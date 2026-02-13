@@ -96,7 +96,6 @@ export class PostFX {
     const withAO = mix(scenePassColor, scenePassColor.mul(blendedAO), this.aoEnabled)
 
     // Effects texture (depth-tested against scene, no AO)
-    // Composited from previous frame (1-frame delay, imperceptible at 60fps)
     const effectsTexture = texture(this.effectsTarget.texture)
     const withEffects = withAO.add(effectsTexture.rgb.mul(effectsTexture.a))
 
@@ -205,6 +204,27 @@ export class PostFX {
       obj.visible = visible
     }
 
+    // ---- Effects pass: render before main so texture binding is fresh when sampled ----
+    renderer.setRenderTarget(effectsTarget)
+    renderer.setClearColor(0x000000, 0)
+    renderer.clear()
+
+    if (effectsObjects.length > 0) {
+      const savedEffVis = new Map()
+      scene.traverse((child) => {
+        if (!child.isMesh && !child.isLine && !child.isLineSegments && !child.isPoints) return
+        const isEffect = effectsObjects.some(o => o === child || o.getObjectById?.(child.id))
+        if (!isEffect) {
+          savedEffVis.set(child, child.visible)
+          child.visible = false
+        }
+      })
+
+      renderer.render(scene, camera)
+
+      for (const [child, vis] of savedEffVis) child.visible = vis
+    }
+
     scene.background = savedBackground
     scene.environment = savedEnvironment
     renderer.setRenderTarget(null)
@@ -225,35 +245,6 @@ export class PostFX {
 
     for (const [obj, visible] of savedMainVis) {
       obj.visible = visible
-    }
-
-    // ---- Effects pass: no AO, depth-sorted among effects objects ----
-    if (effectsObjects.length > 0) {
-      scene.background = null
-      scene.environment = null
-
-      renderer.setRenderTarget(effectsTarget)
-      renderer.setClearColor(0x000000, 0)
-      renderer.clear()
-
-      const savedEffVis = new Map()
-      scene.traverse((child) => {
-        if (!child.isMesh && !child.isLine && !child.isLineSegments && !child.isPoints) return
-        const isEffect = effectsObjects.some(o => o === child || o.getObjectById?.(child.id))
-        if (!isEffect) {
-          savedEffVis.set(child, child.visible)
-          child.visible = false
-        }
-      })
-
-      renderer.render(scene, camera)
-
-      for (const [child, vis] of savedEffVis) child.visible = vis
-
-      scene.background = savedBackground
-      scene.environment = savedEnvironment
-      renderer.setRenderTarget(null)
-      renderer.setClearColor(savedClearColor, savedClearAlpha)
     }
   }
 }
