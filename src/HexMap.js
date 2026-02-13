@@ -772,7 +772,7 @@ export class HexMap {
     geometry.rotateX(-Math.PI / 2)
 
     // GUI-controllable uniforms
-    this._waterOpacity = uniform(0.25)
+    this._waterOpacity = uniform(0)
     this._waterSpeed = uniform(1.1)
     this._waterFreq = uniform(4.4)
 

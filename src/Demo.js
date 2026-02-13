@@ -198,7 +198,7 @@ export class Demo {
     this.updateOrthoFrustum()
 
     // Set up perspective camera - top-down view of hex map
-    this.perspCamera.position.set(2.391, 227.788, -0.177)
+    this.perspCamera.position.set(0.178, 100.036, 59.610)
     this.perspCamera.fov = 20
     this.updatePerspFrustum()
 
@@ -224,7 +224,7 @@ export class Demo {
     this.controls.maxPolarAngle = 1.44
     // Pan parallel to ground plane instead of screen
     this.controls.screenSpacePanning = false
-    this.controls.target.set(2.406, 0, -2.851)
+    this.controls.target.set(0.903, 0, 1.168)
     this.controls.update()
   }
 

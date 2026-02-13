@@ -121,9 +121,33 @@ Conversion (pointy-top odd-row offset):
 
 ## References
 
+### Tech / WFC
 - [Red Blob Games - Hexagonal Grids](https://www.redblobgames.com/grids/hexagons/)
 - [mxgmn/WaveFunctionCollapse](https://github.com/mxgmn/WaveFunctionCollapse)
 - [Boris the Brave - MiB](https://www.boristhebrave.com/2021/10/26/model-synthesis-and-modifying-in-blocks/)
 - [Boris the Brave - Infinite MiB](https://www.boristhebrave.com/2021/11/08/infinite-modifying-in-blocks/)
 - https://observablehq.com/@sanderevers/hexagon-tiling-of-an-hexagonal-grid
+
+### Game Refs
 - Dorf Romantik, Bad North (style refs)
+interactive like  https://robot.co/playground/grid
+ui and walk around like:https://mesq.me/infinite-terrain/
+Tiny Glade
+dorfromantik 
+https://www.youtube.com/watch?v=aYz2oHxCQrw&t=69s
+https://www.youtube.com/watch?v=5Qs9i-y0vbE&t=61s
+
+### Asset packs
+https://www.cgtrader.com/3d-models/exterior/street-exterior/city-downtown-skyscraper-street-mountain-landscape-17-day
+https://assetstore.unity.com/packages/3d/environments/urban/lowpoly-city-vol-2-skyscrapers-138089?srsltid=AfmBOoqo9jo8xKtAOXG_X7LR8p_yzlbXIr9ZzAeXuQebpOXL047mgD8Q
+https://sketchfab.com/MRowa
+
+### Misc
+https://bsky.app/profile/d6learning.bsky.social/post/3mdic5ewwhs2r
+https://x.com/5tr4n0/status/2014340948818358575
+https://x.com/SamuelLundsten/status/2015772374348464286
+https://tympanus.net/codrops/2024/10/30/interactive-3d-with-three-js-batchedmesh-and-webgpurenderer/
+https://github.com/ULuIQ12/codrops-batchedmesh?tab=readme-ov-file
+https://x.com/creativedash/status/2014275193108410859
+https://threejs.org/examples/webgpu_postprocessing_ao.html
+https://sbcode.net/tsl/ambient-occlusion/
