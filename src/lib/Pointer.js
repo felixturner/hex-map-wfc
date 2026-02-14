@@ -56,10 +56,12 @@ export class Pointer {
           : []
         const intersection = intersects.length > 0 ? intersects[0] : null
 
-        // For touch, store intersection for later use on pointerup
+        // For touch, store coords for later use on pointerup
         // For mouse, call callback immediately
         if (this.isTouch) {
           this.pendingTouchIntersection = intersection
+          this.touchStartClientX = e.clientX
+          this.touchStartClientY = e.clientY
         } else {
           const handled = this.onPointerDownCallback(intersection, e.clientX, e.clientY, false)
           // Stop propagation if callback handled the event
@@ -77,12 +79,17 @@ export class Pointer {
     this.clientPointer.set(e.clientX, e.clientY)
     this.updateScreenPointer(e)
 
-    if (this.pointerDown && this.onPointerUpCallback) {
-      // For touch, pass the stored intersection so Map can handle tap
-      if (this.isTouch && this.pendingTouchIntersection !== undefined) {
-        this.onPointerUpCallback(this.isTouch, this.pendingTouchIntersection)
+    if (this.pointerDown) {
+      // For touch, fire the pointerDown callback on tap (pointerup) so
+      // placeholder grid buttons work on mobile
+      if (this.isTouch && this.onPointerDownCallback && this.touchStartClientX !== undefined) {
+        this.onPointerDownCallback(this.pendingTouchIntersection ?? null, this.touchStartClientX, this.touchStartClientY, true)
         this.pendingTouchIntersection = undefined
-      } else {
+        this.touchStartClientX = undefined
+        this.touchStartClientY = undefined
+      }
+
+      if (this.onPointerUpCallback) {
         this.onPointerUpCallback(this.isTouch)
       }
     }
@@ -137,6 +144,8 @@ export class Pointer {
         this.onRightClickCallback(intersects[0])
         // Block the subsequent touch tap (long press triggers contextmenu then pointerup)
         this.pendingTouchIntersection = undefined
+        this.touchStartClientX = undefined
+        this.touchStartClientY = undefined
       }
     }
   }

@@ -31,6 +31,7 @@ import { Demo } from './Demo.js'
 import { initGlobalTreeNoise, Decorations } from './Decorations.js'
 import { Weather } from './Weather.js'
 import { random, getSeed } from './SeededRandom.js'
+import { Sounds } from './lib/Sounds.js'
 
 /**
  * HexMap - Manages the entire world of multiple HexGrid instances
@@ -1842,22 +1843,24 @@ export class HexMap {
     this.raycaster.setFromCamera(pointer, camera)
     const intersects = this.raycaster.intersectObjects(placeholderClickables)
 
-    // Clear previous hover
-    if (this.hoveredGrid) {
-      this.hoveredGrid.setHover(false)
-      this.hoveredGrid = null
-    }
-
-    // Set new hover
+    // Determine new hovered grid
+    let newHovered = null
     if (intersects.length > 0) {
       const clickable = intersects[0].object
       if (clickable.userData.isPlaceholder) {
-        // Find the grid that owns this clickable
-        const ownerGrid = clickable.userData.owner?.group?.userData?.hexGrid
-        if (ownerGrid) {
-          this.hoveredGrid = ownerGrid
-          ownerGrid.setHover(true)
-        }
+        newHovered = clickable.userData.owner?.group?.userData?.hexGrid ?? null
+      }
+    }
+
+    // Only update if hovered grid changed
+    if (newHovered !== this.hoveredGrid) {
+      if (this.hoveredGrid) {
+        this.hoveredGrid.setHover(false)
+      }
+      this.hoveredGrid = newHovered
+      if (newHovered) {
+        newHovered.setHover(true)
+        Sounds.play('roll', 1.0, 0.2, 0.5)
       }
     }
   }
@@ -1887,6 +1890,7 @@ export class HexMap {
         if (clickable.userData.isPlaceholder) {
           const ownerGrid = clickable.userData.owner?.group?.userData?.hexGrid
           if (ownerGrid && ownerGrid.onClick) {
+            Sounds.play('pop', 1.0, 0.2, 0.7)
             ownerGrid.onClick()
             return true
           }
