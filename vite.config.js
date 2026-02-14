@@ -14,6 +14,7 @@ export default defineConfig({
   base: './',
   plugins: [fullReloadAlways, basicSsl()],
   server: {
+    port: 5176,
     watch: {
       ignored: ['**/*.md', '**/*.txt'],
     },

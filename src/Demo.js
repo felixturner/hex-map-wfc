@@ -224,7 +224,7 @@ export class Demo {
     this.controls.maxPolarAngle = 1.44
     // Pan parallel to ground plane instead of screen
     this.controls.screenSpacePanning = false
-    this.controls.target.set(0.903, 0, 1.168)
+    this.controls.target.set(0.903, 1, 1.168)
     this.controls.update()
   }
 
@@ -274,6 +274,16 @@ export class Demo {
     this.aoBlurAmount = this.postFX.aoBlurAmount
     this.aoIntensity = this.postFX.aoIntensity
     this.aoPass = this.postFX.aoPass
+    this.dofEnabled = this.postFX.dofEnabled
+    this.dofFocus = this.postFX.dofFocus
+    this.dofAperture = this.postFX.dofAperture
+    this.dofMaxblur = this.postFX.dofMaxblur
+    this.bleachEnabled = this.postFX.bleachEnabled
+    this.bleachAmount = this.postFX.bleachAmount
+    this.lutEnabled = this.postFX.lutEnabled
+    this.lutAmount = this.postFX.lutAmount
+    this.grainEnabled = this.postFX.grainEnabled
+    this.grainStrength = this.postFX.grainStrength
   }
 
   initStats() {
@@ -357,6 +367,13 @@ export class Demo {
     // Clamp target Y to prevent panning under the city
     if (controls.target.y < 0) controls.target.y = 0
     this.lighting.updateShadowCamera(this.controls.target, this.camera, this.orthoCamera, this.perspCamera)
+
+    // Auto-focus DOF on orbit target (center of screen on ground)
+    postFX.dofFocus.value = this.camera.position.distanceTo(controls.target)
+
+    // Animate grain noise — quantize to noiseFPS for film-like grain
+    const noiseFPS = this.params.fx.grainFPS
+    postFX.grainTime.value = Math.floor(clock.elapsedTime * noiseFPS) / noiseFPS
 
     // Update debris physics
     this.city.update(dt)

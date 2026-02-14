@@ -1,4 +1,4 @@
-import { PostProcessing, RenderTarget, RGBAFormat, Color } from 'three/webgpu'
+import { PostProcessing, RenderTarget, RGBAFormat, Color, TextureLoader, LinearFilter } from 'three/webgpu'
 import {
   pass,
   output,
@@ -10,12 +10,16 @@ import {
   select,
   mix,
   float,
+  vec2,
   vec3,
+  vec4,
   sub,
   texture,
 } from 'three/tsl'
 import { ao } from 'three/addons/tsl/display/GTAONode.js'
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js'
+import { dof } from 'three/addons/tsl/display/DepthOfFieldNode.js'
+import { bleach } from 'three/addons/tsl/display/BleachBypass.js'
 
 export class PostFX {
   constructor(renderer, scene, camera) {
@@ -28,6 +32,10 @@ export class PostFX {
     // Effect toggle uniforms
     this.aoEnabled = uniform(1)
     this.vignetteEnabled = uniform(1)
+    this.dofEnabled = uniform(0)
+    this.bleachEnabled = uniform(0)
+    this.lutEnabled = uniform(0)
+    this.grainEnabled = uniform(0)
 
     // Debug view: 0=final, 1=color, 2=depth, 3=normal, 4=AO, 5=overlay, 6=effects
     this.debugView = uniform(0)
@@ -35,6 +43,21 @@ export class PostFX {
     // AO parameters
     this.aoBlurAmount = uniform(1)
     this.aoIntensity = uniform(1)
+
+    // DOF parameters
+    this.dofFocus = uniform(100)
+    this.dofAperture = uniform(0.025)
+    this.dofMaxblur = uniform(0.01)
+
+    // Bleach bypass parameters
+    this.bleachAmount = uniform(0.5)
+
+    // LUT parameters
+    this.lutAmount = uniform(1)
+
+    // Grain parameters
+    this.grainStrength = uniform(0.1)
+    this.grainTime = uniform(0)
 
     // Fade to black (0 = black, 1 = fully visible)
     this.fadeOpacity = uniform(1)
@@ -55,7 +78,32 @@ export class PostFX {
     this.overlayObjects = []
     this.effectsObjects = []
 
+    // Load default LUT texture
+    this._loadLutTexture('./assets/lut/etikate.png')
+
     this._buildPipeline()
+  }
+
+  _loadLutTexture(path) {
+    const loader = new TextureLoader()
+    this.lutTexture = loader.load(path)
+    this.lutTexture.minFilter = LinearFilter
+    this.lutTexture.magFilter = LinearFilter
+    this.lutTexture.generateMipmaps = false
+    this.lutTexture.flipY = false
+  }
+
+  swapLut(path) {
+    const loader = new TextureLoader()
+    loader.load(path, (tex) => {
+      tex.minFilter = LinearFilter
+      tex.magFilter = LinearFilter
+      tex.generateMipmaps = false
+      tex.flipY = false
+      if (this._lutTexNode) this._lutTexNode.value = tex
+      if (this.lutTexture) this.lutTexture.dispose()
+      this.lutTexture = tex
+    })
   }
 
   _buildPipeline() {
@@ -74,8 +122,13 @@ export class PostFX {
     const scenePassColor = scenePass.getTextureNode('output')
     const scenePassNormal = scenePass.getTextureNode('normal')
     const scenePassDepth = scenePass.getTextureNode('depth')
+    const scenePassViewZ = scenePass.getViewZNode()
 
-    // GTAO pass
+    // ---- DOF (on scene color texture, before AO) ----
+    const dofResult = dof(scenePassColor, scenePassViewZ, this.dofFocus, this.dofAperture, this.dofMaxblur)
+    const afterDof = mix(scenePassColor, dofResult, this.dofEnabled)
+
+    // ---- GTAO pass (uses depth/normals from scene, not affected by DOF) ----
     this.aoPass = ao(scenePassDepth, scenePassNormal, camera)
     this.aoPass.resolutionScale = 0.5 // Half-res AO for performance
     this.aoPass.distanceExponent.value = 1
@@ -93,26 +146,85 @@ export class PostFX {
     // Soften AO: raise to power < 1 to reduce harshness, then blend
     const softenedAO = blurredAO.pow(0.5) // Square root makes it softer
     const blendedAO = mix(float(1), softenedAO, this.aoIntensity)
-    const withAO = mix(scenePassColor, scenePassColor.mul(blendedAO), this.aoEnabled)
+    const withAO = mix(afterDof, afterDof.mul(blendedAO), this.aoEnabled)
 
-    // Effects texture (depth-tested against scene, no AO)
+    // ---- Effects layer compositing (weather, water) ----
     const effectsTexture = texture(this.effectsTarget.texture)
     const withEffects = withAO.add(effectsTexture.rgb.mul(effectsTexture.a))
 
-    // Overlay texture (no depth test, no AO)
+    // ---- Overlay layer compositing (UI) ----
     const overlayTexture = texture(this.overlayTarget.texture)
     const withOverlay = withEffects.add(overlayTexture.rgb.mul(overlayTexture.a))
 
-    // Vignette: darken edges toward black
+    // ---- Bleach bypass (after overlay, before LUT) ----
+    const bleachedColor = bleach(withOverlay, this.bleachAmount)
+    const afterBleach = mix(withOverlay.rgb, bleachedColor.rgb, this.bleachEnabled)
+
+    // ---- LUT color grading (after bleach, before vignette) ----
+    const lutTexNode = texture(this.lutTexture)
+    this._lutTexNode = lutTexNode
+
+    // Clamp input to [0,1] for safe LUT indexing
+    const lutInput = afterBleach.clamp(0, 1)
+    const blue = lutInput.b.mul(63.0)
+    const blueIdx = blue.floor()
+    const nextIdx = blueIdx.add(1.0).min(63.0)
+
+    // Tile positions in 8x8 grid
+    const tile1y = blueIdx.div(8.0).floor()
+    const tile1x = blueIdx.sub(tile1y.mul(8.0))
+    const tile2y = nextIdx.div(8.0).floor()
+    const tile2x = nextIdx.sub(tile2y.mul(8.0))
+
+    // UV coordinates within each tile (64x64 in 512x512 texture)
+    const tileSize = float(0.125) // 64/512
+    const halfTexel = float(0.5 / 512.0)
+    const innerScale = float(63.0 / 512.0)
+
+    const uv1 = vec2(
+      tile1x.mul(tileSize).add(halfTexel).add(lutInput.r.mul(innerScale)),
+      tile1y.mul(tileSize).add(halfTexel).add(lutInput.g.mul(innerScale))
+    )
+    const uv2 = vec2(
+      tile2x.mul(tileSize).add(halfTexel).add(lutInput.r.mul(innerScale)),
+      tile2y.mul(tileSize).add(halfTexel).add(lutInput.g.mul(innerScale))
+    )
+
+    const lutSample1 = lutTexNode.sample(uv1).rgb
+    const lutSample2 = lutTexNode.sample(uv2).rgb
+    const lutColor = mix(lutSample1, lutSample2, blue.fract())
+    const afterLut = mix(afterBleach, lutColor, this.lutEnabled.mul(this.lutAmount))
+
+    // ---- Vignette: darken edges toward black ----
     const vignetteFactor = float(1).sub(
       clamp(viewportUV.sub(0.5).length().mul(1.4), 0.0, 1.0).pow(1.5)
     )
     const vignetteMultiplier = mix(float(1), vignetteFactor, this.vignetteEnabled)
-    const withVignette = mix(vec3(0, 0, 0), withOverlay, vignetteMultiplier)
+    const withVignette = mix(vec3(0, 0, 0), afterLut, vignetteMultiplier)
 
-    // Fade to black pass (final effect in chain)
+    // ---- Fade to black ----
     const fadeColor = vec3(0, 0, 0)
-    const finalOutput = mix(fadeColor, withVignette, this.fadeOpacity)
+    const afterFade = mix(fadeColor, withVignette, this.fadeOpacity)
+
+    // ---- Grain: Worley noise for soft dot-like film grain ----
+    // Worley = distance to nearest random point → soft circular dots
+    // Monochrome (like real film grain), centered at 0 for additive blend
+    // // Perlin noise approach (kept for reference):
+    // const grainPos = vec3(viewportUV.mul(this.grainScale), this.grainTime.mul(this.grainSpeed))
+    // const grainNoise = mx_noise_vec3(grainPos).mul(this.grainStrength)
+    // ---- Grain: per-pixel RGB hash noise, FPS-throttled ----
+    // // Worley/Perlin approaches (kept for reference):
+    // const grainPos = vec3(viewportUV.mul(grainScale), grainTime.mul(grainSpeed))
+    // const grainNoise = mx_noise_vec3(grainPos).mul(grainStrength)
+    // const grainDots = float(1).sub(mx_worley_noise_float(grainPos)).sub(threshold).div(float(1).sub(threshold)).clamp(0,1)
+    const grainSeed1 = viewportUV.x.mul(12.9898).add(viewportUV.y.mul(78.233)).add(this.grainTime)
+    const grainSeed2 = viewportUV.x.mul(93.9898).add(viewportUV.y.mul(67.345)).add(this.grainTime)
+    const grainSeed3 = viewportUV.x.mul(43.332).add(viewportUV.y.mul(93.532)).add(this.grainTime)
+    const noiseR = grainSeed1.sin().mul(43758.5453).fract()
+    const noiseG = grainSeed2.sin().mul(43758.5453).fract()
+    const noiseB = grainSeed3.sin().mul(43758.5453).fract()
+    const grainNoise = vec3(noiseR, noiseG, noiseB).sub(0.5).mul(this.grainStrength)
+    const finalOutput = afterFade.add(grainNoise.mul(this.grainEnabled))
 
     // Debug views
     const depthViz = vec3(scenePassDepth)

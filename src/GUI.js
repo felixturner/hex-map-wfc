@@ -62,6 +62,17 @@ export class GUIManager {
       vignette: true,
       dots: true,
       debris: true,
+      dof: true,
+      dofAperture: 1,
+      dofMaxblur: 0.037,
+      bleach: false,
+      bleachAmount: 0.3,
+      lut: true,
+      lutStyle: 'etikate',
+      lutAmount: 0.1,
+      grain: true,
+      grainStrength: 0.04,
+      grainFPS: 16,
     },
     debug: {
       view: 'final',
@@ -399,6 +410,42 @@ export class GUIManager {
     fxFolder.add(allParams.fx, 'vignette').name('Vignette').onChange((v) => {
       demo.vignetteEnabled.value = v ? 1 : 0
     })
+    fxFolder.add(allParams.fx, 'dof').name('DOF').onChange((v) => {
+      demo.dofEnabled.value = v ? 1 : 0
+    })
+    fxFolder.add(allParams.fx, 'dofAperture', 0, 1, 0.01).name('DOF Aperture').onChange((v) => {
+      demo.dofAperture.value = v / 1000
+    })
+    fxFolder.add(allParams.fx, 'dofMaxblur', 0.001, 0.05, 0.001).name('DOF Max Blur').onChange((v) => {
+      demo.dofMaxblur.value = v
+    })
+    fxFolder.add(allParams.fx, 'bleach').name('Bleach Bypass').onChange((v) => {
+      demo.bleachEnabled.value = v ? 1 : 0
+    })
+    fxFolder.add(allParams.fx, 'bleachAmount', 0, 0.3, 0.05).name('Bleach Amount').onChange((v) => {
+      demo.bleachAmount.value = v
+    })
+    fxFolder.add(allParams.fx, 'lut').name('LUT').onChange((v) => {
+      demo.lutEnabled.value = v ? 1 : 0
+    })
+    const lutOptions = [
+      'amatorka', 'brannan', 'earlybird', 'etikate', 'gotham', 'hefe',
+      'inkwell', 'kelvin', 'lofi', 'lookup', 'nashville', 'sutro',
+      'toaster', 'walden', 'xpro',
+    ]
+    fxFolder.add(allParams.fx, 'lutStyle', lutOptions).name('LUT Style').onChange((v) => {
+      demo.postFX.swapLut(`./assets/lut/${v}.png`)
+    })
+    fxFolder.add(allParams.fx, 'lutAmount', 0, 1, 0.05).name('LUT Amount').onChange((v) => {
+      demo.lutAmount.value = v
+    })
+    fxFolder.add(allParams.fx, 'grain').name('Grain').onChange((v) => {
+      demo.grainEnabled.value = v ? 1 : 0
+    })
+    fxFolder.add(allParams.fx, 'grainStrength', 0, 0.2, 0.005).name('Grain Strength').onChange((v) => {
+      demo.grainStrength.value = v
+    })
+    fxFolder.add(allParams.fx, 'grainFPS', 1, 60, 1).name('Grain FPS')
 
     return allParams
   }
@@ -440,6 +487,15 @@ export class GUIManager {
     if (demo.aoBlurAmount) demo.aoBlurAmount.value = params.fx.aoBlur
     demo.aoIntensity.value = params.fx.aoIntensity
     demo.vignetteEnabled.value = params.fx.vignette ? 1 : 0
+    demo.dofEnabled.value = params.fx.dof ? 1 : 0
+    demo.dofAperture.value = params.fx.dofAperture / 1000
+    demo.dofMaxblur.value = params.fx.dofMaxblur
+    demo.bleachEnabled.value = params.fx.bleach ? 1 : 0
+    demo.bleachAmount.value = params.fx.bleachAmount
+    demo.lutEnabled.value = params.fx.lut ? 1 : 0
+    demo.lutAmount.value = params.fx.lutAmount
+    demo.grainEnabled.value = params.fx.grain ? 1 : 0
+    demo.grainStrength.value = params.fx.grainStrength
 
     // Camera
     demo.perspCamera.fov = params.camera.fov
