@@ -61,4 +61,5 @@
 - add sound effects birds wind sounds. ticking build sound for wfc
 - fix lillies can get cropped by coast
 - prebake AO in blender?
+- add village furniture - barrels, water troghs, carts etc
 
