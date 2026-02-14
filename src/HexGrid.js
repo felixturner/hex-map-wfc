@@ -576,6 +576,51 @@ export class HexGrid {
   }
 
   /**
+   * Animate a single tile dropping in from above (reused by click-resolve)
+   * @param {HexTile} tile - Already-placed tile to animate
+   */
+  animateTileDrop(tile) {
+    if (!tile || tile.instanceId === null) return
+
+    const LEVEL_HEIGHT = 0.5
+    const DROP_HEIGHT = 5
+    const ANIM_DURATION = 0.4
+    const dummy = this.dummy
+
+    const pos = HexTileGeometry.getWorldPosition(
+      tile.gridX - this.gridRadius,
+      tile.gridZ - this.gridRadius
+    )
+    const targetY = tile.level * LEVEL_HEIGHT
+    const rotationY = -tile.rotation * Math.PI / 3
+    const fillId = this.bottomFills.get(`${tile.gridX},${tile.gridZ}`)
+
+    const anim = { y: targetY + DROP_HEIGHT, scale: 1 }
+    tile._anim = anim
+    gsap.to(anim, {
+      y: targetY,
+      duration: ANIM_DURATION,
+      ease: 'power1.out',
+      onUpdate: () => {
+        dummy.position.set(pos.x, anim.y, pos.z)
+        dummy.rotation.y = rotationY
+        dummy.scale.setScalar(anim.scale)
+        dummy.updateMatrix()
+        this.hexMesh.setMatrixAt(tile.instanceId, dummy.matrix)
+
+        if (fillId !== undefined) {
+          const tileY = tile.level * LEVEL_HEIGHT
+          dummy.position.set(pos.x, anim.y, pos.z)
+          dummy.rotation.y = 0
+          dummy.scale.set(anim.scale, tileY, anim.scale)
+          dummy.updateMatrix()
+          this.hexMesh.setMatrixAt(fillId, dummy.matrix)
+        }
+      }
+    })
+  }
+
+  /**
    * Animate tile placements with GSAP drop-in (tiles already placed but hidden)
    * Each decoration drops 0.5s after its tile
    */
@@ -769,7 +814,7 @@ export class HexGrid {
       )
       if (!map.has(key)) map.set(key, [])
       const rockName = TILE_LIST[rock.tile.type]?.name || ''
-      const rockOceanDip = (rockName.startsWith('COAST_') || rockName === 'WATER') ? -0.2 : 0
+      const rockOceanDip = rockName === 'WATER' ? -0.2 : (rockName.startsWith('COAST_') || rockName.startsWith('RIVER_')) ? -0.1 : 0
       map.get(key).push({
         mesh: this.decorations.staticMesh,
         instanceId: rock.instanceId,

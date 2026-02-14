@@ -1,8 +1,15 @@
 # TODO
 
-
 - click tile to randomly replace it with a wfc candidate.
 - add walls as wfc tiles w grass
+
+ use bigger world noise fields for water, mountains + forests, cities?
+  - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
+- Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
+
+- Post - add subtle tilt shift, bleach,grain, LUT
+
+-----
 
 - Add new TILES to help WFC: (claculate tiles needed for Sub-Complete Tileset)
   - make dummy tiles hand-drawn
@@ -14,13 +21,6 @@
   - rivers into coasts?r
  - add extra tile with just 1 small bit of hill to fill jagged gaps in cliffs?(like coast)
 
- use bigger world noise fields for water, mountains + forests, cities?
-  - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
-- Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
-
-- Post - add subtle tilt shift, bleach,grain, LUT
-
-
 - water effect (currently basic sparkle plane at Y=0.92 with value noise, MeshPhysicalNodeMaterial emissive, no masking)
   - use emissive channel in GLB to mask sparkle (paint white on water faces in Blender, sample as mask)
   - render water channel top down to a texture
@@ -29,12 +29,6 @@
 
 - improve color maps textures for 2 levels. keep rivers/roads the same color on both
 - add wind trails like zelda
-
-
-
-
--
-
 - Consider manual compositing passes instead of MRT (fixes transparency, enables half-res AO for perf)
 - Consider preventing road slopes up/down from meeting
 - remove baked shadoews from blender file?

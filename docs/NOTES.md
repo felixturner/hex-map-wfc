@@ -62,6 +62,14 @@ From the [N-WFC paper](https://ar5iv.labs.arxiv.org/html/2308.07307). Design the
 #### Localized Re-Solve
 Instead of dropping cells at conflict points, create a small WFC solve zone (half-grid radius) centered on the conflict cell. The zone can span multiple grids — perimeter cells become fixed constraints from `globalCells`, interior cells are re-solved. After solving, update affected source grids via `replaceTile()`. Uses existing infrastructure: `cubeCoordsInRadius`, `solveWfcAsync`, global cell map.
 
+## Seeded RNG
+
+`SeededRandom.js` exposes `setSeed(n)` and `random()`. A single seed is set once at startup in `Demo.js`. After that, every call to `random()` returns the next number in the deterministic sequence — there is no re-seeding.
+
+The WFC worker runs in a separate thread with its own copy of `SeededRandom.js` (Web Workers have independent module scope). The seed is passed to the worker once via `{ type: 'init', seed }` message in `initWfcWorker()`. After that, the worker's RNG advances naturally across all solves.
+
+**Never re-seed the worker per solve** — that resets the sequence to position 0 and causes identical random choices across solves, making retries and click-resolve produce the same output.
+
 ## Naming Conventions
 
 ### Hex Grid System
@@ -75,6 +83,24 @@ Instead of dropping cells at conflict points, create a small WFC solve zone (hal
 - Soft Fixed Cell — A fixed cell adjacent to the solve region that can be unfixed if it causes a seeding contradiction
 - Anchor — A neighbor of a soft fixed cell that becomes a new fixed constraint when the soft cell is unfixed
 - RNG Seed — The number that initializes the random number generator (global)
+
+## Map Dimensions
+
+The hex map is 19 grids arranged in 2 rings around a central grid (hex radius 2).
+
+Each grid is a hex with cell radius 8 → diameter 17 cells → **217 cells per grid**.
+Total: 19 × 217 = **4,123 cells** (minus shared boundary cells used as fixed constraints).
+
+Grid centers are spaced 17 cells apart in cube coords (2R+1). Max cell distance from map center: grid ring 2 center (34) + cell radius (8) = **42 cells** hex radius.
+
+### World Units
+- `HEX_WIDTH` = 2, `HEX_HEIGHT` = 2/√3 × 2 ≈ 2.309
+- Map is hexagonal — radius ≈ 42 × 2 ≈ **84 WU** from center to edge
+
+### Tile Surface Heights
+- Land (grass, road, cliff): **1.0 WU** above tile base
+- River / Coast: **0.9 WU** above tile base
+- Ocean (WATER): **0.8 WU** above tile base
 
 ## Coordinate Systems
 

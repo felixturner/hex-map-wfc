@@ -607,7 +607,7 @@ class HexWFCSolver {
 
         collapseCount++
         if (collapseCount % 500 === 0) {
-          this.log(`Progress: ${collapseCount}/${totalCells} collapsed, ${this.backtracks} backtracks, trail size ${this.trail.length}`)
+          this.log(`WFC (try ${tryNum}): ${collapseCount}/${totalCells} collapsed, ${this.backtracks} backtracks, trail size ${this.trail.length}`)
         }
 
         if (!this.propagate()) {
@@ -681,13 +681,16 @@ let currentRequestId = null
 self.onmessage = function(e) {
   const { type, id } = e.data
 
+  if (type === 'init') {
+    if (e.data.seed != null) {
+      setSeed(e.data.seed)
+    }
+    return
+  }
+
   if (type === 'solve') {
     currentRequestId = id
     const { solveCells, fixedCells, options } = e.data
-
-    if (options?.seed != null) {
-      setSeed(options.seed)
-    }
 
     const tileTypes = options?.tileTypes ?? null
     const rules = HexWFCAdjacencyRules.fromTileDefinitions(tileTypes)

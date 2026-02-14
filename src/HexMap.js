@@ -10,12 +10,16 @@ import {
   TextureLoader,
   SRGBColorSpace,
   AdditiveBlending,
+  BufferGeometry,
+  Float32BufferAttribute,
+  LineSegments,
+  LineBasicNodeMaterial,
 } from 'three/webgpu'
 import WFCWorker from './workers/wfc.worker.js?worker'
 import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor } from 'three/tsl'
 import { CSS2DObject } from 'three/examples/jsm/Addons.js'
 import { HexWFCAdjacencyRules, HexWFCCell, CUBE_DIRS, cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, edgesCompatible, getEdgeLevel } from './HexWFCCore.js'
-import { setStatus } from './Demo.js'
+import { setStatus, setStatusAsync, log, Demo } from './Demo.js'
 import { TILE_LIST, TileType, HexDir, HexOpposite, rotateHexEdges, LEVELS_COUNT } from './HexTileData.js'
 import { HexTile, HexTileGeometry, isInHexRadius } from './HexTiles.js'
 import { HexGrid, HexGridState } from './HexGrid.js'
@@ -27,7 +31,6 @@ import {
   getGridWorldOffset,
   worldOffsetToGlobalCube,
 } from './HexGridConnector.js'
-import { Demo } from './Demo.js'
 import { initGlobalTreeNoise, Decorations } from './Decorations.js'
 import { Weather } from './Weather.js'
 import { random, getSeed } from './SeededRandom.js'
@@ -78,6 +81,10 @@ export class HexMap {
     this.raycaster = new Raycaster()
     this.hoveredGrid = null  // HexGrid being hovered
 
+    // Hover highlight for click-to-solve region
+    this.hoverHighlight = null  // LineSegments object
+    this.hoveredCubeKey = null  // cubeKey of currently hovered center cell
+
     // Helper visibility state
     this.helpersVisible = false
     this.axesHelpersVisible = false
@@ -107,6 +114,9 @@ export class HexMap {
     this.weather = new Weather()
     this.weather.init()
     this.scene.add(this.weather.group)
+
+    // Hover highlight for click-to-solve region
+    this.initHoverHighlight()
 
     // Pre-create all 19 grids with meshes (avoids lag on Build All)
     const allCoords = [[0,0],[0,1],[-1,0],[-1,-1],[0,-1],[1,-1],[1,-2],[2,-1],[-1,1],[0,2],[1,1],[2,0],[2,1],[1,0],[0,-2],[-1,-2],[-2,-1],[-2,0],[-2,1]]
@@ -251,6 +261,7 @@ export class HexMap {
   initWfcWorker() {
     try {
       this.wfcWorker = new WFCWorker()
+      this.wfcWorker.postMessage({ type: 'init', seed: getSeed() })
       this.wfcWorker.onmessage = (e) => this.handleWfcMessage(e)
       this.wfcWorker.onerror = (e) => {
         console.error('WFC Worker error:', e)
@@ -273,7 +284,7 @@ export class HexMap {
     const { type, id, message, success, tiles, collapseOrder } = e.data
 
     if (type === 'log') {
-      console.log(`%c${e.data.message}`, `color: ${e.data.color || 'black'}`)
+      log(e.data.message, `color: ${e.data.color || 'black'}`)
     } else if (type === 'result') {
       // Resolve pending promise by ID
       const resolve = this.wfcPendingResolvers.get(id)
@@ -448,13 +459,14 @@ export class HexMap {
     }
 
     // Search active tile types and rotations for replacements
+    const currentDef = TILE_LIST[currentType]
     const candidates = []
 
     for (let tileType = 0; tileType < TILE_LIST.length; tileType++) {
       const def = TILE_LIST[tileType]
 
-      // Skip same tile type entirely to avoid oscillation
-      if (tileType === currentType) continue
+      // Skip tiles that use the same mesh (visually identical)
+      if (def.mesh === currentDef.mesh) continue
 
       // Skip if currentLevel is invalid for this tile type
       const isSlope = def.highEdges?.length > 0
@@ -901,8 +913,8 @@ export class HexMap {
     let postReplacedCount = 0
     let postDroppedCount = 0
 
-    console.log(`%c[${gridKey}] POPULATING GRID (${solveCells.length} cells, ${initialFixedCount} fixed)`, 'color: blue')
-    setStatus(`[${gridKey}] Solving WFC...`)
+    log(`[${gridKey}] POPULATING GRID (${solveCells.length} cells, ${initialFixedCount} fixed)`, 'color: blue')
+    await setStatusAsync(`[${gridKey}] Solving WFC...`)
 
     // // ---- Pre-WFC checks disabled — solver handles conflicts via soft cell unfixing ----
     // if (fixedCells.length > 1) {
@@ -1000,7 +1012,6 @@ export class HexMap {
         initialCollapses,
         gridId: gridKey,
         attemptNum: attempt,
-        seed: getSeed(),
         softFixedCells: activeSoftFixed,
       })
 
@@ -1028,10 +1039,10 @@ export class HexMap {
       if (wfcResult.seedingContradiction) {
         const c = wfcResult.seedingContradiction
         this.failedCells.add(`${c.failedCol},${c.failedRow}`)
-        console.log(`%c[${gridKey}] Seed conflict at (${c.failedCol},${c.failedRow})`, 'color: red')
+        log(`[${gridKey}] Seed conflict at (${c.failedCol},${c.failedRow})`, 'color: red')
       } else if (wfcResult.lastContradiction) {
         const c = wfcResult.lastContradiction
-        console.log(`%c[${gridKey}] WFC failed at (${c.failedCol},${c.failedRow})`, 'color: red')
+        log(`[${gridKey}] WFC failed at (${c.failedCol},${c.failedRow})`, 'color: red')
       }
       const failedInfo = wfcResult.seedingContradiction || wfcResult.lastContradiction
       return {
@@ -1090,7 +1101,7 @@ export class HexMap {
           const co = cubeToOffset(fcToReplace.q, fcToReplace.r, fcToReplace.s)
           postReplacedCount++
           replaceAttempts++
-          console.log(`%c[${gridKey}] Post-WFC: replaced fixed cell at (${co.col},${co.row})`, 'color: blue')
+          log(`[${gridKey}] Post-WFC: replaced fixed cell at (${co.col},${co.row})`, 'color: blue')
 
           const wfcResult = await runWfc()
           if (wfcResult.success) {
@@ -1134,7 +1145,7 @@ export class HexMap {
         droppedFixedCubes.push({ q: fcToDrop.q, r: fcToDrop.r, s: fcToDrop.s })
         fcToDrop.dropped = true
         postDroppedCount++
-        console.log(`%c[${gridKey}] Post-WFC: dropped fixed cell at (${co.col},${co.row})`, 'color: red')
+        log(`[${gridKey}] Post-WFC: dropped fixed cell at (${co.col},${co.row})`, 'color: red')
 
         const wfcResult = await runWfc()
         if (wfcResult.success) {
@@ -1155,8 +1166,8 @@ export class HexMap {
     grid.placeholder?.stopSpinning()
 
     if (!result) {
-      console.log(`%c[${gridKey}] WFC FAILED`, 'color: red')
-      setStatus(`[${gridKey}] WFC FAILED`)
+      log(`[${gridKey}] WFC FAILED`, 'color: red')
+      await setStatusAsync(`[${gridKey}] WFC FAILED`)
       const { Sounds } = await import('./lib/Sounds.js')
       Sounds.play('incorrect')
       return
@@ -1177,11 +1188,13 @@ export class HexMap {
       const dropParts = []
       if (preDroppedCount > 0) dropParts.push(`${preDroppedCount} pre-dropped`)
       if (postDroppedCount > 0) dropParts.push(`${postDroppedCount} post-dropped`)
+      // Multi-style for console (red dropped counts), status bar gets green
       console.log(`%c[${gridKey}] WFC SUCCESS (${prefix}, %c${dropParts.join(', ')}%c)`, 'color: green', 'color: red', 'color: green')
+      setStatus(statusMsg)
     } else {
-      console.log(`%c${statusMsg}`, 'color: green')
+      log(statusMsg, 'color: green')
     }
-    setStatus(statusMsg)
+    await setStatusAsync(statusMsg)
 
     // Process changed fixed cells BEFORE addToGlobalCells (which would overwrite gridKey)
     if (changedFixedCells.length > 0) {
@@ -1219,7 +1232,7 @@ export class HexMap {
           this.replacedCells.add(`${co.col},${co.row}`)
         }
       }
-      console.log(`%c[${gridKey}] Solver replaced ${changedFixedCells.length} soft fixed cell(s)`, 'color: blue')
+      log(`[${gridKey}] Solver replaced ${changedFixedCells.length} soft fixed cell(s)`, 'color: blue')
     }
 
     // Process persisted-unfixed cells — compare solved result with originals, update source grids
@@ -1263,7 +1276,7 @@ export class HexMap {
       }
       if (persistedReplacedCount > 0) {
         postReplacedCount += persistedReplacedCount
-        console.log(`%c[${gridKey}] Solver replaced ${persistedReplacedCount} persisted-unfixed cell(s)`, 'color: blue')
+        log(`[${gridKey}] Solver replaced ${persistedReplacedCount} persisted-unfixed cell(s)`, 'color: blue')
       }
     }
 
@@ -1330,10 +1343,10 @@ export class HexMap {
    */
   addWaterEdgeSeeds(initialCollapses, center, radius) {
     if (random() >= 1.0) { // TODO: revert to 0.5
-      console.log('%c[Water seed] skipped (50% roll)', 'color: blue')
+      log('[Water seed] skipped (50% roll)', 'color: blue')
       return
     }
-    console.log('%c[Water seed] triggered', 'color: blue')
+    log('[Water seed] triggered', 'color: blue')
 
     const selectedEdge = Math.floor(random() * 6)
 
@@ -1571,7 +1584,7 @@ export class HexMap {
       `${this.droppedCells.size} dropped`,
       `${this.failedCells.size} conflicts`,
     ]
-    console.log(`%c[AUTO-BUILD] Done (${stats.join(', ')})`, 'color: green')
+    log(`[AUTO-BUILD] Done (${stats.join(', ')})`, 'color: green')
   }
 
   /**
@@ -1607,7 +1620,7 @@ export class HexMap {
 
     // ---- Create all grids (PLACEHOLDER state) ----
     const allGridCoords = [[0, 0], ...expansionCoords]
-    console.log(`%c[BUILD ALL] Creating ${allGridCoords.length} grids...`, 'color: blue')
+    log(`[BUILD ALL] Creating ${allGridCoords.length} grids...`, 'color: blue')
 
     for (const [gx, gz] of allGridCoords) {
       await this.createGrid(gx, gz)
@@ -1640,8 +1653,8 @@ export class HexMap {
       }
     }
 
-    console.log(`%c[BUILD ALL] Solving ${allSolveCells.length} cells across ${allGridCoords.length} grids`, 'color: blue')
-    setStatus(`[BUILD ALL] Solving ${allSolveCells.length} cells...`)
+    log(`[BUILD ALL] Solving ${allSolveCells.length} cells across ${allGridCoords.length} grids`, 'color: blue')
+    await setStatusAsync(`[BUILD ALL] Solving ${allSolveCells.length} cells...`)
     const startTime = performance.now()
 
     // ---- Seed initial collapses ----
@@ -1660,14 +1673,13 @@ export class HexMap {
       initialCollapses,
       gridId: 'BUILD_ALL',
       attemptNum: 1,
-      seed: getSeed(),
     })
 
     if (!result.success) {
-      console.log('%c[BUILD ALL] WFC FAILED', 'color: red')
+      log('[BUILD ALL] WFC FAILED', 'color: red')
       const { Sounds } = await import('./lib/Sounds.js')
       Sounds.play('incorrect')
-      setStatus('[BUILD ALL] WFC FAILED')
+      await setStatusAsync('[BUILD ALL] WFC FAILED')
       for (const grid of this.grids.values()) {
         grid.placeholder?.stopSpinning()
       }
@@ -1675,8 +1687,8 @@ export class HexMap {
     }
 
     const solveTime = ((performance.now() - startTime) / 1000).toFixed(1)
-    console.log(`%c[BUILD ALL] WFC SUCCESS (${result.tiles.length} tiles, ${solveTime}s, ${result.backtracks || 0} backtracks, ${result.restarts || 0} restarts)`, 'color: green')
-    setStatus(`[BUILD ALL] Success! Distributing ${result.tiles.length} tiles...`)
+    log(`[BUILD ALL] WFC SUCCESS (${result.tiles.length} tiles, ${solveTime}s, ${result.backtracks || 0} backtracks, ${result.restarts || 0} restarts)`, 'color: green')
+    await setStatusAsync(`[BUILD ALL] Success! Distributing ${result.tiles.length} tiles...`)
 
     // ---- Build lookup map from results ----
     const tileMap = new Map()
@@ -1739,8 +1751,8 @@ export class HexMap {
     }
 
     const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
-    console.log(`%c[BUILD ALL] Complete (${totalTime}s total)`, 'color: green')
-    setStatus(`[BUILD ALL] Complete (${totalTime}s)`)
+    log(`[BUILD ALL] Complete (${totalTime}s total)`, 'color: green')
+    await setStatusAsync(`[BUILD ALL] Complete (${totalTime}s)`)
   }
 
   /**
@@ -1824,12 +1836,125 @@ export class HexMap {
   }
 
   /**
+   * Create the reusable hover highlight LineSegments object
+   */
+  initHoverHighlight() {
+    const hexRadius = 2 / Math.sqrt(3)
+    // Pre-allocate geometry for 7 hexes × 6 edges × 2 verts × 3 components
+    const maxVerts = 7 * 6 * 2 * 3
+    const positions = new Float32Array(maxVerts)
+    const geom = new BufferGeometry()
+    geom.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    geom.setDrawRange(0, 0)
+
+    const mat = new LineBasicNodeMaterial({ color: 0xffffff })
+    mat.depthTest = false
+    mat.depthWrite = false
+    mat.transparent = true
+    mat.blending = AdditiveBlending
+
+    this.hoverHighlight = new LineSegments(geom, mat)
+    this.hoverHighlight.renderOrder = 999
+    this.hoverHighlight.frustumCulled = false
+    this.hoverHighlight.visible = false
+    this.scene.add(this.hoverHighlight)
+
+    // Filled hex faces (7 hexes × 6 tris × 3 verts × 3 components)
+    const fillPositions = new Float32Array(7 * 6 * 3 * 3)
+    const fillGeom = new BufferGeometry()
+    fillGeom.setAttribute('position', new Float32BufferAttribute(fillPositions, 3))
+    fillGeom.setDrawRange(0, 0)
+
+    const fillMat = new MeshBasicNodeMaterial({ color: 0xffffff })
+    fillMat.depthTest = false
+    fillMat.depthWrite = false
+    fillMat.transparent = true
+    fillMat.opacity = 0.3
+    fillMat.side = 2
+
+    this.hoverFill = new Mesh(fillGeom, fillMat)
+    this.hoverFill.renderOrder = 998
+    this.hoverFill.frustumCulled = false
+    this.hoverFill.visible = false
+    this.scene.add(this.hoverFill)
+  }
+
+  /**
+   * Update hover highlight to show the 7-cell solve region around a global cube coord
+   * @param {number} cq - Center cube q
+   * @param {number} cr - Center cube r
+   * @param {number} cs - Center cube s
+   */
+  updateHoverHighlight(cq, cr, cs) {
+    const key = cubeKey(cq, cr, cs)
+    if (key === this.hoveredCubeKey) return
+    this.hoveredCubeKey = key
+
+    const hexWidth = 2
+    const hexHeight = 2 / Math.sqrt(3) * 2
+    const hexRadius = 2 / Math.sqrt(3)
+
+    const cells = cubeCoordsInRadius(cq, cr, cs, 1)
+      .filter(c => this.globalCells.has(cubeKey(c.q, c.r, c.s)))
+
+    const positions = this.hoverHighlight.geometry.attributes.position.array
+    const fillPositions = this.hoverFill.geometry.attributes.position.array
+    let idx = 0
+    let fIdx = 0
+
+    for (const { q, r, s } of cells) {
+      const offset = cubeToOffset(q, r, s)
+      const cx = offset.col * hexWidth + (Math.abs(offset.row) % 2) * hexWidth * 0.5
+      const cz = offset.row * hexHeight * 0.75
+
+      for (let i = 0; i < 6; i++) {
+        const a1 = i * Math.PI / 3
+        const a2 = ((i + 1) % 6) * Math.PI / 3
+        const x1 = cx + Math.sin(a1) * hexRadius
+        const z1 = cz + Math.cos(a1) * hexRadius
+        const x2 = cx + Math.sin(a2) * hexRadius
+        const z2 = cz + Math.cos(a2) * hexRadius
+
+        // Line edge
+        positions[idx++] = x1; positions[idx++] = 1; positions[idx++] = z1
+        positions[idx++] = x2; positions[idx++] = 1; positions[idx++] = z2
+
+        // Fill triangle (center, v1, v2)
+        fillPositions[fIdx++] = cx; fillPositions[fIdx++] = 1; fillPositions[fIdx++] = cz
+        fillPositions[fIdx++] = x1; fillPositions[fIdx++] = 1; fillPositions[fIdx++] = z1
+        fillPositions[fIdx++] = x2; fillPositions[fIdx++] = 1; fillPositions[fIdx++] = z2
+      }
+    }
+
+    this.hoverHighlight.geometry.attributes.position.needsUpdate = true
+    this.hoverHighlight.geometry.setDrawRange(0, idx / 3)
+    this.hoverHighlight.visible = true
+
+    this.hoverFill.geometry.attributes.position.needsUpdate = true
+    this.hoverFill.geometry.setDrawRange(0, fIdx / 3)
+    this.hoverFill.visible = true
+  }
+
+  /**
+   * Hide the hover highlight
+   */
+  clearHoverHighlight() {
+    if (this.hoveredCubeKey !== null) {
+      this.hoveredCubeKey = null
+      this.hoverHighlight.visible = false
+      this.hoverFill.visible = false
+    }
+  }
+
+  /**
    * Handle pointer move for placeholder hover
    * @param {Vector2} pointer - Normalized device coordinates
    * @param {Camera} camera - Scene camera
    */
   onPointerMove(pointer, camera) {
-    // Collect all placeholder clickables (buttons + triangles) from grids in PLACEHOLDER state
+    this.raycaster.setFromCamera(pointer, camera)
+
+    // Placeholder hover
     const placeholderClickables = []
     for (const grid of this.grids.values()) {
       if (grid.state === HexGridState.PLACEHOLDER) {
@@ -1837,18 +1962,17 @@ export class HexMap {
       }
     }
 
-    if (placeholderClickables.length === 0) return
-
-    // Raycast against placeholder clickables
     this.raycaster.setFromCamera(pointer, camera)
-    const intersects = this.raycaster.intersectObjects(placeholderClickables)
 
-    // Determine new hovered grid
+    // Determine new hovered grid from placeholders
     let newHovered = null
-    if (intersects.length > 0) {
-      const clickable = intersects[0].object
-      if (clickable.userData.isPlaceholder) {
-        newHovered = clickable.userData.owner?.group?.userData?.hexGrid ?? null
+    if (placeholderClickables.length > 0) {
+      const intersects = this.raycaster.intersectObjects(placeholderClickables)
+      if (intersects.length > 0) {
+        const clickable = intersects[0].object
+        if (clickable.userData.isPlaceholder) {
+          newHovered = clickable.userData.owner?.group?.userData?.hexGrid ?? null
+        }
       }
     }
 
@@ -1863,6 +1987,41 @@ export class HexMap {
         Sounds.play('roll', 1.0, 0.2, 0.5)
       }
     }
+
+    // Hex tile hover — show 7-cell solve region highlight (mouse only)
+    if ('ontouchstart' in window) {
+      this.clearHoverHighlight()
+      return
+    }
+    const hexMeshes = []
+    const meshToGrid = new Map()
+    for (const grid of this.grids.values()) {
+      if (grid.state === HexGridState.POPULATED && grid.hexMesh) {
+        hexMeshes.push(grid.hexMesh)
+        meshToGrid.set(grid.hexMesh, grid)
+      }
+    }
+
+    if (hexMeshes.length > 0) {
+      const intersects = this.raycaster.intersectObjects(hexMeshes)
+      if (intersects.length > 0) {
+        const hit = intersects[0]
+        const grid = meshToGrid.get(hit.object)
+        const batchId = hit.batchId ?? hit.instanceId
+        if (grid && batchId !== undefined) {
+          const tile = grid.hexTiles.find(t => t.instanceId === batchId)
+          if (tile) {
+            const globalCube = grid.globalCenterCube ?? { q: 0, r: 0, s: 0 }
+            const global = localToGlobalCoords(tile.gridX, tile.gridZ, grid.gridRadius, globalCube)
+            const globalCubeCoords = offsetToCube(global.col, global.row)
+            this.updateHoverHighlight(globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s)
+            return
+          }
+        }
+      }
+    }
+
+    this.clearHoverHighlight()
   }
 
   /**
@@ -1919,10 +2078,84 @@ export class HexMap {
             const def = TILE_LIST[tile.type]
             const globalCube = grid.globalCenterCube ?? { q: 0, r: 0, s: 0 }
             const global = localToGlobalCoords(tile.gridX, tile.gridZ, grid.gridRadius, globalCube)
-            console.log(
-              `%c[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} type=${tile.type} rot=${tile.rotation} level=${tile.level}`,
-              'color: blue'
-            )
+            const globalCubeCoords = offsetToCube(global.col, global.row)
+
+            log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} type=${tile.type} rot=${tile.rotation} — mini WFC solve`, 'color: blue')
+
+            // Mini WFC solve: re-solve clicked tile + 6 neighbors
+            const solveCells = cubeCoordsInRadius(
+              globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s, 1
+            ).filter(c => this.globalCells.has(cubeKey(c.q, c.r, c.s)))
+
+            const fixedCells = this.getFixedCellsForRegion(solveCells)
+            const tileTypes = this.getDefaultTileTypes()
+
+            this.solveWfcAsync(solveCells, fixedCells, {
+              tileTypes,
+              maxRestarts: 5,
+            }).then(result => {
+              if (result.success && result.tiles) {
+                // Check if result is identical to current state
+                const allSame = result.tiles.every(t => {
+                  const existing = this.globalCells.get(cubeKey(t.q, t.r, t.s))
+                  return existing && existing.type === t.type && existing.rotation === t.rotation && existing.level === t.level
+                })
+
+                // Replace tiles and collect changed tiles per grid for decoration repopulation
+                const changedTilesPerGrid = new Map()
+
+                for (const t of result.tiles) {
+                  const key = cubeKey(t.q, t.r, t.s)
+                  const existing = this.globalCells.get(key)
+                  if (!existing) continue
+
+                  const sourceGrid = this.grids.get(existing.gridKey)
+                  if (!sourceGrid) continue
+
+                  const localCube = {
+                    q: t.q - sourceGrid.globalCenterCube.q,
+                    r: t.r - sourceGrid.globalCenterCube.r,
+                    s: t.s - sourceGrid.globalCenterCube.s,
+                  }
+                  const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
+                  const gridX = localOffset.col + sourceGrid.gridRadius
+                  const gridZ = localOffset.row + sourceGrid.gridRadius
+
+                  sourceGrid.replaceTile(gridX, gridZ, t.type, t.rotation, t.level)
+
+                  const replacedTile = sourceGrid.hexGrid[gridX]?.[gridZ]
+                  if (replacedTile) {
+                    if (!changedTilesPerGrid.has(sourceGrid)) changedTilesPerGrid.set(sourceGrid, [])
+                    changedTilesPerGrid.get(sourceGrid).push(replacedTile)
+                  }
+                }
+
+                // Animate tile drop-in (staggered) then decorations
+                const TILE_STAGGER = 60
+                const DEC_DELAY = 400
+                const DEC_STAGGER = 40
+                for (const [g, tiles] of changedTilesPerGrid) {
+                  tiles.forEach((t, i) => {
+                    setTimeout(() => g.animateTileDrop(t), i * TILE_STAGGER)
+                  })
+                  const newDecs = g.decorations?.repopulateTilesAt(tiles, g.gridRadius, g.hexGrid)
+                  if (newDecs && newDecs.length > 0) {
+                    const decStart = tiles.length * TILE_STAGGER + DEC_DELAY
+                    newDecs.forEach((dec, j) => {
+                      setTimeout(() => g.animateDecoration(dec), decStart + j * DEC_STAGGER)
+                    })
+                  }
+                }
+
+                this.addToGlobalCells('click-resolve', result.tiles)
+
+                log(`[TILE RESOLVE] (${global.col},${global.row}) solved ${result.tiles.length} tiles`, 'color: green')
+                import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0.15))
+              } else {
+                log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} — mini WFC failed`, 'color: red')
+                import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('incorrect'))
+              }
+            })
           }
         }
       }
@@ -2300,6 +2533,13 @@ export class HexMap {
       if (grid.axesHelper) {
         overlays.push(grid.axesHelper)
       }
+    }
+    // Hover highlight
+    if (this.hoverHighlight) {
+      overlays.push(this.hoverHighlight)
+    }
+    if (this.hoverFill) {
+      overlays.push(this.hoverFill)
     }
     return overlays
   }

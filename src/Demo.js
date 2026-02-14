@@ -29,6 +29,12 @@ export function setStatus(text) {
   }
 }
 
+// Set status and yield to browser so the paint is visible
+export function setStatusAsync(text) {
+  setStatus(text)
+  return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+}
+
 // Log to both console and status bar
 export function log(text, style = '') {
   if (style) {
@@ -36,7 +42,7 @@ export function log(text, style = '') {
   } else {
     console.log(text)
   }
-  setStatus(text)
+  setStatus(text, style)
 }
 
 export class Demo {

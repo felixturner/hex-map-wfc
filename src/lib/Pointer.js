@@ -1,6 +1,8 @@
 import { Raycaster, Vector2, Vector3 } from 'three/webgpu'
 import { uniform } from 'three/tsl'
 
+const CLICK_THRESHOLD = 5 // Max pixels between pointerdown and pointerup to count as a click
+
 /**
  * Helper class to handle pointer position and "down" with output exposed in vector3 and uniforms
  */
@@ -21,6 +23,10 @@ export class Pointer {
     // Raycast targets for hover detection
     this.raycastTargets = []
     this.onHoverCallback = null
+
+    // Click vs drag tracking
+    this.downClientX = 0
+    this.downClientY = 0
 
     renderer.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this))
     renderer.domElement.addEventListener('pointerup', this.onPointerUp.bind(this))
@@ -43,33 +49,9 @@ export class Pointer {
       this.uPointerDown.value = 1
       this.isTouch = e.pointerType === 'touch'
 
-      // Raycast for click detection
-      if (this.onPointerDownCallback) {
-        this.clientPointer.set(e.clientX, e.clientY)
-        this.pointer.set(
-          (e.clientX / window.innerWidth) * 2 - 1,
-          -(e.clientY / window.innerHeight) * 2 + 1
-        )
-        this.rayCaster.setFromCamera(this.pointer, this.camera)
-        const intersects = this.raycastTargets.length > 0
-          ? this.rayCaster.intersectObjects(this.raycastTargets, false)
-          : []
-        const intersection = intersects.length > 0 ? intersects[0] : null
-
-        // For touch, store coords for later use on pointerup
-        // For mouse, call callback immediately
-        if (this.isTouch) {
-          this.pendingTouchIntersection = intersection
-          this.touchStartClientX = e.clientX
-          this.touchStartClientY = e.clientY
-        } else {
-          const handled = this.onPointerDownCallback(intersection, e.clientX, e.clientY, false)
-          // Stop propagation if callback handled the event
-          if (handled) {
-            e.stopPropagation()
-          }
-        }
-      }
+      // Store down position for click vs drag detection
+      this.downClientX = e.clientX
+      this.downClientY = e.clientY
     }
     this.clientPointer.set(e.clientX, e.clientY)
     this.updateScreenPointer(e)
@@ -80,13 +62,23 @@ export class Pointer {
     this.updateScreenPointer(e)
 
     if (this.pointerDown) {
-      // For touch, fire the pointerDown callback on tap (pointerup) so
-      // placeholder grid buttons work on mobile
-      if (this.isTouch && this.onPointerDownCallback && this.touchStartClientX !== undefined) {
-        this.onPointerDownCallback(this.pendingTouchIntersection ?? null, this.touchStartClientX, this.touchStartClientY, true)
-        this.pendingTouchIntersection = undefined
-        this.touchStartClientX = undefined
-        this.touchStartClientY = undefined
+      // Check if pointer moved less than threshold — it's a click, not a drag
+      const dx = e.clientX - this.downClientX
+      const dy = e.clientY - this.downClientY
+      const isClick = (dx * dx + dy * dy) < CLICK_THRESHOLD * CLICK_THRESHOLD
+
+      if (isClick && this.onPointerDownCallback) {
+        // Raycast using the pointerup position
+        this.pointer.set(
+          (e.clientX / window.innerWidth) * 2 - 1,
+          -(e.clientY / window.innerHeight) * 2 + 1
+        )
+        this.rayCaster.setFromCamera(this.pointer, this.camera)
+        const intersects = this.raycastTargets.length > 0
+          ? this.rayCaster.intersectObjects(this.raycastTargets, false)
+          : []
+        const intersection = intersects.length > 0 ? intersects[0] : null
+        this.onPointerDownCallback(intersection, e.clientX, e.clientY, this.isTouch)
       }
 
       if (this.onPointerUpCallback) {
@@ -143,9 +135,7 @@ export class Pointer {
       if (intersects.length > 0) {
         this.onRightClickCallback(intersects[0])
         // Block the subsequent touch tap (long press triggers contextmenu then pointerup)
-        this.pendingTouchIntersection = undefined
-        this.touchStartClientX = undefined
-        this.touchStartClientY = undefined
+        this.downClientX = Infinity
       }
     }
   }
