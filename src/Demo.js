@@ -218,16 +218,16 @@ export class Demo {
       MIDDLE: 1, // DOLLY
       RIGHT: 0   // ROTATE
     }
-    // Touch: 1 finger=pan, 2 fingers=rotate+zoom
+    // Touch: 1 finger=rotate, 2 fingers=pan+zoom (OrbitControls default)
     // TOUCH constants: ROTATE=0, PAN=1, DOLLY_PAN=2, DOLLY_ROTATE=3
     this.controls.touches = {
-      ONE: 1,  // TOUCH.PAN
-      TWO: 3   // TOUCH.DOLLY_ROTATE
+      ONE: 0,  // TOUCH.ROTATE
+      TWO: 2   // TOUCH.DOLLY_PAN
     }
     // Zoom/rotation limits - defaults allow unlimited (debugCam: true)
-    this.controls.minDistance = 0
+    this.controls.minDistance = 25
     this.controls.maxDistance = 125
-    this.controls.maxPolarAngle = 1.44
+    this.controls.maxPolarAngle = 1.1
     // Pan parallel to ground plane instead of screen
     this.controls.screenSpacePanning = false
     this.controls.target.set(0.903, 1, 1.168)

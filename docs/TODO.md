@@ -1,13 +1,11 @@
 # TODO
 
-- click tile to randomly replace it with a wfc candidate.
-- add walls as wfc tiles w grass
+- add tile pallet water,mountain,grass, town. clikcc that then ground.
+- add walls as wfc tiles w grass (tried ugly)
 
- use bigger world noise fields for water, mountains + forests, cities?
+- use bigger world noise fields for water, mountains + forests, cities? WIP
   - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
 - Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
-
-- Post - add subtle tilt shift, bleach,grain, LUT
 
 -----
 
@@ -56,4 +54,5 @@
 - fix lillies can get cropped by coast
 - prebake AO in blender?
 - add village furniture - barrels, water troghs, carts etc
+- smooth cam zoom
 

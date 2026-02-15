@@ -162,8 +162,8 @@ export class GUIManager {
       demo.city.setAxesHelpersVisible(v)
     })
     gui.add(allParams.debug, 'debugCam').name('Debug Cam').onChange((v) => {
-      demo.controls.maxPolarAngle = v ? Math.PI : 1.44
-      demo.controls.minDistance = v ? 0 : 40
+      demo.controls.maxPolarAngle = v ? Math.PI : 1.1
+      demo.controls.minDistance = v ? 0 : 25
       demo.controls.maxDistance = v ? Infinity : 125
     })
     gui.add(allParams.debug, 'hexGrid').name('Hex Helper').onChange((v) => {
@@ -500,8 +500,8 @@ export class GUIManager {
     // Camera
     demo.perspCamera.fov = params.camera.fov
     demo.perspCamera.updateProjectionMatrix()
-    demo.controls.maxPolarAngle = params.debug.debugCam ? Math.PI : 1.44
-    demo.controls.minDistance = params.debug.debugCam ? 0 : 40
+    demo.controls.maxPolarAngle = params.debug.debugCam ? Math.PI : 1.1
+    demo.controls.minDistance = params.debug.debugCam ? 0 : 25
     demo.controls.maxDistance = params.debug.debugCam ? Infinity : 125
     if (demo.axesHelper) demo.axesHelper.visible = params.debug.originHelper
     demo.city.setAxesHelpersVisible(params.debug.originHelper)
