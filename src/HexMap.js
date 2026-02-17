@@ -10,7 +10,6 @@ import {
   TextureLoader,
   SRGBColorSpace,
   AdditiveBlending,
-  MultiplyBlending,
   BufferGeometry,
   Float32BufferAttribute,
   LineSegments,
@@ -800,7 +799,7 @@ export class HexMap {
     geometry.rotateX(-Math.PI / 2)
 
     // GUI-controllable uniforms
-    this._waterOpacity = uniform(0.2)
+    this._waterOpacity = uniform(0.7)
     this._waterSpeed = uniform(0.3)
     this._waterFreq = uniform(0.9)
     this._waterDirAngle = uniform(209 * Math.PI / 180)  // radians
@@ -815,7 +814,6 @@ export class HexMap {
       transparent: true,
       depthWrite: false,
       depthTest: true,
-      blending: AdditiveBlending,
     })
 
     // Rotate world pos into wave-aligned coordinates (across, along)
@@ -839,8 +837,7 @@ export class HexMap {
     const freq = this._waterFreq
     const stretch = this._waterStretch
 
-    // Two 3D voronoi layers — time as Z axis for non-directional animation
-    // Stretch applied to acrossWave axis, drift moves pattern directionally
+    // Bright voronoi — two 3D layers
     const pos1 = vec3(
       acrossWave.mul(freq.mul(0.8)).mul(stretch).add(drift.mul(stretch)),
       alongWave.mul(freq.mul(0.8)),
@@ -851,37 +848,12 @@ export class HexMap {
       alongWave2.mul(freq.mul(1.5)),
       tslTime.mul(speed.mul(0.4))
     )
-
-    // mx_worley_noise_float returns distance to nearest cell point (0 at center, ~1 at edges)
-    // Raise to power to steepen falloff — bigger dark holes, thinner bright edges
     const noise1 = mx_worley_noise_float(pos1).pow(this._waterEdgePow)
     const noise2 = mx_worley_noise_float(pos2).pow(this._waterEdgePow)
-
-    // Combine and threshold
     const combined = noise1.add(noise2).mul(0.5)
     const sparkle = clamp(combined.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
 
-    // Additive blending: emissive controls brightness, opacity scales overall intensity
-    material.colorNode = vec3(0, 0, 0)
-    material.emissiveNode = vec3(sparkle, sparkle, sparkle).mul(this._waterOpacity)
-    material.opacityNode = float(1)
-
-    this.waterPlane = new Mesh(geometry, material)
-    this.waterPlane.position.y = 0.92
-    this.scene.add(this.waterPlane)
-
-    // Dark underlay — multiply blending darkens between the bright edges
-    const darkGeometry = new PlaneGeometry(296, 296)
-    darkGeometry.rotateX(-Math.PI / 2)
-
-    const darkMaterial = new MeshPhysicalNodeMaterial({
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      blending: MultiplyBlending,
-    })
-
-    // Dark voronoi — same structure but offset positions so it doesn't overlap bright layer
+    // Dark voronoi — offset positions so it doesn't overlap bright layer
     const darkPos1 = vec3(
       acrossWave.mul(freq.mul(0.8)).mul(stretch).add(drift.mul(stretch)).add(100.0),
       alongWave.mul(freq.mul(0.8)).add(100.0),
@@ -897,16 +869,25 @@ export class HexMap {
     const darkCombined = darkNoise1.add(darkNoise2).mul(0.5)
     const darkSparkle = clamp(darkCombined.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
 
-    // Multiply blend: white (1) = no change, dark = darken
-    const darkColor = float(1).sub(darkSparkle.mul(this._waterDarkOpacity))
+    // Blend bright (white) and dark (black) into one RGBA output
+    // Where bright sparkle: white with high alpha. Where dark: black with some alpha.
+    // Where neither: alpha 0 (transparent)
+    const brightAlpha = sparkle.mul(this._waterOpacity)
+    const darkAlpha = darkSparkle.mul(this._waterDarkOpacity)
+    const totalAlpha = clamp(brightAlpha.add(darkAlpha), 0.0, 1.0)
+    // Weighted color: bright pushes toward white, dark pushes toward black
+    const waterColor = select(totalAlpha.greaterThan(0.001),
+      vec3(brightAlpha, brightAlpha, brightAlpha).div(totalAlpha),
+      vec3(0, 0, 0)
+    )
 
-    darkMaterial.colorNode = vec3(0, 0, 0)
-    darkMaterial.emissiveNode = vec3(darkColor, darkColor, darkColor)
-    darkMaterial.opacityNode = float(1)
+    material.colorNode = vec3(0, 0, 0)
+    material.emissiveNode = waterColor
+    material.opacityNode = totalAlpha
 
-    this.waterDarkPlane = new Mesh(darkGeometry, darkMaterial)
-    this.waterDarkPlane.position.y = 0.919
-    this.scene.add(this.waterDarkPlane)
+    this.waterPlane = new Mesh(geometry, material)
+    this.waterPlane.position.y = 0.92
+    this.scene.add(this.waterPlane)
   }
 
   /**
@@ -2652,6 +2633,12 @@ export class HexMap {
     const effects = []
     if (this.weather) effects.push(this.weather.group)
     return effects
+  }
+
+  getWaterObjects() {
+    const water = []
+    if (this.waterPlane) water.push(this.waterPlane)
+    return water
   }
 
   // Stub methods for Demo.js compatibility

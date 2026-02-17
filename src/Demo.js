@@ -453,6 +453,7 @@ export class Demo {
     // Update render layers
     postFX.setOverlayObjects(this.city.getOverlayObjects())
     postFX.setEffectsObjects(this.city.getEffectsObjects())
+    postFX.setWaterObjects(this.city.getWaterObjects())
 
     postFX.render()
 

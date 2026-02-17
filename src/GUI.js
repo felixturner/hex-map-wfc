@@ -111,7 +111,7 @@ export class GUIManager {
     },
     water: {
       y: 0.92,
-      opacity: 0.2,
+      opacity: 0.7,
       speed: 0.3,
       freq: 0.9,
       dirAngle: 209,
