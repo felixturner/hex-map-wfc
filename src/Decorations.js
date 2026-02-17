@@ -60,7 +60,7 @@ function hasRoadEdge(tileType) {
 function isCoastOrOcean(tileType) {
   const def = TILE_LIST[tileType]
   if (!def) return false
-  return def.name.startsWith('COAST_') || def.name === 'WATER'
+  return def.name.startsWith('COAST_') || def.name === 'OCEAN'
 }
 
 // Check if a tile is a road dead-end (exactly 1 road edge) and return the exit direction
@@ -244,6 +244,10 @@ export class Decorations {
         }
       })
       if (geom) {
+        // Sink mountain meshes so they appear shorter
+        if (MountainMeshNames.includes(meshName)) {
+          geom.translate(0, -0.5, 0)
+        }
         Decorations.cachedGeoms.set(meshName, geom)
       } else {
         console.warn(`[Dec] NOT FOUND: ${meshName}`)
@@ -725,8 +729,10 @@ export class Decorations {
 
     for (const tile of hexTiles) {
       // River tiles (not crossings — those have bridges) and coast tiles
-      const tileName = TILE_LIST[tile.type]?.name
+      const tileDef = TILE_LIST[tile.type]
+      const tileName = tileDef?.name
       if (!tileName) continue
+      if (tileDef.debug !== undefined) continue  // Skip debug tiles
       const isRiver = tileName.startsWith('RIVER_') && !tileName.startsWith('RIVER_CROSSING')
       const isCoast = tileName.startsWith('COAST_')
       if (!isRiver && !isCoast) continue
@@ -842,6 +848,7 @@ export class Decorations {
     for (const tile of hexTiles) {
       const def = TILE_LIST[tile.type]
       if (!def) continue
+      if (def.debug !== undefined) continue  // Skip debug tiles
       const name = def.name
       const isCliff = name.includes('CLIFF')
       const isCoast = name.startsWith('COAST_')
@@ -880,7 +887,7 @@ export class Decorations {
         const rotationY = random() * Math.PI * 2
 
         const tileName = TILE_LIST[tile.type]?.name || ''
-        const surfaceDip = tileName === 'WATER' ? -0.2 : (tileName.startsWith('COAST_') || tileName.startsWith('RIVER_')) ? -0.1 : 0
+        const surfaceDip = tileName === 'OCEAN' ? -0.2 : (tileName.startsWith('COAST_') || tileName.startsWith('RIVER_')) ? -0.1 : 0
         this.dummy.position.set(localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE + surfaceDip, localPos.z + oz)
         this.dummy.rotation.y = rotationY
         this.dummy.scale.setScalar(1)
@@ -908,9 +915,10 @@ export class Decorations {
     for (const tile of hexTiles) {
       const def = TILE_LIST[tile.type]
       if (!def) continue
+      if (def.debug !== undefined) continue  // Skip debug tiles
 
       const isCliff = def.levelIncrement && def.name.includes('CLIFF')
-      const isRiverEnd = def.name === 'RIVER_M'
+      const isRiverEnd = def.name === 'RIVER_END'
       const isHighGrass = def.name === 'GRASS' && tile.level >= LEVELS_COUNT - 1
 
       if (!isCliff && !isRiverEnd && !isHighGrass) continue
@@ -1170,6 +1178,7 @@ export class Decorations {
       )
       const def = TILE_LIST[tile.type]
       if (!def) continue
+      if (def.debug !== undefined) continue  // Skip debug tiles
       const name = def.name
 
       // Trees (noise-based, same as populate)
@@ -1296,7 +1305,7 @@ export class Decorations {
 
       // Hills and mountains
       const isCliff = def.levelIncrement && name.includes('CLIFF')
-      const isRiverEnd = name === 'RIVER_M'
+      const isRiverEnd = name === 'RIVER_END'
       const isHighGrass = name === 'GRASS' && tile.level >= 2
       if ((isCliff || isRiverEnd || isHighGrass) && this.staticMesh) {
         const chance = isRiverEnd ? 0.3 : isHighGrass ? 0.1 : 0.1
@@ -1343,7 +1352,7 @@ export class Decorations {
             const ox = (random() - 0.5) * 1.2
             const oz = (random() - 0.5) * 1.2
             const rotationY = random() * Math.PI * 2
-            const surfaceDip = (name === 'WATER') ? -0.2 : (isCoast || isRiver) ? -0.1 : 0
+            const surfaceDip = (name === 'OCEAN') ? -0.2 : (isCoast || isRiver) ? -0.1 : 0
             const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE + surfaceDip
             this.dummy.position.set(localPos.x + ox, y, localPos.z + oz)
             this.dummy.rotation.y = rotationY

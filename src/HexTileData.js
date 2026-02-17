@@ -17,15 +17,15 @@ export const TILE_LIST = [
   // Base
   { name: 'GRASS', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
-    weight: 300 },
-  { name: 'WATER', mesh: 'hex_water',
+    weight: 500 },
+  { name: 'OCEAN', mesh: 'hex_water',
     edges: { NE: 'ocean', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'ocean', NW: 'ocean' },
-    weight: 50 },
+    weight: 500 },
 
   // Roads
   { name: 'ROAD_A', mesh: 'hex_road_A',
     edges: { NE: 'grass', E: 'road', SE: 'grass', SW: 'grass', W: 'road', NW: 'grass' },
-    weight: 10 },
+    weight: 30 },
   { name: 'ROAD_B', mesh: 'hex_road_B',
     edges: { NE: 'road', E: 'grass', SE: 'grass', SW: 'grass', W: 'road', NW: 'grass' },
     weight: 8 },
@@ -59,9 +59,9 @@ export const TILE_LIST = [
   // { name: 'ROAD_L', mesh: 'hex_road_L',  // removed from GLB
   //   edges: { NE: 'road', E: 'road', SE: 'road', SW: 'road', W: 'road', NW: 'road' },
   //   weight: 1 },
-  { name: 'ROAD_M', mesh: 'hex_road_M',
+  { name: 'ROAD_END', mesh: 'hex_road_M',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'road', NW: 'grass' },
-    weight: 4 },
+    weight: 1, preventChaining: true },
 
   // Rivers
   { name: 'RIVER_A', mesh: 'hex_river_A',
@@ -72,7 +72,7 @@ export const TILE_LIST = [
     weight: 20 },
   { name: 'RIVER_B', mesh: 'hex_river_B',
     edges: { NE: 'river', E: 'grass', SE: 'grass', SW: 'grass', W: 'river', NW: 'grass' },
-    weight: 60 },
+    weight: 30 },
   // { name: 'RIVER_C', mesh: 'hex_river_C',  // removed from GLB
   //   edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'river', NW: 'river' },
   //   weight: 8 },
@@ -103,9 +103,9 @@ export const TILE_LIST = [
   // { name: 'RIVER_L', mesh: 'hex_river_L',  // removed from GLB
   //   edges: { NE: 'river', E: 'river', SE: 'river', SW: 'river', W: 'river', NW: 'river' },
   //   weight: 2 },
-  { name: 'RIVER_M', mesh: 'hex_river_M',
+  { name: 'RIVER_END', mesh: 'hex_river_M',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'river', NW: 'grass' },
-    weight: 8 },
+    weight: 4, preventChaining: true },
 
   // Coasts
   { name: 'COAST_A', mesh: 'hex_coast_A',
@@ -124,6 +124,24 @@ export const TILE_LIST = [
     edges: { NE: 'grass', E: 'grass', SE: 'coast', SW: 'coast', W: 'grass', NW: 'grass' },
     weight: 10, preventChaining: true },
 
+  // Coast slope (debug)
+  { name: 'COAST_SLOPE_A_LOW', mesh: 'hex_grass_sloped_low',
+    edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'ocean', NW: 'coast' },
+    weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1, debug: { color: 0xff0000, stripe: 'W' } },
+  { name: 'COAST_SLOPE_A_HIGH', mesh: 'hex_grass_sloped_high',
+    edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'ocean', NW: 'coast' },
+    weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2, debug: { color: 0xff0000, stripe: 'W', yOffset: 0.5 } },
+
+  // River slope (debug)
+  { name: 'RIVER_A_SLOPE_LOW', mesh: 'hex_road_A_sloped_low',
+    edges: { NE: 'grass', E: 'river', SE: 'grass', SW: 'grass', W: 'river', NW: 'grass' },
+    weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1, debug: { color: 0xff0000 } },
+
+  // River-into-coast (debug)
+  { name: 'RIVER_INTO_COAST', mesh: 'hex_coast_C',
+    edges: { NE: 'coast', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'coast', NW: 'river' },
+    weight: 3, preventChaining: true, debug: { color: 0xff0000, stripe: 'NW' } },
+
   // Crossings
   { name: 'RIVER_CROSSING_A', mesh: 'hex_river_crossing_A',
     edges: { NE: 'grass', E: 'river', SE: 'road', SW: 'grass', W: 'river', NW: 'road' },
@@ -135,43 +153,86 @@ export const TILE_LIST = [
   // High slopes (2-level rise)
   { name: 'GRASS_SLOPE_HIGH', mesh: 'hex_grass_sloped_high',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
-    weight: 20, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2 },
+    weight: 10, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2 },
   { name: 'ROAD_A_SLOPE_HIGH', mesh: 'hex_road_A_sloped_high',
     edges: { NE: 'grass', E: 'road', SE: 'grass', SW: 'grass', W: 'road', NW: 'grass' },
-    weight: 12, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2 },
+    weight: 3, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2 },
   { name: 'GRASS_CLIFF', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
-    weight: 6, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2 },
+    weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2 },
   // { name: 'GRASS_CLIFF_B', mesh: 'hex_grass',
   //   edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
   //   weight: 6, highEdges: ['NE', 'E', 'SE', 'SW'], levelIncrement: 2 },
   { name: 'GRASS_CLIFF_C', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
-    weight: 6, highEdges: ['E'], levelIncrement: 2 },
+    weight: 1, highEdges: ['E'], levelIncrement: 2 },
 
   // Low slopes (1-level rise)
   { name: 'GRASS_SLOPE_LOW', mesh: 'hex_grass_sloped_low',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
-    weight: 20, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1 },
+    weight: 10, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1 },
   { name: 'ROAD_A_SLOPE_LOW', mesh: 'hex_road_A_sloped_low',
     edges: { NE: 'grass', E: 'road', SE: 'grass', SW: 'grass', W: 'road', NW: 'grass' },
-    weight: 12, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1 },
+    weight: 3, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1 },
   { name: 'GRASS_CLIFF_LOW', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
-    weight: 6, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1 },
+    weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1 },
   // { name: 'GRASS_CLIFF_LOW_B', mesh: 'hex_grass',
   //   edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
   //   weight: 6, highEdges: ['NE', 'E', 'SE', 'SW'], levelIncrement: 1 },
   { name: 'GRASS_CLIFF_LOW_C', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
-    weight: 6, highEdges: ['E'], levelIncrement: 1 },
+    weight: 1, highEdges: ['E'], levelIncrement: 1 },
 ]
 
 /**
  * Name → index lookup (derived from TILE_LIST)
- * e.g. TileType.GRASS === 0, TileType.WATER === 1
+ * e.g. TileType.GRASS === 0, TileType.OCEAN === 1
  */
 export const TileType = Object.fromEntries(TILE_LIST.map((t, i) => [t.name, i]))
+
+/**
+ * Terrain palette categories — maps palette key to favored tile types and level weights
+ */
+export const TERRAIN_CATEGORIES = {
+  grass: {
+    types: [TileType.GRASS],
+    levelWeights: { 0: 10, 1: 1, 2: 0.1, 3: 0.01 },
+  },
+  mountain: {
+    types: [
+      TileType.GRASS_SLOPE_HIGH, TileType.GRASS_SLOPE_LOW,
+      TileType.GRASS_CLIFF, TileType.GRASS_CLIFF_C,
+      TileType.GRASS_CLIFF_LOW, TileType.GRASS_CLIFF_LOW_C,
+      TileType.ROAD_A_SLOPE_HIGH, TileType.ROAD_A_SLOPE_LOW,
+    ],
+    levelWeights: { 0: 0.1, 1: 1, 2: 5, 3: 10 },
+  },
+  ocean: {
+    types: [
+      TileType.OCEAN, TileType.COAST_A, TileType.COAST_B, TileType.COAST_C, TileType.COAST_D, TileType.COAST_E,
+      TileType.RIVER_INTO_COAST, TileType.COAST_SLOPE_A_LOW, TileType.COAST_SLOPE_A_HIGH,
+    ],
+    levelWeights: null,
+  },
+  river: {
+    types: [
+      TileType.RIVER_A, TileType.RIVER_A_CURVY, TileType.RIVER_B,
+      TileType.RIVER_D, TileType.RIVER_E, TileType.RIVER_F,
+      TileType.RIVER_END, TileType.RIVER_CROSSING_A, TileType.RIVER_CROSSING_B,
+      TileType.RIVER_INTO_COAST, TileType.RIVER_A_SLOPE_LOW,
+    ],
+    levelWeights: null,
+  },
+  road: {
+    types: [
+      TileType.ROAD_A, TileType.ROAD_B, TileType.ROAD_D,
+      TileType.ROAD_E, TileType.ROAD_F, TileType.ROAD_END,
+      TileType.ROAD_A_SLOPE_HIGH, TileType.ROAD_A_SLOPE_LOW,
+    ],
+    levelWeights: null,
+  },
+}
 
 /**
  * Hex directions (6 edges) for pointy-top orientation

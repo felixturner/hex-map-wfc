@@ -219,13 +219,11 @@ export class GUIManager {
     } }, 'regen').name('Regen')
     gui.add({ exportPNG: () => demo.exportPNG() }, 'exportPNG').name('Export PNG')
     gui.add({ autoBuild: () => demo.city.autoExpand([
-      [0,0],[0,1],[-1,0],[-1,-1],[0,-1],[1,-1],[1,-2],[2,-1],[-1,1],[0,2],[1,1],[2,0],[2,1],[1,0],[0,-2],[-1,-2],[-2,-1],[-2,0],[-2,1]
+      [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
     ]) }, 'autoBuild').name('Build Sequentially')
     gui.add({ buildAll: () => {
       import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0, 0.3))
-      demo.city.populateAllGrids([
-        [0,1],[-1,0],[-1,-1],[0,-1],[1,-1],[1,-2],[2,-1],[-1,1],[0,2],[1,1],[2,0],[2,1],[1,0],[0,-2],[-1,-2],[-2,-1],[-2,0],[-2,1]
-      ])
+      demo.city.populateAllGrids()
     } }, 'buildAll').name('Build All')
 
     gui.add({

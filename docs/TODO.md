@@ -55,4 +55,5 @@
 - prebake AO in blender?
 - add village furniture - barrels, water troghs, carts etc
 - smooth cam zoom
-
+- put backtrasck limit back to 500
+- animate rotate tiles in like railway board

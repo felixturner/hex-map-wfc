@@ -70,6 +70,7 @@ export class Demo {
     this.lighting = null
     this.params = null
     this.cssRenderer = null  // CSS2DRenderer for debug labels
+    this.clickTerrainType = 'none'  // Selected terrain palette key
 
     if (Demo.instance != null) {
       console.warn('Demo instance already exists')
@@ -110,6 +111,7 @@ export class Demo {
     this.initStats()
     this.initCSSRenderer()
     this.initStatusOverlay()
+    this.initTerrainPalette()
 
     this.seedElement.textContent = `seed: ${seed}`
 
@@ -338,6 +340,70 @@ export class Demo {
       z-index: 1000;
     `
     document.body.appendChild(this.seedElement)
+  }
+
+  initTerrainPalette() {
+    const terrains = [
+      { key: 'none', label: 'None' },
+      { key: 'grass', label: 'Grass' },
+      { key: 'mountain', label: 'Mountain' },
+      { key: 'ocean', label: 'Ocean' },
+      { key: 'river', label: 'River' },
+      { key: 'road', label: 'Road' },
+    ]
+
+    const container = document.createElement('div')
+    container.style.cssText = `
+      position: fixed;
+      top: 56px;
+      left: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 1000;
+    `
+    document.body.appendChild(container)
+
+    const buttons = []
+
+    for (const { key, label } of terrains) {
+      const btn = document.createElement('button')
+      btn.textContent = label
+      btn.style.cssText = `
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        border: 2px solid rgba(255,255,255,0.3);
+        background: rgba(0,0,0,0.4);
+        color: white;
+        font-family: monospace;
+        font-size: 14px;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+      `
+      btn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation()
+      })
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        if (this.clickTerrainType === key) {
+          // Deselect → fall back to 'none'
+          this.clickTerrainType = 'none'
+          btn.style.borderColor = 'rgba(255,255,255,0.3)'
+          buttons[0].style.borderColor = 'white'
+        } else {
+          this.clickTerrainType = key
+          for (const b of buttons) {
+            b.style.borderColor = 'rgba(255,255,255,0.3)'
+          }
+          btn.style.borderColor = 'white'
+        }
+      })
+      container.appendChild(btn)
+      buttons.push(btn)
+      // Highlight None button by default
+      if (key === 'none') btn.style.borderColor = 'white'
+    }
   }
 
   onResize(_e, toSize) {

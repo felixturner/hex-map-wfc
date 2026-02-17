@@ -119,7 +119,16 @@ export class HexMap {
     this.initHoverHighlight()
 
     // Pre-create all 19 grids with meshes (avoids lag on Build All)
-    const allCoords = [[0,0],[0,1],[-1,0],[-1,-1],[0,-1],[1,-1],[1,-2],[2,-1],[-1,1],[0,2],[1,1],[2,0],[2,1],[1,0],[0,-2],[-1,-2],[-2,-1],[-2,0],[-2,1]]
+    const allCoords = []
+    for (let q = -2; q <= 2; q++) {
+      for (let r = -2; r <= 2; r++) {
+        const s = -q - r
+        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= 2) {
+          const gz = r + Math.floor((q - (q & 1)) / 2)
+          allCoords.push([q, gz])
+        }
+      }
+    }
     for (const [gx, gz] of allCoords) {
       const grid = await this.createGrid(gx, gz)
       await grid.initMeshes(HexTileGeometry.geoms)
@@ -1373,7 +1382,7 @@ export class HexMap {
       const edgeIndex = Math.floor(normalizedAngle * 6) % 6
 
       if (edgeIndex === selectedEdge) {
-        initialCollapses.push({ q: cell.q, r: cell.r, s: cell.s, type: TileType.WATER, rotation: 0, level: 0 })
+        initialCollapses.push({ q: cell.q, r: cell.r, s: cell.s, type: TileType.OCEAN, rotation: 0, level: 0 })
       }
     }
   }
@@ -1597,7 +1606,19 @@ export class HexMap {
    * @param {Array<[number,number]>} expansionCoords - Grid coords to populate (besides 0,0)
    * @param {Object} options - { animate, animateDelay }
    */
-  async populateAllGrids(expansionCoords, options = {}) {
+  async populateAllGrids(expansionCoords = null, options = {}) {
+    if (!expansionCoords) {
+      expansionCoords = []
+      for (let q = -2; q <= 2; q++) {
+        for (let r = -2; r <= 2; r++) {
+          const s = -q - r
+          if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= 2) {
+            const gz = r + Math.floor((q - (q & 1)) / 2)
+            if (q !== 0 || gz !== 0) expansionCoords.push([q, gz])
+          }
+        }
+      }
+    }
     const params = Demo.instance?.params ?? this.params
     const animate = options.animate ?? (params?.roads?.animateWFC ?? false)
     const animateDelay = options.animateDelay ?? (params?.roads?.animateDelay ?? 20)
@@ -1994,7 +2015,7 @@ export class HexMap {
     }
 
     // Hex tile hover — show 19-cell solve region highlight (mouse only)
-    if ('ontouchstart' in window) {
+    if ('ontouchstart' in window || Demo.instance?.clickTerrainType === 'none') {
       this.clearHoverHighlight()
       return
     }
@@ -2061,6 +2082,9 @@ export class HexMap {
         }
       }
     }
+
+    // Skip click WFC in 'none' mode
+    if (Demo.instance?.clickTerrainType === 'none') return false
 
     // Check hex tile meshes for debug logging
     const hexMeshes = []
