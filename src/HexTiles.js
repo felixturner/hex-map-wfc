@@ -85,7 +85,7 @@ export class HexTile {
    */
   updateLevelColor() {
     const blend = Math.min(this.level / (LEVELS_COUNT - 1), 1)
-    this.color.setRGB(blend, blend, blend)
+    this.color.setRGB(blend, 0, 0)
   }
 
   /**

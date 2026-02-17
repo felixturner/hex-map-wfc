@@ -1,5 +1,5 @@
 import { Object3D, BatchedMesh, Color } from 'three/webgpu'
-import { TILE_LIST, TileType, HexDir, getHexNeighborOffset } from './HexTileData.js'
+import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, LEVELS_COUNT } from './HexTileData.js'
 import { HexTileGeometry } from './HexTiles.js'
 import FastSimplexNoise from '@webvoxel/fast-simplex-noise'
 import { random } from './SeededRandom.js'
@@ -183,6 +183,12 @@ const MountainMeshNames = MountainDefs.map(m => m.name)
 
 // Default white color for decorations (no tinting)
 const WHITE = new Color(0xffffff)
+const _lvlColor = new Color()
+function levelColor(level) {
+  const blend = Math.min(level / (LEVELS_COUNT - 1), 1)
+  _lvlColor.setRGB(blend, 1, 0)  // G=1 flags decoration (skip slopeContrib in shader)
+  return _lvlColor
+}
 
 // Instance limits for BatchedMesh (per-type caps)
 const MAX_TREES = 100
@@ -409,7 +415,7 @@ export class Decorations {
       const geomId = this.treeGeomIds.get(meshName)
       const instanceId = this._addInstance(this.treeMesh, geomId)
       if (instanceId === -1) break
-      this.treeMesh.setColorAt(instanceId, WHITE)
+      this.treeMesh.setColorAt(instanceId, levelColor(tile.level))
 
       // Position at tile center with random offset (local coords since mesh is in group)
       const rotationY = 0 // random() * Math.PI * 2  // TEMP: disabled for wind debug
@@ -553,7 +559,7 @@ export class Decorations {
       const geomId = this.staticGeomIds.get(meshName)
       const instanceId = this._addInstance(this.staticMesh, geomId)
       if (instanceId === -1) break
-      this.staticMesh.setColorAt(instanceId, WHITE)
+      this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
       this.dummy.position.set(localPos.x, baseY, localPos.z)
       this.dummy.rotation.y = roadAngle
@@ -578,7 +584,7 @@ export class Decorations {
         const geomId = this.staticGeomIds.get(meshName)
         const instanceId = this._addInstance(this.staticMesh, geomId)
         if (instanceId === -1) break
-        this.staticMesh.setColorAt(instanceId, WHITE)
+        this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
         this.dummy.position.set(localPos.x, baseY, localPos.z)
         this.dummy.rotation.y = roadAngle
@@ -605,7 +611,7 @@ export class Decorations {
         const baseGeomId = this.staticGeomIds.get('building_windmill_yellow')
         const baseInstanceId = this._addInstance(this.staticMesh, baseGeomId)
         if (baseInstanceId === -1) break
-        this.staticMesh.setColorAt(baseInstanceId, WHITE)
+        this.staticMesh.setColorAt(baseInstanceId, levelColor(tile.level))
         this.dummy.position.set(localPos.x, baseY, localPos.z)
         this.dummy.rotation.y = waterAngle
         this.dummy.scale.setScalar(1)
@@ -617,7 +623,7 @@ export class Decorations {
         const topGeomId = this.staticGeomIds.get('building_windmill_top_yellow')
         const topInstanceId = this._addInstance(this.staticMesh, topGeomId)
         if (topInstanceId === -1) break
-        this.staticMesh.setColorAt(topInstanceId, WHITE)
+        this.staticMesh.setColorAt(topInstanceId, levelColor(tile.level))
         const cosA = Math.cos(waterAngle), sinA = Math.sin(waterAngle)
         const topOx = WINDMILL_TOP_OFFSET.x * cosA + WINDMILL_TOP_OFFSET.z * sinA
         const topOz = -WINDMILL_TOP_OFFSET.x * sinA + WINDMILL_TOP_OFFSET.z * cosA
@@ -632,7 +638,7 @@ export class Decorations {
         const fanGeomId = this.staticGeomIds.get('building_windmill_top_fan_yellow')
         const fanInstanceId = this._addInstance(this.staticMesh, fanGeomId)
         if (fanInstanceId === -1) break
-        this.staticMesh.setColorAt(fanInstanceId, WHITE)
+        this.staticMesh.setColorAt(fanInstanceId, levelColor(tile.level))
         const fanOx = WINDMILL_FAN_OFFSET.x * cosA + WINDMILL_FAN_OFFSET.z * sinA
         const fanOz = -WINDMILL_FAN_OFFSET.x * sinA + WINDMILL_FAN_OFFSET.z * cosA
         const fanX = localPos.x + fanOx
@@ -686,7 +692,7 @@ export class Decorations {
 
       const instanceId = this._addInstance(this.staticMesh, geomId)
       if (instanceId === -1) break
-      this.staticMesh.setColorAt(instanceId, WHITE)
+      this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
       const localPos = HexTileGeometry.getWorldPosition(
         tile.gridX - gridRadius,
@@ -734,7 +740,7 @@ export class Decorations {
       const geomId = this.staticGeomIds.get(meshName)
       const instanceId = this._addInstance(this.staticMesh, geomId)
       if (instanceId === -1) break
-      this.staticMesh.setColorAt(instanceId, WHITE)
+      this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
       const localPos = HexTileGeometry.getWorldPosition(
         tile.gridX - gridRadius,
@@ -804,7 +810,7 @@ export class Decorations {
         const geomId = this.treeGeomIds.get(meshName)
         const instanceId = this._addInstance(this.treeMesh, geomId)
         if (instanceId === -1) break
-        this.treeMesh.setColorAt(instanceId, WHITE)
+        this.treeMesh.setColorAt(instanceId, levelColor(tile.level))
 
         const ox = (random() - 0.5) * 1.6
         const oz = (random() - 0.5) * 1.6
@@ -867,7 +873,7 @@ export class Decorations {
         const geomId = this.staticGeomIds.get(meshName)
         const instanceId = this._addInstance(this.staticMesh, geomId)
         if (instanceId === -1) break
-        this.staticMesh.setColorAt(instanceId, WHITE)
+        this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
         const ox = (random() - 0.5) * 1.2
         const oz = (random() - 0.5) * 1.2
@@ -905,12 +911,12 @@ export class Decorations {
 
       const isCliff = def.levelIncrement && def.name.includes('CLIFF')
       const isRiverEnd = def.name === 'RIVER_M'
-      const isHighGrass = def.name === 'GRASS' && tile.level >= 2
+      const isHighGrass = def.name === 'GRASS' && tile.level >= LEVELS_COUNT - 1
 
       if (!isCliff && !isRiverEnd && !isHighGrass) continue
 
       // 10% for cliffs, 30% for river ends, 15% for high grass
-      const chance = isRiverEnd ? 0.3 : isHighGrass ? 0.15 : 0.1
+      const chance = isRiverEnd ? 0.3 : isHighGrass ? 0.1 : 0.1
       if (random() > chance) continue
 
       const localPos = HexTileGeometry.getWorldPosition(
@@ -928,7 +934,7 @@ export class Decorations {
         const geomId = this.staticGeomIds.get(meshName)
         const instanceId = this._addInstance(this.staticMesh, geomId)
         if (instanceId === -1) continue
-        this.staticMesh.setColorAt(instanceId, WHITE)
+        this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
         this.dummy.position.set(localPos.x, baseY, localPos.z)
         this.dummy.rotation.y = Math.floor(random() * 6) * Math.PI / 3
@@ -947,7 +953,7 @@ export class Decorations {
         const geomId = this.staticGeomIds.get(meshName)
         const instanceId = this._addInstance(this.staticMesh, geomId)
         if (instanceId === -1) continue
-        this.staticMesh.setColorAt(instanceId, WHITE)
+        this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
         this.dummy.position.set(localPos.x, baseY, localPos.z)
         this.dummy.rotation.y = rotationY
@@ -965,7 +971,7 @@ export class Decorations {
         const geomId = this.staticGeomIds.get(meshName)
         const instanceId = this._addInstance(this.staticMesh, geomId)
         if (instanceId === -1) continue
-        this.staticMesh.setColorAt(instanceId, WHITE)
+        this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
         this.dummy.position.set(localPos.x, baseY, localPos.z)
         this.dummy.rotation.y = Math.floor(random() * 6) * Math.PI / 3
@@ -980,7 +986,7 @@ export class Decorations {
         const geomId = this.staticGeomIds.get(meshName)
         const instanceId = this._addInstance(this.staticMesh, geomId)
         if (instanceId === -1) continue
-        this.staticMesh.setColorAt(instanceId, WHITE)
+        this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
         this.dummy.position.set(localPos.x, baseY, localPos.z)
         this.dummy.rotation.y = rotationY
@@ -1091,7 +1097,7 @@ export class Decorations {
 
     const instanceId = this._addInstance(this.staticMesh, geomId)
     if (instanceId === -1) return
-    this.staticMesh.setColorAt(instanceId, WHITE)
+    this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
     const localPos = HexTileGeometry.getWorldPosition(
       tile.gridX - gridRadius,
@@ -1123,7 +1129,7 @@ export class Decorations {
 
     const instanceId = this._addInstance(this.staticMesh, geomId)
     if (instanceId === -1) return
-    this.staticMesh.setColorAt(instanceId, WHITE)
+    this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
 
     const localPos = HexTileGeometry.getWorldPosition(
       tile.gridX - gridRadius,
@@ -1191,7 +1197,7 @@ export class Decorations {
             const geomId = this.treeGeomIds.get(meshName)
             const instanceId = this._addInstance(this.treeMesh, geomId)
             if (instanceId !== -1) {
-              this.treeMesh.setColorAt(instanceId, WHITE)
+              this.treeMesh.setColorAt(instanceId, levelColor(tile.level))
               random() // consume for rotation (kept stable)
               const ox = (random() - 0.5) * 1.0
               const oz = (random() - 0.5) * 1.0
@@ -1239,7 +1245,7 @@ export class Decorations {
           if (geomId !== undefined) {
             const instanceId = this._addInstance(this.staticMesh, geomId)
             if (instanceId !== -1) {
-              this.staticMesh.setColorAt(instanceId, WHITE)
+              this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
               const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
               this.dummy.position.set(localPos.x, y, localPos.z)
               this.dummy.rotation.y = buildingAngle
@@ -1272,7 +1278,7 @@ export class Decorations {
           const geomId = this.staticGeomIds.get(meshName)
           const instanceId = this._addInstance(this.staticMesh, geomId)
           if (instanceId !== -1) {
-            this.staticMesh.setColorAt(instanceId, WHITE)
+            this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
             const ox = (random() - 0.5) * 0.3
             const oz = (random() - 0.5) * 0.3
             const rotationY = random() * Math.PI * 2
@@ -1293,7 +1299,7 @@ export class Decorations {
       const isRiverEnd = name === 'RIVER_M'
       const isHighGrass = name === 'GRASS' && tile.level >= 2
       if ((isCliff || isRiverEnd || isHighGrass) && this.staticMesh) {
-        const chance = isRiverEnd ? 0.3 : isHighGrass ? 0.15 : 0.1
+        const chance = isRiverEnd ? 0.3 : isHighGrass ? 0.1 : 0.1
         if (random() <= chance) {
           if (isHighGrass) {
             const mtCountBefore = this.mountains.length
@@ -1309,7 +1315,7 @@ export class Decorations {
               const geomId = this.staticGeomIds.get(meshName)
               const instanceId = this._addInstance(this.staticMesh, geomId)
               if (instanceId !== -1) {
-                this.staticMesh.setColorAt(instanceId, WHITE)
+                this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
                 const rotationY = Math.floor(random() * 6) * Math.PI / 3
                 const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
                 this.dummy.position.set(localPos.x, y, localPos.z)
@@ -1333,7 +1339,7 @@ export class Decorations {
           const geomId = this.staticGeomIds.get(meshName)
           const instanceId = this._addInstance(this.staticMesh, geomId)
           if (instanceId !== -1) {
-            this.staticMesh.setColorAt(instanceId, WHITE)
+            this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
             const ox = (random() - 0.5) * 1.2
             const oz = (random() - 0.5) * 1.2
             const rotationY = random() * Math.PI * 2

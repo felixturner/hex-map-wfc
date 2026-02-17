@@ -20,7 +20,7 @@ import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity,
 import { CSS2DObject } from 'three/examples/jsm/Addons.js'
 import { HexWFCAdjacencyRules, HexWFCCell, CUBE_DIRS, cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, edgesCompatible, getEdgeLevel } from './HexWFCCore.js'
 import { setStatus, setStatusAsync, log, Demo } from './Demo.js'
-import { TILE_LIST, TileType, HexDir, HexOpposite, rotateHexEdges, LEVELS_COUNT } from './HexTileData.js'
+import { TILE_LIST, TileType, HexDir, HexOpposite, rotateHexEdges, LEVELS_COUNT, TERRAIN_CATEGORIES } from './HexTileData.js'
 import { HexTile, HexTileGeometry, isInHexRadius } from './HexTiles.js'
 import { HexGrid, HexGridState } from './HexGrid.js'
 import {
@@ -214,15 +214,20 @@ export class HexMap {
     const sampleA = this._texNodeA
     const sampleB = this._texNodeB
 
-    // Tile level stored as greyscale in instance color (0 at level 0, 1 at max level)
+    // Tile level stored in instance color R channel (0 at level 0, 1 at max level)
+    // G channel flags decorations (G=1) vs tiles (G=0) to skip slope contribution
     // setupDiffuseColor override prevents auto-multiply, so this is pure data
     const batchColor = varyingProperty('vec3', 'vBatchColor')
     const levelBlend = batchColor.r
+    const isDecoration = batchColor.g.greaterThan(0.5)
     // Raw geometry Y (before batch transform) for slope gradient
     // Tile surface is at geomY=1.0, each 0.5u above = +1 level
     // So slope contribution = (geomY - 1.0) / 0.5 / (LEVELS_COUNT - 1)
     const rawGeomPos = positionGeometry.varying('vRawGeomPos')
-    const slopeContrib = rawGeomPos.y.sub(1.0).mul(2.0 / (LEVELS_COUNT - 1))
+    const slopeContrib = select(isDecoration,
+      rawGeomPos.y.mul(2.0 / (LEVELS_COUNT - 1)),          // decorations: geom starts at y=0
+      rawGeomPos.y.sub(1.0).mul(2.0 / (LEVELS_COUNT - 1))  // tiles: surface at y=1.0
+    )
     // Level bias shifts the blend ramp up or down (-1 to 1)
     this._levelBias = uniform(0)
     const blendFactor = clamp(levelBlend.add(slopeContrib).add(this._levelBias), 0, 1)
@@ -1840,8 +1845,8 @@ export class HexMap {
    */
   initHoverHighlight() {
     const hexRadius = 2 / Math.sqrt(3)
-    // Pre-allocate geometry for 7 hexes × 6 edges × 2 verts × 3 components
-    const maxVerts = 7 * 6 * 2 * 3
+    // Pre-allocate geometry for 19 hexes × 6 edges × 2 verts × 3 components
+    const maxVerts = 19 * 6 * 2 * 3
     const positions = new Float32Array(maxVerts)
     const geom = new BufferGeometry()
     geom.setAttribute('position', new Float32BufferAttribute(positions, 3))
@@ -1859,8 +1864,8 @@ export class HexMap {
     this.hoverHighlight.visible = false
     this.scene.add(this.hoverHighlight)
 
-    // Filled hex faces (7 hexes × 6 tris × 3 verts × 3 components)
-    const fillPositions = new Float32Array(7 * 6 * 3 * 3)
+    // Filled hex faces (19 hexes × 6 tris × 3 verts × 3 components)
+    const fillPositions = new Float32Array(19 * 6 * 3 * 3)
     const fillGeom = new BufferGeometry()
     fillGeom.setAttribute('position', new Float32BufferAttribute(fillPositions, 3))
     fillGeom.setDrawRange(0, 0)
@@ -1880,7 +1885,7 @@ export class HexMap {
   }
 
   /**
-   * Update hover highlight to show the 7-cell solve region around a global cube coord
+   * Update hover highlight to show the 19-cell solve region around a global cube coord
    * @param {number} cq - Center cube q
    * @param {number} cr - Center cube r
    * @param {number} cs - Center cube s
@@ -1894,7 +1899,7 @@ export class HexMap {
     const hexHeight = 2 / Math.sqrt(3) * 2
     const hexRadius = 2 / Math.sqrt(3)
 
-    const cells = cubeCoordsInRadius(cq, cr, cs, 1)
+    const cells = cubeCoordsInRadius(cq, cr, cs, 2)
       .filter(c => this.globalCells.has(cubeKey(c.q, c.r, c.s)))
 
     const positions = this.hoverHighlight.geometry.attributes.position.array
@@ -1988,7 +1993,7 @@ export class HexMap {
       }
     }
 
-    // Hex tile hover — show 7-cell solve region highlight (mouse only)
+    // Hex tile hover — show 19-cell solve region highlight (mouse only)
     if ('ontouchstart' in window) {
       this.clearHoverHighlight()
       return
@@ -2082,17 +2087,24 @@ export class HexMap {
 
             log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} type=${tile.type} rot=${tile.rotation} — mini WFC solve`, 'color: blue')
 
-            // Mini WFC solve: re-solve clicked tile + 6 neighbors
+            // Mini WFC solve: re-solve clicked tile + 2 rings of neighbors (19 cells)
             const solveCells = cubeCoordsInRadius(
-              globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s, 1
+              globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s, 2
             ).filter(c => this.globalCells.has(cubeKey(c.q, c.r, c.s)))
 
             const fixedCells = this.getFixedCellsForRegion(solveCells)
             const tileTypes = this.getDefaultTileTypes()
 
+            const terrainType = Demo.instance?.clickTerrainType ?? null
+            const category = terrainType ? TERRAIN_CATEGORIES[terrainType] : null
+            const centerKey = cubeKey(globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s)
+
             this.solveWfcAsync(solveCells, fixedCells, {
               tileTypes,
               maxRestarts: 5,
+              centerTypeFilter: category?.types ?? null,
+              centerKey: category ? centerKey : null,
+              levelWeights: category?.levelWeights ?? null,
             }).then(result => {
               if (result.success && result.tiles) {
                 // Check if result is identical to current state
