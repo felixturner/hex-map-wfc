@@ -10,13 +10,14 @@ import {
   TextureLoader,
   SRGBColorSpace,
   AdditiveBlending,
+  MultiplyBlending,
   BufferGeometry,
   Float32BufferAttribute,
   LineSegments,
   LineBasicNodeMaterial,
 } from 'three/webgpu'
 import WFCWorker from './workers/wfc.worker.js?worker'
-import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor } from 'three/tsl'
+import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, mx_worley_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor, vec2 } from 'three/tsl'
 import { CSS2DObject } from 'three/examples/jsm/Addons.js'
 import { HexWFCAdjacencyRules, HexWFCCell, CUBE_DIRS, cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, edgesCompatible, getEdgeLevel } from './HexWFCCore.js'
 import { setStatus, setStatusAsync, log, Demo } from './Demo.js'
@@ -799,76 +800,113 @@ export class HexMap {
     geometry.rotateX(-Math.PI / 2)
 
     // GUI-controllable uniforms
-    this._waterOpacity = uniform(0)
-    this._waterSpeed = uniform(3.1)
-    this._waterFreq = uniform(7.4)
+    this._waterOpacity = uniform(0.2)
+    this._waterSpeed = uniform(0.3)
+    this._waterFreq = uniform(0.9)
     this._waterDirAngle = uniform(209 * Math.PI / 180)  // radians
     this._waterDirSpeed = uniform(0)       // directional drift speed
-    this._waterBrightness = uniform(0.79)  // threshold cutoff (lower = more sparkle)
-    this._waterContrast = uniform(24.5)    // sharpness multiplier
-    this._waterStretch = uniform(0.15)     // along-wave scale factor (< 1 = elongated waves)
+    this._waterBrightness = uniform(0.29)  // threshold cutoff (lower = more sparkle)
+    this._waterContrast = uniform(17.5)    // sharpness multiplier after threshold
+    this._waterEdgePow = uniform(2.5)     // voronoi power — higher = thinner edges, bigger holes
+    this._waterStretch = uniform(1)        // along-wave scale factor (< 1 = elongated waves)
+    this._waterDarkOpacity = uniform(0.15) // dark underlay intensity
 
     const material = new MeshPhysicalNodeMaterial({
       transparent: true,
       depthWrite: false,
       depthTest: true,
+      blending: AdditiveBlending,
     })
-
-    // 2D hash noise: fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453)
-    const hash2d = (x, z) => fract(sin(x.mul(127.1).add(z.mul(311.7))).mul(43758.5453))
-
-    // 2D value noise with smoothstep interpolation
-    const valueNoise = (x, z) => {
-      const ix = tslFloor(x), iz = tslFloor(z)
-      const fx = fract(x), fz = fract(z)
-      const ux = fx.mul(fx).mul(float(3).sub(fx.mul(2)))
-      const uz = fz.mul(fz).mul(float(3).sub(fz.mul(2)))
-      const a = hash2d(ix, iz)
-      const b = hash2d(ix.add(1), iz)
-      const c = hash2d(ix, iz.add(1))
-      const d = hash2d(ix.add(1), iz.add(1))
-      return mix(mix(a, b, ux), mix(c, d, ux), uz)
-    }
 
     // Rotate world pos into wave-aligned coordinates (across, along)
     const px = positionWorld.x, pz = positionWorld.z
     const cosA = cos(this._waterDirAngle)
     const sinA = sin(this._waterDirAngle)
-    const acrossWave = px.mul(cosA).add(pz.mul(sinA))   // perpendicular to wave crests
-    const alongWave = px.mul(sinA.negate()).add(pz.mul(cosA))  // parallel to wave crests
+    const acrossWave = px.mul(cosA).add(pz.mul(sinA))
+    const alongWave = px.mul(sinA.negate()).add(pz.mul(cosA))
+
+    // 2nd layer rotated slightly (~15°) for more natural interference
+    const angleOffset = float(0.26) // ~15 degrees in radians
+    const cosA2 = cos(this._waterDirAngle.add(angleOffset))
+    const sinA2 = sin(this._waterDirAngle.add(angleOffset))
+    const acrossWave2 = px.mul(cosA2).add(pz.mul(sinA2))
+    const alongWave2 = px.mul(sinA2.negate()).add(pz.mul(cosA2))
 
     // Directional drift (moves along acrossWave direction)
     const drift = tslTime.mul(this._waterDirSpeed)
 
-    // Scale: full freq across waves, reduced freq along waves (stretch < 1 = elongated)
     const speed = this._waterSpeed
     const freq = this._waterFreq
     const stretch = this._waterStretch
 
-    // Two noise layers at different scales/speeds, with directional drift + stretch
-    // Stretch applied to acrossWave (travel direction) so waves elongate along travel
-    // Time-based motion on this axis also scaled by stretch to keep visual speed consistent
-    const noise1 = valueNoise(
-      acrossWave.mul(freq.mul(0.8)).mul(stretch).add(tslTime.mul(speed.mul(0.5)).mul(stretch)).add(drift.mul(stretch)),
-      alongWave.mul(freq.mul(0.8)).add(tslTime.mul(speed.mul(0.3)))
+    // Two 3D voronoi layers — time as Z axis for non-directional animation
+    // Stretch applied to acrossWave axis, drift moves pattern directionally
+    const pos1 = vec3(
+      acrossWave.mul(freq.mul(0.8)).mul(stretch).add(drift.mul(stretch)),
+      alongWave.mul(freq.mul(0.8)),
+      tslTime.mul(speed.mul(0.5))
     )
-    const noise2 = valueNoise(
-      acrossWave.mul(freq.mul(1.5)).mul(stretch).add(tslTime.mul(speed.mul(-0.4)).mul(stretch)).add(drift.mul(stretch)),
-      alongWave.mul(freq.mul(1.5)).add(tslTime.mul(speed.mul(0.6)))
+    const pos2 = vec3(
+      acrossWave2.mul(freq.mul(1.5)).mul(stretch).add(drift.mul(stretch)),
+      alongWave2.mul(freq.mul(1.5)),
+      tslTime.mul(speed.mul(0.4))
     )
 
-    // Combine and threshold for discrete sparkle points
+    // mx_worley_noise_float returns distance to nearest cell point (0 at center, ~1 at edges)
+    // Raise to power to steepen falloff — bigger dark holes, thinner bright edges
+    const noise1 = mx_worley_noise_float(pos1).pow(this._waterEdgePow)
+    const noise2 = mx_worley_noise_float(pos2).pow(this._waterEdgePow)
+
+    // Combine and threshold
     const combined = noise1.add(noise2).mul(0.5)
     const sparkle = clamp(combined.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
 
-    // Black base, sparkle via emissive so it glows regardless of lighting
+    // Additive blending: emissive controls brightness, opacity scales overall intensity
     material.colorNode = vec3(0, 0, 0)
-    material.emissiveNode = vec3(sparkle, sparkle, sparkle)
-    material.opacityNode = sparkle.mul(this._waterOpacity)
+    material.emissiveNode = vec3(sparkle, sparkle, sparkle).mul(this._waterOpacity)
+    material.opacityNode = float(1)
 
     this.waterPlane = new Mesh(geometry, material)
     this.waterPlane.position.y = 0.92
     this.scene.add(this.waterPlane)
+
+    // Dark underlay — multiply blending darkens between the bright edges
+    const darkGeometry = new PlaneGeometry(296, 296)
+    darkGeometry.rotateX(-Math.PI / 2)
+
+    const darkMaterial = new MeshPhysicalNodeMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      blending: MultiplyBlending,
+    })
+
+    // Dark voronoi — same structure but offset positions so it doesn't overlap bright layer
+    const darkPos1 = vec3(
+      acrossWave.mul(freq.mul(0.8)).mul(stretch).add(drift.mul(stretch)).add(100.0),
+      alongWave.mul(freq.mul(0.8)).add(100.0),
+      tslTime.mul(speed.mul(0.5))
+    )
+    const darkPos2 = vec3(
+      acrossWave2.mul(freq.mul(1.5)).mul(stretch).add(drift.mul(stretch)).add(100.0),
+      alongWave2.mul(freq.mul(1.5)).add(100.0),
+      tslTime.mul(speed.mul(0.4))
+    )
+    const darkNoise1 = mx_worley_noise_float(darkPos1).pow(this._waterEdgePow)
+    const darkNoise2 = mx_worley_noise_float(darkPos2).pow(this._waterEdgePow)
+    const darkCombined = darkNoise1.add(darkNoise2).mul(0.5)
+    const darkSparkle = clamp(darkCombined.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
+
+    // Multiply blend: white (1) = no change, dark = darken
+    const darkColor = float(1).sub(darkSparkle.mul(this._waterDarkOpacity))
+
+    darkMaterial.colorNode = vec3(0, 0, 0)
+    darkMaterial.emissiveNode = vec3(darkColor, darkColor, darkColor)
+    darkMaterial.opacityNode = float(1)
+
+    this.waterDarkPlane = new Mesh(darkGeometry, darkMaterial)
+    this.waterDarkPlane.position.y = 0.919
+    this.scene.add(this.waterDarkPlane)
   }
 
   /**

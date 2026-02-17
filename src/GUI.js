@@ -111,14 +111,16 @@ export class GUIManager {
     },
     water: {
       y: 0.92,
-      opacity: 0.5,
-      speed: 3.1,
-      freq: 7.4,
+      opacity: 0.2,
+      speed: 0.3,
+      freq: 0.9,
       dirAngle: 209,
       dirSpeed: 0,
-      brightness: 0.79,
-      contrast: 24.5,
-      stretch: 0.15,
+      brightness: 0.29,
+      contrast: 17.5,
+      edgePow: 2.5,
+      stretch: 1,
+      darkOpacity: 0.15,
     },
     weather: {
       mode: 'none',
@@ -291,10 +293,10 @@ export class GUIManager {
     waterFolder.add(allParams.water, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
       if (demo.city._waterOpacity) demo.city._waterOpacity.value = v
     })
-    waterFolder.add(allParams.water, 'speed', 0, 10, 0.1).name('Speed').onChange((v) => {
+    waterFolder.add(allParams.water, 'speed', 0, 2, 0.05).name('Speed').onChange((v) => {
       if (demo.city._waterSpeed) demo.city._waterSpeed.value = v
     })
-    waterFolder.add(allParams.water, 'freq', 0.1, 10, 0.1).name('Frequency').onChange((v) => {
+    waterFolder.add(allParams.water, 'freq', 0.1, 3, 0.05).name('Frequency').onChange((v) => {
       if (demo.city._waterFreq) demo.city._waterFreq.value = v
     })
     waterFolder.add(allParams.water, 'dirAngle', 0, 360, 1).name('Direction °').onChange((v) => {
@@ -309,8 +311,14 @@ export class GUIManager {
     waterFolder.add(allParams.water, 'contrast', 1, 40, 0.5).name('Contrast').onChange((v) => {
       if (demo.city._waterContrast) demo.city._waterContrast.value = v
     })
+    waterFolder.add(allParams.water, 'edgePow', 0.5, 10, 0.1).name('Edge Power').onChange((v) => {
+      if (demo.city._waterEdgePow) demo.city._waterEdgePow.value = v
+    })
     waterFolder.add(allParams.water, 'stretch', 0.05, 1, 0.05).name('Stretch').onChange((v) => {
       if (demo.city._waterStretch) demo.city._waterStretch.value = v
+    })
+    waterFolder.add(allParams.water, 'darkOpacity', 0, 1, 0.05).name('Dark Opacity').onChange((v) => {
+      if (demo.city._waterDarkOpacity) demo.city._waterDarkOpacity.value = v
     })
 
     // Weather folder
@@ -540,6 +548,19 @@ export class GUIManager {
 
     // Level bias
     if (demo.city._levelBias) demo.city._levelBias.value = params.debug.levelBias
+
+    // Water
+    if (demo.city.waterPlane) demo.city.waterPlane.position.y = params.water.y
+    if (demo.city._waterOpacity) demo.city._waterOpacity.value = params.water.opacity
+    if (demo.city._waterSpeed) demo.city._waterSpeed.value = params.water.speed
+    if (demo.city._waterFreq) demo.city._waterFreq.value = params.water.freq
+    if (demo.city._waterDirAngle) demo.city._waterDirAngle.value = params.water.dirAngle * Math.PI / 180
+    if (demo.city._waterDirSpeed) demo.city._waterDirSpeed.value = params.water.dirSpeed
+    if (demo.city._waterBrightness) demo.city._waterBrightness.value = params.water.brightness
+    if (demo.city._waterContrast) demo.city._waterContrast.value = params.water.contrast
+    if (demo.city._waterEdgePow) demo.city._waterEdgePow.value = params.water.edgePow
+    if (demo.city._waterStretch) demo.city._waterStretch.value = params.water.stretch
+    if (demo.city._waterDarkOpacity) demo.city._waterDarkOpacity.value = params.water.darkOpacity
 
     // Renderer
     demo.renderer.setPixelRatio(params.renderer.dpr)
