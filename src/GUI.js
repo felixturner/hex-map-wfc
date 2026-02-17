@@ -4,7 +4,6 @@ import {
   CineonToneMapping, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping,
 } from 'three/webgpu'
 import { Sounds } from './lib/Sounds.js'
-import { TileGeometry } from './Tiles.js'
 import { setTreeNoiseFrequency, setTreeThreshold } from './Decorations.js'
 import { HexTile } from './HexTiles.js'
 
