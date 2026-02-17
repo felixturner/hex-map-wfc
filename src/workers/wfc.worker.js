@@ -8,7 +8,7 @@ import {
   HexDir,
   HexOpposite,
   LEVELS_COUNT,
-} from '../HexTileData.js'
+} from '../hexmap/HexTileData.js'
 import { setSeed, random } from '../SeededRandom.js'
 import {
   HexWFCCell,
@@ -17,7 +17,7 @@ import {
   cubeKey,
   parseCubeKey,
   cubeToOffset,
-} from '../HexWFCCore.js'
+} from '../hexmap/HexWFCCore.js'
 
 // ============================================================================
 // WFC Solver (cube-coordinate based)

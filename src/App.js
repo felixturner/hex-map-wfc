@@ -16,16 +16,16 @@ import Stats from 'three/addons/libs/stats.module.js'
 import WebGPU from 'three/examples/jsm/capabilities/WebGPU.js'
 import { Pointer } from './lib/Pointer.js'
 import { GUIManager } from './GUI.js'
-import { HexMap } from './HexMap.js'
+import { HexMap } from './hexmap/HexMap.js'
 import { Lighting } from './Lighting.js'
 import { PostFX } from './PostFX.js'
 import { setSeed } from './SeededRandom.js'
-import { LEVELS_COUNT } from './HexTileData.js'
+import { LEVELS_COUNT } from './hexmap/HexTileData.js'
 
 // Global status update function
 export function setStatus(text) {
-  if (Demo.instance?.statusElement) {
-    Demo.instance.statusElement.textContent = text
+  if (App.instance?.statusElement) {
+    App.instance.statusElement.textContent = text
   }
 }
 
@@ -45,7 +45,7 @@ export function log(text, style = '') {
   setStatus(text, style)
 }
 
-export class Demo {
+export class App {
   static instance = null
 
   constructor(canvas) {
@@ -72,12 +72,12 @@ export class Demo {
     this.cssRenderer = null  // CSS2DRenderer for debug labels
     this.clickTerrainType = 'none'  // Selected terrain palette key
 
-    if (Demo.instance != null) {
-      console.warn('Demo instance already exists')
+    if (App.instance != null) {
+      console.warn('App instance already exists')
       return null
     }
-    Demo.instance = this
-    window.demo = this  // Expose for console debugging
+    App.instance = this
+    window.app = this  // Expose for console debugging
   }
 
   async init() {

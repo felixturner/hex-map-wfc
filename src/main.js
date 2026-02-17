@@ -1,4 +1,4 @@
-import { Demo } from './Demo.js'
+import { App } from './App.js'
 import WebGPU from 'three/examples/jsm/capabilities/WebGPU.js'
 // import { Sounds } from './lib/Sounds.js'
 
@@ -7,7 +7,7 @@ const loadingEl = document.getElementById('loading')
 // const startBtn = document.getElementById('start-btn')
 const canvas = document.getElementById('canvas')
 
-let demo = null
+let app = null
 
 async function init() {
   if (!WebGPU.isAvailable()) {
@@ -15,8 +15,8 @@ async function init() {
     return
   }
 
-  demo = new Demo(canvas)
-  await demo.init()
+  app = new App(canvas)
+  await app.init()
 
   // Go straight to rendering (no start button)
   start()
@@ -31,10 +31,10 @@ function start() {
   loadingEl.style.display = 'none'
 
   // Fade in scene
-  demo.fadeIn(1000)
+  app.fadeIn(1000)
 
   // Start intro build animation
-  demo.city.startIntroAnimation(demo.camera, demo.controls, 4)
+  app.city.startIntroAnimation(app.camera, app.controls, 4)
 }
 
 // startBtn.addEventListener('click', start)

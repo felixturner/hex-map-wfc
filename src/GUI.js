@@ -4,12 +4,12 @@ import {
   CineonToneMapping, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping,
 } from 'three/webgpu'
 import { Sounds } from './lib/Sounds.js'
-import { setTreeNoiseFrequency, setTreeThreshold } from './Decorations.js'
-import { HexTile } from './HexTiles.js'
+import { setTreeNoiseFrequency, setTreeThreshold } from './hexmap/Decorations.js'
+import { HexTile } from './hexmap/HexTiles.js'
 
 export class GUIManager {
-  constructor(demo) {
-    this.demo = demo
+  constructor(app) {
+    this.app = app
     this.gui = null
     this.fovController = null
   }
@@ -126,64 +126,64 @@ export class GUIManager {
   }
 
   init() {
-    const { demo } = this
+    const { app } = this
     const gui = new GUI()
     this.gui = gui
 
-    // Store params on demo for single source of truth
-    const allParams = demo.params = JSON.parse(JSON.stringify(GUIManager.defaultParams))
+    // Store params on app for single source of truth
+    const allParams = app.params = JSON.parse(JSON.stringify(GUIManager.defaultParams))
 
     // DPR dropdown (default 1)
     allParams.renderer.dpr = 1
     gui.add(allParams.renderer, 'dpr', [1, 1.5, 2]).name('DPR').onChange((v) => {
-      demo.renderer.setPixelRatio(v)
-      demo.onResize()
+      app.renderer.setPixelRatio(v)
+      app.onResize()
     })
 
     // Top-level controls (no folder)
     gui.add(allParams.camera, 'perspective').name('Perspective Cam').onChange((v) => {
-      demo.switchCamera(v)
+      app.switchCamera(v)
     })
     this.fovController = gui.add(allParams.camera, 'fov', 20, 90, 1).name('FOV').onChange((v) => {
-      demo.perspCamera.fov = v
-      demo.perspCamera.updateProjectionMatrix()
+      app.perspCamera.fov = v
+      app.perspCamera.updateProjectionMatrix()
     })
 
     // Debug view
     const viewMap = { final: 0, color: 1, depth: 2, normal: 3, ao: 4, overlay: 5, effects: 6 }
     gui.add(allParams.debug, 'view', Object.keys(viewMap)).name('Debug View').onChange((v) => {
-      demo.debugView.value = viewMap[v]
+      app.debugView.value = viewMap[v]
     })
 
     // Visual toggles at top level
     gui.add(allParams.debug, 'originHelper').name('Axes Helpers').onChange((v) => {
-      if (demo.axesHelper) demo.axesHelper.visible = v
-      demo.city.setAxesHelpersVisible(v)
+      if (app.axesHelper) app.axesHelper.visible = v
+      app.city.setAxesHelpersVisible(v)
     })
     gui.add(allParams.debug, 'debugCam').name('Debug Cam').onChange((v) => {
-      demo.controls.maxPolarAngle = v ? Math.PI : 1.1
-      demo.controls.minDistance = v ? 0 : 25
-      demo.controls.maxDistance = v ? Infinity : 125
+      app.controls.maxPolarAngle = v ? Math.PI : 1.1
+      app.controls.minDistance = v ? 0 : 25
+      app.controls.maxDistance = v ? Infinity : 125
     })
     gui.add(allParams.debug, 'hexGrid').name('Hex Helper').onChange((v) => {
-      demo.city.setHelpersVisible(v)
+      app.city.setHelpersVisible(v)
     })
     gui.add(allParams.roads, 'showOutlines').name('Show Outlines').onChange((v) => {
-      demo.city?.setOutlinesVisible(v)
+      app.city?.setOutlinesVisible(v)
     })
     gui.add(allParams.debug, 'tileLabels').name('Tile Labels').onChange((v) => {
-      demo.city.setTileLabelsVisible(v)
+      app.city.setTileLabelsVisible(v)
     })
     gui.add(allParams.debug, 'tileLabelMode', ['coords', 'levels']).name('Label Mode').onChange((v) => {
-      demo.city.tileLabelMode = v
-      if (allParams.debug.tileLabels) demo.city.createTileLabels()
+      app.city.tileLabelMode = v
+      if (allParams.debug.tileLabels) app.city.createTileLabels()
     })
     gui.add(allParams.debug, 'levelColors').name('Level Colors').onChange((v) => {
       HexTile.debugLevelColors = v
-      demo.city.updateTileColors()
+      app.city.updateTileColors()
     })
     gui.add(allParams.debug, 'whiteMode').name('White Mode').onChange((v) => {
-      demo.city.setWhiteMode(v)
+      app.city.setWhiteMode(v)
     })
 
     // Biome texture pickers + level bias
@@ -198,31 +198,31 @@ export class GUIManager {
     allParams.debug.biomeHi = 'winter'
     allParams.debug.levelBias = -0.3
     gui.add(allParams.debug, 'biomeLo', Object.keys(biomeOptions)).name('Biome Lo').onChange((v) => {
-      demo.city.swapBiomeTexture('lo', biomeOptions[v])
+      app.city.swapBiomeTexture('lo', biomeOptions[v])
     })
     gui.add(allParams.debug, 'biomeHi', Object.keys(biomeOptions)).name('Biome Hi').onChange((v) => {
-      demo.city.swapBiomeTexture('hi', biomeOptions[v])
+      app.city.swapBiomeTexture('hi', biomeOptions[v])
     })
     gui.add(allParams.debug, 'levelBias', -1, 1, 0.05).name('Level Bias').onChange((v) => {
-      if (demo.city._levelBias) demo.city._levelBias.value = v
+      if (app.city._levelBias) app.city._levelBias.value = v
     })
 
     // Action buttons
     gui.add({ regen: () => {
-      demo.city.regenerate({
+      app.city.regenerate({
         animate: allParams.roads.animateWFC,
         animateDelay: allParams.roads.animateDelay,
       })
       // Restore hex helper visibility from GUI state
-      demo.city.setHelpersVisible(allParams.debug.hexGrid)
+      app.city.setHelpersVisible(allParams.debug.hexGrid)
     } }, 'regen').name('Regen')
-    gui.add({ exportPNG: () => demo.exportPNG() }, 'exportPNG').name('Export PNG')
-    gui.add({ autoBuild: () => demo.city.autoExpand([
+    gui.add({ exportPNG: () => app.exportPNG() }, 'exportPNG').name('Export PNG')
+    gui.add({ autoBuild: () => app.city.autoExpand([
       [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
     ]) }, 'autoBuild').name('Build Sequentially')
     gui.add({ buildAll: () => {
       import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0, 0.3))
-      demo.city.populateAllGrids()
+      app.city.populateAllGrids()
     } }, 'buildAll').name('Build All')
 
     gui.add({
@@ -230,8 +230,8 @@ export class GUIManager {
         const exportData = {
           ...allParams,
           cameraState: {
-            position: { x: demo.camera.position.x, y: demo.camera.position.y, z: demo.camera.position.z },
-            target: { x: demo.controls.target.x, y: demo.controls.target.y, z: demo.controls.target.z },
+            position: { x: app.camera.position.x, y: app.camera.position.y, z: app.camera.position.z },
+            target: { x: app.controls.target.x, y: app.controls.target.y, z: app.controls.target.z },
           }
         }
         const json = JSON.stringify(exportData, null, 2)
@@ -241,8 +241,8 @@ export class GUIManager {
     }, 'copyState').name('Copy GUI State')
     gui.add({
       logControls: () => {
-        const c = demo.controls
-        const cam = demo.camera
+        const c = app.controls
+        const cam = app.camera
         console.log('OrbitControls State:')
         console.log('  camera.position:', cam.position.x.toFixed(3), cam.position.y.toFixed(3), cam.position.z.toFixed(3))
         console.log('  target:', c.target.x.toFixed(3), c.target.y.toFixed(3), c.target.z.toFixed(3))
@@ -261,59 +261,59 @@ export class GUIManager {
     const decorationFolder = gui.addFolder('Decoration').close()
     decorationFolder.add(allParams.decoration, 'treeNoiseFreq', 0.01, 0.2, 0.01).name('Tree Noise Freq').onChange((v) => {
       setTreeNoiseFrequency(v)
-      demo.city.repopulateDecorations()
+      app.city.repopulateDecorations()
     })
     decorationFolder.add(allParams.decoration, 'treeThreshold', 0, 1, 0.05).name('Tree Threshold').onChange((v) => {
       setTreeThreshold(v)
-      demo.city.repopulateDecorations()
+      app.city.repopulateDecorations()
     })
     decorationFolder.add(allParams.decoration, 'windStrength', 0, 0.15).name('Wind Strength').onChange((v) => {
-      if (demo.city._windStrength) demo.city._windStrength.value = v
+      if (app.city._windStrength) app.city._windStrength.value = v
     })
     decorationFolder.add(allParams.decoration, 'windSpeed', 0, 2.0).name('Wind Speed').onChange((v) => {
-      if (demo.city._windSpeed) demo.city._windSpeed.value = v
+      if (app.city._windSpeed) app.city._windSpeed.value = v
     })
     decorationFolder.add(allParams.decoration, 'windFreq', 0, 1.0).name('Wind Noise Freq').onChange((v) => {
-      if (demo.city._windFreq) demo.city._windFreq.value = v
+      if (app.city._windFreq) app.city._windFreq.value = v
     })
 
     // Water folder
     const waterFolder = gui.addFolder('Water').close()
     waterFolder.add(allParams.water, 'y', 0.7, 1.0, 0.01).name('Y Height').onChange((v) => {
-      if (demo.city.waterPlane) demo.city.waterPlane.position.y = v
+      if (app.city.waterPlane) app.city.waterPlane.position.y = v
     })
     waterFolder.add(allParams.water, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
-      if (demo.city._waterOpacity) demo.city._waterOpacity.value = v
+      if (app.city._waterOpacity) app.city._waterOpacity.value = v
     })
     waterFolder.add(allParams.water, 'speed', 0, 5, 0.1).name('Speed').onChange((v) => {
-      if (demo.city._waterSpeed) demo.city._waterSpeed.value = v
+      if (app.city._waterSpeed) app.city._waterSpeed.value = v
     })
     waterFolder.add(allParams.water, 'freq', 0.1, 5, 0.1).name('Frequency').onChange((v) => {
-      if (demo.city._waterFreq) demo.city._waterFreq.value = v
+      if (app.city._waterFreq) app.city._waterFreq.value = v
     })
 
     // Weather folder
     const weatherFolder = gui.addFolder('Weather').close()
     weatherFolder.add(allParams.weather, 'mode', ['none', 'rain', 'snow']).name('Mode').onChange((v) => {
-      demo.city.weather?.setMode(v)
+      app.city.weather?.setMode(v)
     })
     weatherFolder.add(allParams.weather, 'intensity', 0, 1, 0.05).name('Intensity').onChange((v) => {
-      demo.city.weather?.setIntensity(v)
+      app.city.weather?.setIntensity(v)
     })
     weatherFolder.add(allParams.weather, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
-      demo.city.weather?.setOpacity(v)
+      app.city.weather?.setOpacity(v)
     })
     weatherFolder.add(allParams.weather, 'speed', 0, 2, 0.05).name('Speed').onChange((v) => {
-      demo.city.weather?.setSpeed(v)
+      app.city.weather?.setSpeed(v)
     })
     weatherFolder.add(allParams.weather, 'wind', -1, 1, 0.05).name('Wind').onChange((v) => {
-      demo.city.weather?.setWind(v)
+      app.city.weather?.setWind(v)
     })
     weatherFolder.add(allParams.weather, 'wobble', 0, 5, 0.1).name('Wobble').onChange((v) => {
-      demo.city.weather?.setWobble(v)
+      app.city.weather?.setWobble(v)
     })
     weatherFolder.add(allParams.weather, 'snowSize', 1, 20, 0.5).name('Snow Size').onChange((v) => {
-      demo.city.weather?.setSnowSize(v)
+      app.city.weather?.setSnowSize(v)
     })
 
     // Lights folder
@@ -331,12 +331,12 @@ export class GUIManager {
       'tiber_island_1k.hdr',
     ]
     lightsFolder.add(allParams.lighting, 'hdr', hdrOptions).name('HDR').onChange((v) => {
-      demo.lighting.loadHDR(v)
+      app.lighting.loadHDR(v)
     })
     // HDR rotation disabled — see TODO.md for details
     // lightsFolder.add(allParams.lighting, 'hdrRotation', 0, 360, 1).name('HDR Rotation')
     lightsFolder.add(allParams.lighting, 'exposure', 0, 2, 0.05).name('Exposure').onChange((v) => {
-      demo.renderer.toneMappingExposure = v
+      app.renderer.toneMappingExposure = v
     })
     const toneMappingMap = {
       'None': NoToneMapping,
@@ -348,41 +348,41 @@ export class GUIManager {
       'Neutral': NeutralToneMapping,
     }
     lightsFolder.add(allParams.lighting, 'toneMapping', Object.keys(toneMappingMap)).name('Tone Mapping').onChange((v) => {
-      demo.renderer.toneMapping = toneMappingMap[v]
-      if (demo.postFX) demo.postFX.postProcessing.needsUpdate = true
+      app.renderer.toneMapping = toneMappingMap[v]
+      if (app.postFX) app.postFX.postProcessing.needsUpdate = true
     })
     lightsFolder.add(allParams.lighting, 'envIntensity', 0, 2, 0.05).name('Env Intensity').onChange((v) => {
-      demo.scene.environmentIntensity = v
+      app.scene.environmentIntensity = v
     })
     lightsFolder.add(allParams.lighting, 'dirLight', 0, 5, 0.05).name('Dir Light').onChange((v) => {
-      if (demo.lighting.dirLight) demo.lighting.dirLight.intensity = v
+      if (app.lighting.dirLight) app.lighting.dirLight.intensity = v
     })
     lightsFolder.add(allParams.lighting, 'hemiLight', 0, 5, 0.05).name('Hemi Light').onChange((v) => {
-      if (demo.lighting.hemiLight) demo.lighting.hemiLight.intensity = v
+      if (app.lighting.hemiLight) app.lighting.hemiLight.intensity = v
     })
     lightsFolder.add(allParams.lighting, 'shadowIntensity', 0, 1, 0.05).name('Shadow Intensity').onChange((v) => {
-      if (demo.lighting.dirLight) demo.lighting.dirLight.shadow.intensity = v
+      if (app.lighting.dirLight) app.lighting.dirLight.shadow.intensity = v
     })
     lightsFolder.add(allParams.lighting, 'lightX', -100, 100, 5).name('Light X').onChange((v) => {
-      if (demo.lighting.dirLightOffset) {
-        demo.lighting.dirLightOffset.x = v
-        demo.lighting.updateShadowFrustum()
+      if (app.lighting.dirLightOffset) {
+        app.lighting.dirLightOffset.x = v
+        app.lighting.updateShadowFrustum()
       }
     })
     lightsFolder.add(allParams.lighting, 'lightY', 20, 200, 5).name('Light Y').onChange((v) => {
-      if (demo.lighting.dirLightOffset) {
-        demo.lighting.dirLightOffset.y = v
-        demo.lighting.updateShadowFrustum()
+      if (app.lighting.dirLightOffset) {
+        app.lighting.dirLightOffset.y = v
+        app.lighting.updateShadowFrustum()
       }
     })
     lightsFolder.add(allParams.lighting, 'lightZ', -100, 100, 5).name('Light Z').onChange((v) => {
-      if (demo.lighting.dirLightOffset) {
-        demo.lighting.dirLightOffset.z = v
-        demo.lighting.updateShadowFrustum()
+      if (app.lighting.dirLightOffset) {
+        app.lighting.dirLightOffset.z = v
+        app.lighting.updateShadowFrustum()
       }
     })
     lightsFolder.add(allParams.lighting, 'showHelper').name('Show Helper').onChange((v) => {
-      if (demo.lighting.dirLightHelper) demo.lighting.dirLightHelper.visible = v
+      if (app.lighting.dirLightHelper) app.lighting.dirLightHelper.visible = v
     })
 
     // Material folder removed - using GLB material directly for hex tiles
@@ -390,40 +390,40 @@ export class GUIManager {
     // Effects folder
     const fxFolder = gui.addFolder('Post Processing').close()
     fxFolder.add(allParams.fx, 'ao').name('AO').onChange((v) => {
-      demo.aoEnabled.value = v ? 1 : 0
+      app.aoEnabled.value = v ? 1 : 0
     })
     fxFolder.add(allParams.fx, 'aoScale', 0, 5, 0.1).name('AO Scale').onChange((v) => {
-      if (demo.aoPass) demo.aoPass.scale.value = v
+      if (app.aoPass) app.aoPass.scale.value = v
     })
     fxFolder.add(allParams.fx, 'aoRadius', 0.01, 2, 0.01).name('AO Radius').onChange((v) => {
-      if (demo.aoPass) demo.aoPass.radius.value = v
+      if (app.aoPass) app.aoPass.radius.value = v
     })
     fxFolder.add(allParams.fx, 'aoBlur', 0, 0.5, 0.01).name('AO Blur').onChange((v) => {
-      if (demo.aoBlurAmount) demo.aoBlurAmount.value = v
+      if (app.aoBlurAmount) app.aoBlurAmount.value = v
     })
     fxFolder.add(allParams.fx, 'aoIntensity', 0, 1, 0.05).name('AO Intensity').onChange((v) => {
-      demo.aoIntensity.value = v
+      app.aoIntensity.value = v
     })
     fxFolder.add(allParams.fx, 'vignette').name('Vignette').onChange((v) => {
-      demo.vignetteEnabled.value = v ? 1 : 0
+      app.vignetteEnabled.value = v ? 1 : 0
     })
     fxFolder.add(allParams.fx, 'dof').name('DOF').onChange((v) => {
-      demo.dofEnabled.value = v ? 1 : 0
+      app.dofEnabled.value = v ? 1 : 0
     })
     fxFolder.add(allParams.fx, 'dofAperture', 0, 1, 0.01).name('DOF Aperture').onChange((v) => {
-      demo.dofAperture.value = v / 1000
+      app.dofAperture.value = v / 1000
     })
     fxFolder.add(allParams.fx, 'dofMaxblur', 0.001, 0.05, 0.001).name('DOF Max Blur').onChange((v) => {
-      demo.dofMaxblur.value = v
+      app.dofMaxblur.value = v
     })
     fxFolder.add(allParams.fx, 'bleach').name('Bleach Bypass').onChange((v) => {
-      demo.bleachEnabled.value = v ? 1 : 0
+      app.bleachEnabled.value = v ? 1 : 0
     })
     fxFolder.add(allParams.fx, 'bleachAmount', 0, 0.3, 0.05).name('Bleach Amount').onChange((v) => {
-      demo.bleachAmount.value = v
+      app.bleachAmount.value = v
     })
     fxFolder.add(allParams.fx, 'lut').name('LUT').onChange((v) => {
-      demo.lutEnabled.value = v ? 1 : 0
+      app.lutEnabled.value = v ? 1 : 0
     })
     const lutOptions = [
       'amatorka', 'brannan', 'earlybird', 'etikate', 'gotham', 'hefe',
@@ -431,16 +431,16 @@ export class GUIManager {
       'toaster', 'walden', 'xpro',
     ]
     fxFolder.add(allParams.fx, 'lutStyle', lutOptions).name('LUT Style').onChange((v) => {
-      demo.postFX.swapLut(`./assets/lut/${v}.png`)
+      app.postFX.swapLut(`./assets/lut/${v}.png`)
     })
     fxFolder.add(allParams.fx, 'lutAmount', 0, 1, 0.05).name('LUT Amount').onChange((v) => {
-      demo.lutAmount.value = v
+      app.lutAmount.value = v
     })
     fxFolder.add(allParams.fx, 'grain').name('Grain').onChange((v) => {
-      demo.grainEnabled.value = v ? 1 : 0
+      app.grainEnabled.value = v ? 1 : 0
     })
     fxFolder.add(allParams.fx, 'grainStrength', 0, 0.2, 0.005).name('Grain Strength').onChange((v) => {
-      demo.grainStrength.value = v
+      app.grainStrength.value = v
     })
     fxFolder.add(allParams.fx, 'grainFPS', 1, 60, 1).name('Grain FPS')
 
@@ -449,8 +449,8 @@ export class GUIManager {
 
   // Apply all GUI params to scene objects (called after init)
   applyParams() {
-    const { demo } = this
-    const { params } = demo
+    const { app } = this
+    const { params } = app
 
     // Lighting
     const toneMappingMap = {
@@ -458,69 +458,69 @@ export class GUIManager {
       'Cineon': CineonToneMapping, 'ACES': ACESFilmicToneMapping,
       'AgX': AgXToneMapping, 'Neutral': NeutralToneMapping,
     }
-    demo.renderer.toneMapping = toneMappingMap[params.lighting.toneMapping] || NoToneMapping
-    demo.renderer.toneMappingExposure = params.lighting.exposure
-    demo.scene.environmentIntensity = params.lighting.envIntensity
-    if (demo.lighting.dirLight) {
-      demo.lighting.dirLight.intensity = params.lighting.dirLight
-      demo.lighting.dirLight.shadow.intensity = params.lighting.shadowIntensity
+    app.renderer.toneMapping = toneMappingMap[params.lighting.toneMapping] || NoToneMapping
+    app.renderer.toneMappingExposure = params.lighting.exposure
+    app.scene.environmentIntensity = params.lighting.envIntensity
+    if (app.lighting.dirLight) {
+      app.lighting.dirLight.intensity = params.lighting.dirLight
+      app.lighting.dirLight.shadow.intensity = params.lighting.shadowIntensity
     }
-    if (demo.lighting.hemiLight) demo.lighting.hemiLight.intensity = params.lighting.hemiLight
-    if (demo.lighting.dirLightOffset) {
-      demo.lighting.dirLightOffset.x = params.lighting.lightX
-      demo.lighting.dirLightOffset.y = params.lighting.lightY
-      demo.lighting.dirLightOffset.z = params.lighting.lightZ
-      demo.lighting.updateShadowFrustum()
+    if (app.lighting.hemiLight) app.lighting.hemiLight.intensity = params.lighting.hemiLight
+    if (app.lighting.dirLightOffset) {
+      app.lighting.dirLightOffset.x = params.lighting.lightX
+      app.lighting.dirLightOffset.y = params.lighting.lightY
+      app.lighting.dirLightOffset.z = params.lighting.lightZ
+      app.lighting.updateShadowFrustum()
     }
-    if (demo.lighting.dirLightHelper) demo.lighting.dirLightHelper.visible = params.lighting.showHelper
+    if (app.lighting.dirLightHelper) app.lighting.dirLightHelper.visible = params.lighting.showHelper
     // Material override removed - using GLB material directly for hex tiles
 
     // Post processing
-    demo.aoEnabled.value = params.fx.ao ? 1 : 0
-    if (demo.aoPass) {
-      demo.aoPass.scale.value = params.fx.aoScale
-      demo.aoPass.radius.value = params.fx.aoRadius
+    app.aoEnabled.value = params.fx.ao ? 1 : 0
+    if (app.aoPass) {
+      app.aoPass.scale.value = params.fx.aoScale
+      app.aoPass.radius.value = params.fx.aoRadius
     }
-    if (demo.aoBlurAmount) demo.aoBlurAmount.value = params.fx.aoBlur
-    demo.aoIntensity.value = params.fx.aoIntensity
-    demo.vignetteEnabled.value = params.fx.vignette ? 1 : 0
-    demo.dofEnabled.value = params.fx.dof ? 1 : 0
-    demo.dofAperture.value = params.fx.dofAperture / 1000
-    demo.dofMaxblur.value = params.fx.dofMaxblur
-    demo.bleachEnabled.value = params.fx.bleach ? 1 : 0
-    demo.bleachAmount.value = params.fx.bleachAmount
-    demo.lutEnabled.value = params.fx.lut ? 1 : 0
-    demo.lutAmount.value = params.fx.lutAmount
-    demo.grainEnabled.value = params.fx.grain ? 1 : 0
-    demo.grainStrength.value = params.fx.grainStrength
+    if (app.aoBlurAmount) app.aoBlurAmount.value = params.fx.aoBlur
+    app.aoIntensity.value = params.fx.aoIntensity
+    app.vignetteEnabled.value = params.fx.vignette ? 1 : 0
+    app.dofEnabled.value = params.fx.dof ? 1 : 0
+    app.dofAperture.value = params.fx.dofAperture / 1000
+    app.dofMaxblur.value = params.fx.dofMaxblur
+    app.bleachEnabled.value = params.fx.bleach ? 1 : 0
+    app.bleachAmount.value = params.fx.bleachAmount
+    app.lutEnabled.value = params.fx.lut ? 1 : 0
+    app.lutAmount.value = params.fx.lutAmount
+    app.grainEnabled.value = params.fx.grain ? 1 : 0
+    app.grainStrength.value = params.fx.grainStrength
 
     // Camera
-    demo.perspCamera.fov = params.camera.fov
-    demo.perspCamera.updateProjectionMatrix()
-    demo.controls.maxPolarAngle = params.debug.debugCam ? Math.PI : 1.1
-    demo.controls.minDistance = params.debug.debugCam ? 0 : 25
-    demo.controls.maxDistance = params.debug.debugCam ? Infinity : 125
-    if (demo.axesHelper) demo.axesHelper.visible = params.debug.originHelper
-    demo.city.setAxesHelpersVisible(params.debug.originHelper)
+    app.perspCamera.fov = params.camera.fov
+    app.perspCamera.updateProjectionMatrix()
+    app.controls.maxPolarAngle = params.debug.debugCam ? Math.PI : 1.1
+    app.controls.minDistance = params.debug.debugCam ? 0 : 25
+    app.controls.maxDistance = params.debug.debugCam ? Infinity : 125
+    if (app.axesHelper) app.axesHelper.visible = params.debug.originHelper
+    app.city.setAxesHelpersVisible(params.debug.originHelper)
 
     // Hex helper visibility
-    demo.city.setHelpersVisible(params.debug.hexGrid)
+    app.city.setHelpersVisible(params.debug.hexGrid)
 
     // Weather
-    if (demo.city.weather) {
-      demo.city.weather.setMode(params.weather.mode)
-      demo.city.weather.setIntensity(params.weather.intensity)
-      demo.city.weather.setOpacity(params.weather.opacity)
-      demo.city.weather.setSpeed(params.weather.speed)
-      demo.city.weather.setWind(params.weather.wind)
-      demo.city.weather.setWobble(params.weather.wobble)
-      demo.city.weather.setSnowSize(params.weather.snowSize)
+    if (app.city.weather) {
+      app.city.weather.setMode(params.weather.mode)
+      app.city.weather.setIntensity(params.weather.intensity)
+      app.city.weather.setOpacity(params.weather.opacity)
+      app.city.weather.setSpeed(params.weather.speed)
+      app.city.weather.setWind(params.weather.wind)
+      app.city.weather.setWobble(params.weather.wobble)
+      app.city.weather.setSnowSize(params.weather.snowSize)
     }
 
     // Level bias
-    if (demo.city._levelBias) demo.city._levelBias.value = params.debug.levelBias
+    if (app.city._levelBias) app.city._levelBias.value = params.debug.levelBias
 
     // Renderer
-    demo.renderer.setPixelRatio(params.renderer.dpr)
+    app.renderer.setPixelRatio(params.renderer.dpr)
   }
 }

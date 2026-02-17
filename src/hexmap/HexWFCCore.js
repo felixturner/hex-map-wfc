@@ -9,7 +9,7 @@ import {
   rotateHexEdges,
   LEVELS_COUNT,
 } from './HexTileData.js'
-import { random } from './SeededRandom.js'
+import { random } from '../SeededRandom.js'
 
 // ============================================================================
 // Cube Coordinate Utilities
