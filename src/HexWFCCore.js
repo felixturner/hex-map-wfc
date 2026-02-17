@@ -78,6 +78,22 @@ export function localToGlobalCoords(x, z, gridRadius, globalCenterCube) {
 }
 
 /**
+ * Convert global cube coordinates to local grid array indices
+ */
+export function globalToLocalGrid(globalCube, globalCenterCube, gridRadius) {
+  const localCube = {
+    q: globalCube.q - globalCenterCube.q,
+    r: globalCube.r - globalCenterCube.r,
+    s: globalCube.s - globalCenterCube.s,
+  }
+  const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
+  return {
+    gridX: localOffset.col + gridRadius,
+    gridZ: localOffset.row + gridRadius,
+  }
+}
+
+/**
  * Get all cube coordinates within a hex radius of a center point
  */
 export function cubeCoordsInRadius(cq, cr, cs, radius) {

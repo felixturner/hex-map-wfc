@@ -2,8 +2,11 @@ import { Object3D, BatchedMesh, Color } from 'three/webgpu'
 import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, LEVELS_COUNT } from './HexTileData.js'
 import { HexTileGeometry } from './HexTiles.js'
 import FastSimplexNoise from '@webvoxel/fast-simplex-noise'
-import { random } from './SeededRandom.js'
+import { random, shuffle } from './SeededRandom.js'
 import gsap from 'gsap'
+
+const LEVEL_HEIGHT = 0.5
+const TILE_SURFACE = 1
 
 // Global noise instances shared across all Decorations
 // Created lazily on first use, seeded from global RNG
@@ -14,10 +17,7 @@ let currentTreeNoiseFreq = 0.05
 let currentTreeThreshold = 0.5
 
 export function initGlobalTreeNoise(frequency = 0.05) {
-  currentTreeNoiseFreq = frequency
-  globalNoiseA = new FastSimplexNoise({ frequency, min: 0, max: 1, random })
-  globalNoiseB = new FastSimplexNoise({ frequency, min: 0, max: 1, random })
-
+  setTreeNoiseFrequency(frequency)
 }
 
 export function setTreeNoiseFrequency(frequency) {
@@ -366,8 +366,6 @@ export class Decorations {
     if (!this.treeMesh || this.treeGeomIds.size === 0) return
     if (!globalNoiseA || !globalNoiseB) return  // Need global noise initialized
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1  // Height of tile mesh surface above base
     const threshold = currentTreeThreshold  // noise > threshold = tree
     const { x: offsetX, z: offsetZ } = this.worldOffset
 
@@ -445,8 +443,6 @@ export class Decorations {
 
     if (!this.staticMesh || this.staticGeomIds.size === 0) return
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     const maxBuildings = options.maxBuildings ?? Math.floor(random() * 11)
     const maxRuralBuildings = Math.floor(random() * 4)  // 0-3
     const buildingNames = [...BuildingMeshNames].filter(n => this.staticGeomIds.has(n))
@@ -529,22 +525,10 @@ export class Decorations {
     }
 
     // Shuffle each group separately
-    for (let i = deadEndCandidates.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1))
-      ;[deadEndCandidates[i], deadEndCandidates[j]] = [deadEndCandidates[j], deadEndCandidates[i]]
-    }
-    for (let i = roadAdjacentCandidates.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1))
-      ;[roadAdjacentCandidates[i], roadAdjacentCandidates[j]] = [roadAdjacentCandidates[j], roadAdjacentCandidates[i]]
-    }
-    for (let i = flatGrassCandidates.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1))
-      ;[flatGrassCandidates[i], flatGrassCandidates[j]] = [flatGrassCandidates[j], flatGrassCandidates[i]]
-    }
-    for (let i = coastWindmillCandidates.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1))
-      ;[coastWindmillCandidates[i], coastWindmillCandidates[j]] = [coastWindmillCandidates[j], coastWindmillCandidates[i]]
-    }
+    shuffle(deadEndCandidates)
+    shuffle(roadAdjacentCandidates)
+    shuffle(flatGrassCandidates)
+    shuffle(coastWindmillCandidates)
 
     // Dead-ends first, then road-adjacent (no flat grass for road buildings)
     const candidates = [...deadEndCandidates, ...roadAdjacentCandidates]
@@ -679,8 +663,6 @@ export class Decorations {
 
     if (!this.staticMesh || this.staticGeomIds.size === 0) return
 
-    const LEVEL_HEIGHT = 0.5
-
     for (const tile of hexTiles) {
       // Only river crossing tiles
       if (tile.type !== TileType.RIVER_CROSSING_A &&
@@ -723,8 +705,6 @@ export class Decorations {
 
     if (!this.staticMesh || this.staticGeomIds.size === 0) return
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     const lilyNames = WaterlilyMeshNames.filter(n => this.staticGeomIds.has(n))
 
     for (const tile of hexTiles) {
@@ -771,8 +751,6 @@ export class Decorations {
 
     if (!this.treeMesh || this.treeGeomIds.size === 0) return
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     const flowerNames = FlowerMeshNames.filter(n => this.treeGeomIds.has(n))
     const { x: offsetX, z: offsetZ } = this.worldOffset
     const hasNoise = globalNoiseA && globalNoiseB
@@ -838,8 +816,6 @@ export class Decorations {
 
     if (!this.staticMesh || this.staticGeomIds.size === 0) return
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     const rockNames = RockMeshNames.filter(n => this.staticGeomIds.has(n))
     const treeTileIds = new Set(this.trees.map(t => t.tile.id))
 
@@ -859,10 +835,7 @@ export class Decorations {
     }
 
     // Shuffle and pick up to 20 tiles
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1))
-      ;[candidates[i], candidates[j]] = [candidates[j], candidates[i]]
-    }
+    shuffle(candidates)
     const budget = Math.min(10, candidates.length)
 
     for (let i = 0; i < budget; i++) {
@@ -903,8 +876,6 @@ export class Decorations {
     this.clearHills()
     this.clearMountains()
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     const hillNames = HillMeshNames.filter(n => this.staticGeomIds.has(n))
     const mountainNames = MountainMeshNames.filter(n => this.staticGeomIds.has(n))
     const hasHills = this.staticMesh && hillNames.length > 0
@@ -1095,7 +1066,6 @@ export class Decorations {
     if (tile.type !== TileType.RIVER_CROSSING_A &&
         tile.type !== TileType.RIVER_CROSSING_B) return
 
-    const LEVEL_HEIGHT = 0.5
     const meshName = tile.type === TileType.RIVER_CROSSING_A
       ? 'building_bridge_A'
       : 'building_bridge_B'
@@ -1126,8 +1096,6 @@ export class Decorations {
   addMountainAt(tile, gridRadius) {
     if (!this.staticMesh || this.staticGeomIds.size === 0) return
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     const mountainNames = MountainMeshNames.filter(n => this.staticGeomIds.has(n))
     if (mountainNames.length === 0) return
 
@@ -1165,8 +1133,6 @@ export class Decorations {
       this.clearDecorationsAt(tile.gridX, tile.gridZ)
     }
 
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     const { x: offsetX, z: offsetZ } = this.worldOffset
     const newItems = []
     const treeTileIds = new Set()

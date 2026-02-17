@@ -18,7 +18,7 @@ import {
 import WFCWorker from './workers/wfc.worker.js?worker'
 import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor } from 'three/tsl'
 import { CSS2DObject } from 'three/examples/jsm/Addons.js'
-import { HexWFCAdjacencyRules, HexWFCCell, CUBE_DIRS, cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, edgesCompatible, getEdgeLevel } from './HexWFCCore.js'
+import { HexWFCAdjacencyRules, HexWFCCell, CUBE_DIRS, cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, globalToLocalGrid, edgesCompatible, getEdgeLevel } from './HexWFCCore.js'
 import { setStatus, setStatusAsync, log, Demo } from './Demo.js'
 import { TILE_LIST, TileType, HexDir, HexOpposite, rotateHexEdges, LEVELS_COUNT, TERRAIN_CATEGORIES } from './HexTileData.js'
 import { HexTile, HexTileGeometry, isInHexRadius } from './HexTiles.js'
@@ -33,8 +33,29 @@ import {
 } from './HexGridConnector.js'
 import { initGlobalTreeNoise, Decorations } from './Decorations.js'
 import { Weather } from './Weather.js'
-import { random, getSeed } from './SeededRandom.js'
+import { random, getSeed, shuffle } from './SeededRandom.js'
 import { Sounds } from './lib/Sounds.js'
+
+const LEVEL_HEIGHT = 0.5
+const TILE_SURFACE = 1
+
+/**
+ * Get all grid coordinates within the hex radius (19 grids at radius 2)
+ * Returns [q, gz] pairs in flat-top hex odd-q offset layout
+ */
+function getAllGridCoordinates(cubeRadius = 2) {
+  const coords = []
+  for (let q = -cubeRadius; q <= cubeRadius; q++) {
+    for (let r = -cubeRadius; r <= cubeRadius; r++) {
+      const s = -q - r
+      if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= cubeRadius) {
+        const gz = r + Math.floor((q - (q & 1)) / 2)
+        coords.push([q, gz])
+      }
+    }
+  }
+  return coords
+}
 
 /**
  * HexMap - Manages the entire world of multiple HexGrid instances
@@ -119,16 +140,7 @@ export class HexMap {
     this.initHoverHighlight()
 
     // Pre-create all 19 grids with meshes (avoids lag on Build All)
-    const allCoords = []
-    for (let q = -2; q <= 2; q++) {
-      for (let r = -2; r <= 2; r++) {
-        const s = -q - r
-        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= 2) {
-          const gz = r + Math.floor((q - (q & 1)) / 2)
-          allCoords.push([q, gz])
-        }
-      }
-    }
+    const allCoords = getAllGridCoordinates()
     for (const [gx, gz] of allCoords) {
       const grid = await this.createGrid(gx, gz)
       await grid.initMeshes(HexTileGeometry.geoms)
@@ -516,10 +528,7 @@ export class HexMap {
     }
 
     // Shuffle candidates to avoid bias toward early-defined tile types
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1))
-      ;[candidates[i], candidates[j]] = [candidates[j], candidates[i]]
-    }
+    shuffle(candidates)
 
     return candidates
   }
@@ -746,14 +755,7 @@ export class HexMap {
           const sourceGrid = this.grids.get(existing.gridKey)
           if (sourceGrid) {
             // Convert global cube to local grid coords
-            const localCube = {
-              q: fixedCell.q - sourceGrid.globalCenterCube.q,
-              r: fixedCell.r - sourceGrid.globalCenterCube.r,
-              s: fixedCell.s - sourceGrid.globalCenterCube.s,
-            }
-            const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
-            const gridX = localOffset.col + sourceGrid.gridRadius
-            const gridZ = localOffset.row + sourceGrid.gridRadius
+            const { gridX, gridZ } = globalToLocalGrid(fixedCell, sourceGrid.globalCenterCube, sourceGrid.gridRadius)
             sourceGrid.replaceTile(gridX, gridZ, replacement.type, replacement.rotation, replacement.level)
           }
         }
@@ -770,6 +772,31 @@ export class HexMap {
     }
 
     return false
+  }
+
+  /**
+   * Apply WFC tile results to their source grids (replace tiles + collect changed tiles)
+   * Used by conflict-WFC and click-resolve to update visuals after re-solving
+   * @param {Array} tiles - [{q,r,s,type,rotation,level}] solved tiles
+   * @returns {Map<HexGrid, HexTile[]>} Changed tiles per grid
+   */
+  applyTileResultsToGrids(tiles) {
+    const changedTilesPerGrid = new Map()
+    for (const t of tiles) {
+      const key = cubeKey(t.q, t.r, t.s)
+      const existing = this.globalCells.get(key)
+      if (!existing) continue
+      const sourceGrid = this.grids.get(existing.gridKey)
+      if (!sourceGrid) continue
+      const { gridX, gridZ } = globalToLocalGrid(t, sourceGrid.globalCenterCube, sourceGrid.gridRadius)
+      sourceGrid.replaceTile(gridX, gridZ, t.type, t.rotation, t.level)
+      const replacedTile = sourceGrid.hexGrid[gridX]?.[gridZ]
+      if (replacedTile) {
+        if (!changedTilesPerGrid.has(sourceGrid)) changedTilesPerGrid.set(sourceGrid, [])
+        changedTilesPerGrid.get(sourceGrid).push(replacedTile)
+      }
+    }
+    return changedTilesPerGrid
   }
 
   /**
@@ -959,15 +986,6 @@ export class HexMap {
     let unfixedKeys = []
     let attempt = 0
 
-    // Shuffle helper
-    const shuffleArray = (arr) => {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1))
-        ;[arr[i], arr[j]] = [arr[j], arr[i]]
-      }
-      return arr
-    }
-
     // Track unfixed cells across retries so the solver doesn't re-unfix the same ones
     const persistedUnfixedKeys = new Set()
     const persistedUnfixedOriginals = new Map() // cubeKey → { q,r,s, type, rotation, level }
@@ -1111,33 +1129,8 @@ export class HexMap {
             break
           }
 
-          // Update visuals in source grids (same pattern as click-WFC)
-          const changedTilesPerGrid = new Map()
-          for (const t of conflictResult.tiles) {
-            const key = cubeKey(t.q, t.r, t.s)
-            const existing = this.globalCells.get(key)
-            if (!existing) continue
-
-            const sourceGrid = this.grids.get(existing.gridKey)
-            if (!sourceGrid) continue
-
-            const localCube = {
-              q: t.q - sourceGrid.globalCenterCube.q,
-              r: t.r - sourceGrid.globalCenterCube.r,
-              s: t.s - sourceGrid.globalCenterCube.s,
-            }
-            const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
-            const gridX = localOffset.col + sourceGrid.gridRadius
-            const gridZ = localOffset.row + sourceGrid.gridRadius
-
-            sourceGrid.replaceTile(gridX, gridZ, t.type, t.rotation, t.level)
-
-            const replacedTile = sourceGrid.hexGrid[gridX]?.[gridZ]
-            if (replacedTile) {
-              if (!changedTilesPerGrid.has(sourceGrid)) changedTilesPerGrid.set(sourceGrid, [])
-              changedTilesPerGrid.get(sourceGrid).push(replacedTile)
-            }
-          }
+          // Update visuals in source grids
+          const changedTilesPerGrid = this.applyTileResultsToGrids(conflictResult.tiles)
 
           // Repopulate decorations for changed tiles
           for (const [g, tiles] of changedTilesPerGrid) {
@@ -1318,14 +1311,7 @@ export class HexMap {
           // Update rendered tile in source grid (before globalCells is overwritten)
           const sourceGrid = this.grids.get(existing.gridKey)
           if (sourceGrid) {
-            const localCube = {
-              q: changed.q - sourceGrid.globalCenterCube.q,
-              r: changed.r - sourceGrid.globalCenterCube.r,
-              s: changed.s - sourceGrid.globalCenterCube.s,
-            }
-            const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
-            const gridX = localOffset.col + sourceGrid.gridRadius
-            const gridZ = localOffset.row + sourceGrid.gridRadius
+            const { gridX, gridZ } = globalToLocalGrid(changed, sourceGrid.globalCenterCube, sourceGrid.gridRadius)
             sourceGrid.replaceTile(gridX, gridZ, changed.type, changed.rotation, changed.level)
             // Remove old decorations and add bridge if new tile is a crossing
             sourceGrid.decorations?.clearDecorationsAt(gridX, gridZ)
@@ -1362,14 +1348,7 @@ export class HexMap {
           if (existing) {
             const sourceGrid = this.grids.get(existing.gridKey)
             if (sourceGrid) {
-              const localCube = {
-                q: original.q - sourceGrid.globalCenterCube.q,
-                r: original.r - sourceGrid.globalCenterCube.r,
-                s: original.s - sourceGrid.globalCenterCube.s,
-              }
-              const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
-              const gridX = localOffset.col + sourceGrid.gridRadius
-              const gridZ = localOffset.row + sourceGrid.gridRadius
+              const { gridX, gridZ } = globalToLocalGrid(original, sourceGrid.globalCenterCube, sourceGrid.gridRadius)
               sourceGrid.replaceTile(gridX, gridZ, solvedTile.type, solvedTile.rotation, solvedTile.level)
               sourceGrid.decorations?.clearDecorationsAt(gridX, gridZ)
               const replacedTile = sourceGrid.hexGrid[gridX]?.[gridZ]
@@ -1401,14 +1380,7 @@ export class HexMap {
         if (existing) {
           const sourceGrid = this.grids.get(existing.gridKey)
           if (sourceGrid) {
-            const localCube = {
-              q: dropped.q - sourceGrid.globalCenterCube.q,
-              r: dropped.r - sourceGrid.globalCenterCube.r,
-              s: dropped.s - sourceGrid.globalCenterCube.s,
-            }
-            const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
-            const gridX = localOffset.col + sourceGrid.gridRadius
-            const gridZ = localOffset.row + sourceGrid.gridRadius
+            const { gridX, gridZ } = globalToLocalGrid(dropped, sourceGrid.globalCenterCube, sourceGrid.gridRadius)
             const tile = sourceGrid.hexGrid[gridX]?.[gridZ]
             if (tile) {
               sourceGrid.decorations?.clearDecorationsAt(gridX, gridZ)
@@ -1508,15 +1480,7 @@ export class HexMap {
    * @returns {number} Number of populated neighbors
    */
   countPopulatedNeighbors(gridKey) {
-    let count = 0
-    for (let dir = 0; dir < 6; dir++) {
-      const adjacentKey = getAdjacentGridKey(gridKey, dir)
-      const adjacentGrid = this.grids.get(adjacentKey)
-      if (adjacentGrid?.state === HexGridState.POPULATED) {
-        count++
-      }
-    }
-    return count
+    return this.getPopulatedNeighborDirections(gridKey).length
   }
 
   /**
@@ -1707,16 +1671,7 @@ export class HexMap {
    */
   async populateAllGrids(expansionCoords = null, options = {}) {
     if (!expansionCoords) {
-      expansionCoords = []
-      for (let q = -2; q <= 2; q++) {
-        for (let r = -2; r <= 2; r++) {
-          const s = -q - r
-          if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= 2) {
-            const gz = r + Math.floor((q - (q & 1)) / 2)
-            if (q !== 0 || gz !== 0) expansionCoords.push([q, gz])
-          }
-        }
-      }
+      expansionCoords = getAllGridCoordinates().filter(([q, gz]) => q !== 0 || gz !== 0)
     }
     const params = Demo.instance?.params ?? this.params
     const animate = options.animate ?? (params?.roads?.animateWFC ?? false)
@@ -2236,34 +2191,8 @@ export class HexMap {
                   return existing && existing.type === t.type && existing.rotation === t.rotation && existing.level === t.level
                 })
 
-                // Replace tiles and collect changed tiles per grid for decoration repopulation
-                const changedTilesPerGrid = new Map()
-
-                for (const t of result.tiles) {
-                  const key = cubeKey(t.q, t.r, t.s)
-                  const existing = this.globalCells.get(key)
-                  if (!existing) continue
-
-                  const sourceGrid = this.grids.get(existing.gridKey)
-                  if (!sourceGrid) continue
-
-                  const localCube = {
-                    q: t.q - sourceGrid.globalCenterCube.q,
-                    r: t.r - sourceGrid.globalCenterCube.r,
-                    s: t.s - sourceGrid.globalCenterCube.s,
-                  }
-                  const localOffset = cubeToOffset(localCube.q, localCube.r, localCube.s)
-                  const gridX = localOffset.col + sourceGrid.gridRadius
-                  const gridZ = localOffset.row + sourceGrid.gridRadius
-
-                  sourceGrid.replaceTile(gridX, gridZ, t.type, t.rotation, t.level)
-
-                  const replacedTile = sourceGrid.hexGrid[gridX]?.[gridZ]
-                  if (replacedTile) {
-                    if (!changedTilesPerGrid.has(sourceGrid)) changedTilesPerGrid.set(sourceGrid, [])
-                    changedTilesPerGrid.get(sourceGrid).push(replacedTile)
-                  }
-                }
+                // Replace tiles and collect changed tiles per grid
+                const changedTilesPerGrid = this.applyTileResultsToGrids(result.tiles)
 
                 // Animate tile drop-in (staggered) then decorations
                 const TILE_STAGGER = 60
@@ -2401,8 +2330,6 @@ export class HexMap {
 
   createTileLabels() {
     this.clearTileLabels()
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
     for (const [key, grid] of this.grids) {
       const gridRadius = grid.gridRadius
       const { x: offsetX, z: offsetZ } = grid.worldOffset

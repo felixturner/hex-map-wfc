@@ -40,3 +40,14 @@ export function random() {
 export function getSeed() {
   return currentSeed
 }
+
+/**
+ * In-place Fisher-Yates shuffle using seeded RNG
+ */
+export function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}

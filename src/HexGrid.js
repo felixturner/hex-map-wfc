@@ -22,9 +22,10 @@ import { HexTile, HexTileGeometry, isInHexRadius } from './HexTiles.js'
 import { Decorations } from './Decorations.js'
 import { HexGridHelper } from './HexGridHelper.js'
 import { Placeholder } from './Placeholder.js'
-import { cubeToOffset } from './HexWFCCore.js'
+import { cubeToOffset, globalToLocalGrid } from './HexWFCCore.js'
 
 const LEVEL_HEIGHT = 0.5
+const TILE_SURFACE = 1
 const Y_AXIS = new Vector3(0, 1, 0)
 
 /**
@@ -474,17 +475,7 @@ export class HexGrid {
     // Convert cube coords to local grid coords and place tiles
     const placements = []
     for (const tile of tiles) {
-      // Global cube → local cube (subtract center)
-      const localCube = {
-        q: tile.q - globalCenterCube.q,
-        r: tile.r - globalCenterCube.r,
-        s: tile.s - globalCenterCube.s
-      }
-      // Local cube → offset
-      const offset = cubeToOffset(localCube.q, localCube.r, localCube.s)
-      // Offset → grid array indices
-      const gridX = offset.col + this.gridRadius
-      const gridZ = offset.row + this.gridRadius
+      const { gridX, gridZ } = globalToLocalGrid(tile, globalCenterCube, this.gridRadius)
 
       placements.push({
         gridX, gridZ,
@@ -496,15 +487,9 @@ export class HexGrid {
 
     // Convert collapse order the same way
     const localCollapseOrder = collapseOrder.map(tile => {
-      const localCube = {
-        q: tile.q - globalCenterCube.q,
-        r: tile.r - globalCenterCube.r,
-        s: tile.s - globalCenterCube.s
-      }
-      const offset = cubeToOffset(localCube.q, localCube.r, localCube.s)
+      const { gridX, gridZ } = globalToLocalGrid(tile, globalCenterCube, this.gridRadius)
       return {
-        gridX: offset.col + this.gridRadius,
-        gridZ: offset.row + this.gridRadius,
+        gridX, gridZ,
         type: tile.type,
         rotation: tile.rotation,
         level: tile.level,
@@ -625,7 +610,6 @@ export class HexGrid {
       this.hexMesh.setColorAt(oldTile.instanceId, oldTile.color)
 
       // Update matrix for new rotation
-      const LEVEL_HEIGHT = 0.5
       const offsetCol = gridX - this.gridRadius
       const offsetRow = gridZ - this.gridRadius
       const pos = HexTileGeometry.getWorldPosition(offsetCol, offsetRow)
@@ -746,7 +730,6 @@ export class HexGrid {
   animateTileDrop(tile) {
     if (!tile || tile.instanceId === null) return
 
-    const LEVEL_HEIGHT = 0.5
     const DROP_HEIGHT = 5
     const ANIM_DURATION = 0.4
     const dummy = this.dummy
@@ -799,7 +782,6 @@ export class HexGrid {
    * Each decoration drops 0.5s after its tile
    */
   animatePlacements(collapseOrder, delay) {
-    const LEVEL_HEIGHT = 0.5
     const DROP_HEIGHT = 5
     const ANIM_DURATION = 0.4
     const DEC_DELAY = 400 // Decoration drops after its tile
@@ -886,9 +868,6 @@ export class HexGrid {
   buildDecorationMap() {
     const map = new Map()
     if (!this.decorations) return map
-
-    const LEVEL_HEIGHT = 0.5
-    const TILE_SURFACE = 1
 
     for (const tree of this.decorations.trees) {
       const key = `${tree.tile.gridX},${tree.tile.gridZ}`
@@ -1092,8 +1071,6 @@ export class HexGrid {
     const dummy = this.dummy
     const rotationAngles = [0, 1, 2, 3, 4, 5].map(r => -r * Math.PI / 3)
     const gridRadius = this.gridRadius
-    const LEVEL_HEIGHT = 0.5
-
     // Clear old bottom fills
     for (const fillId of this.bottomFills.values()) {
       this.hexMesh.deleteInstance(fillId)
@@ -1192,8 +1169,6 @@ export class HexGrid {
     this.slopeArrows = []
 
     if (!HexTile.debugLevelColors) return
-
-    const LEVEL_HEIGHT = 0.5
 
     for (const tile of this.hexTiles) {
       if (!tile.isSlope()) continue
