@@ -111,9 +111,14 @@ export class GUIManager {
     },
     water: {
       y: 0.92,
-      opacity: 0.25,
-      speed: 1.1,
-      freq: 4.4,
+      opacity: 0.5,
+      speed: 3.1,
+      freq: 7.4,
+      dirAngle: 209,
+      dirSpeed: 0,
+      brightness: 0.79,
+      contrast: 24.5,
+      stretch: 0.15,
     },
     weather: {
       mode: 'none',
@@ -286,11 +291,26 @@ export class GUIManager {
     waterFolder.add(allParams.water, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
       if (demo.city._waterOpacity) demo.city._waterOpacity.value = v
     })
-    waterFolder.add(allParams.water, 'speed', 0, 5, 0.1).name('Speed').onChange((v) => {
+    waterFolder.add(allParams.water, 'speed', 0, 10, 0.1).name('Speed').onChange((v) => {
       if (demo.city._waterSpeed) demo.city._waterSpeed.value = v
     })
-    waterFolder.add(allParams.water, 'freq', 0.1, 5, 0.1).name('Frequency').onChange((v) => {
+    waterFolder.add(allParams.water, 'freq', 0.1, 10, 0.1).name('Frequency').onChange((v) => {
       if (demo.city._waterFreq) demo.city._waterFreq.value = v
+    })
+    waterFolder.add(allParams.water, 'dirAngle', 0, 360, 1).name('Direction °').onChange((v) => {
+      if (demo.city._waterDirAngle) demo.city._waterDirAngle.value = v * Math.PI / 180
+    })
+    waterFolder.add(allParams.water, 'dirSpeed', 0, 3, 0.05).name('Dir Speed').onChange((v) => {
+      if (demo.city._waterDirSpeed) demo.city._waterDirSpeed.value = v
+    })
+    waterFolder.add(allParams.water, 'brightness', 0.1, 0.9, 0.01).name('Brightness').onChange((v) => {
+      if (demo.city._waterBrightness) demo.city._waterBrightness.value = v
+    })
+    waterFolder.add(allParams.water, 'contrast', 1, 40, 0.5).name('Contrast').onChange((v) => {
+      if (demo.city._waterContrast) demo.city._waterContrast.value = v
+    })
+    waterFolder.add(allParams.water, 'stretch', 0.05, 1, 0.05).name('Stretch').onChange((v) => {
+      if (demo.city._waterStretch) demo.city._waterStretch.value = v
     })
 
     // Weather folder

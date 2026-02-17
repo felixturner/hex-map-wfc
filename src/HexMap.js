@@ -800,8 +800,13 @@ export class HexMap {
 
     // GUI-controllable uniforms
     this._waterOpacity = uniform(0)
-    this._waterSpeed = uniform(1.1)
-    this._waterFreq = uniform(4.4)
+    this._waterSpeed = uniform(3.1)
+    this._waterFreq = uniform(7.4)
+    this._waterDirAngle = uniform(209 * Math.PI / 180)  // radians
+    this._waterDirSpeed = uniform(0)       // directional drift speed
+    this._waterBrightness = uniform(0.79)  // threshold cutoff (lower = more sparkle)
+    this._waterContrast = uniform(24.5)    // sharpness multiplier
+    this._waterStretch = uniform(0.15)     // along-wave scale factor (< 1 = elongated waves)
 
     const material = new MeshPhysicalNodeMaterial({
       transparent: true,
@@ -825,16 +830,36 @@ export class HexMap {
       return mix(mix(a, b, ux), mix(c, d, ux), uz)
     }
 
-    // Two noise layers at different scales/speeds
+    // Rotate world pos into wave-aligned coordinates (across, along)
     const px = positionWorld.x, pz = positionWorld.z
+    const cosA = cos(this._waterDirAngle)
+    const sinA = sin(this._waterDirAngle)
+    const acrossWave = px.mul(cosA).add(pz.mul(sinA))   // perpendicular to wave crests
+    const alongWave = px.mul(sinA.negate()).add(pz.mul(cosA))  // parallel to wave crests
+
+    // Directional drift (moves along acrossWave direction)
+    const drift = tslTime.mul(this._waterDirSpeed)
+
+    // Scale: full freq across waves, reduced freq along waves (stretch < 1 = elongated)
     const speed = this._waterSpeed
     const freq = this._waterFreq
-    const noise1 = valueNoise(px.mul(freq.mul(0.8)).add(tslTime.mul(speed.mul(0.5))), pz.mul(freq.mul(0.8)).add(tslTime.mul(speed.mul(0.3))))
-    const noise2 = valueNoise(px.mul(freq.mul(1.5)).add(tslTime.mul(speed.mul(-0.4))), pz.mul(freq.mul(1.5)).add(tslTime.mul(speed.mul(0.6))))
+    const stretch = this._waterStretch
+
+    // Two noise layers at different scales/speeds, with directional drift + stretch
+    // Stretch applied to acrossWave (travel direction) so waves elongate along travel
+    // Time-based motion on this axis also scaled by stretch to keep visual speed consistent
+    const noise1 = valueNoise(
+      acrossWave.mul(freq.mul(0.8)).mul(stretch).add(tslTime.mul(speed.mul(0.5)).mul(stretch)).add(drift.mul(stretch)),
+      alongWave.mul(freq.mul(0.8)).add(tslTime.mul(speed.mul(0.3)))
+    )
+    const noise2 = valueNoise(
+      acrossWave.mul(freq.mul(1.5)).mul(stretch).add(tslTime.mul(speed.mul(-0.4)).mul(stretch)).add(drift.mul(stretch)),
+      alongWave.mul(freq.mul(1.5)).add(tslTime.mul(speed.mul(0.6)))
+    )
 
     // Combine and threshold for discrete sparkle points
     const combined = noise1.add(noise2).mul(0.5)
-    const sparkle = clamp(combined.sub(0.6).mul(5.0), 0.0, 1.0)
+    const sparkle = clamp(combined.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
 
     // Black base, sparkle via emissive so it glows regardless of lighting
     material.colorNode = vec3(0, 0, 0)
