@@ -132,11 +132,37 @@ export class App {
     await this.lighting.init()
     await this.city.init()
 
-    // Wire coast mask: wait for drop anim, then quick fade out/in around mask re-render
+    // Fade out waves immediately when a new grid starts building
+    this.city.onBeforeTilesChanged = () => {
+      const opacity = this.city._waveOpacity
+      const gradOpacity = this.city._waveGradientOpacity
+      const maskStrength = this.city._waveMaskStrength
+      if (!opacity || opacity.value === 0) return
+
+      this._savedWaveOpacity = opacity.value
+      this._savedGradOpacity = gradOpacity ? gradOpacity.value : 0
+
+      const fadeOutMs = 500
+      const startTime = performance.now()
+      const fadeOutAnim = () => {
+        const t = Math.min((performance.now() - startTime) / fadeOutMs, 1)
+        opacity.value = this._savedWaveOpacity * (1 - t)
+        if (gradOpacity) gradOpacity.value = this._savedGradOpacity * (1 - t)
+        if (maskStrength) maskStrength.value = 1 - t
+        if (t < 1) requestAnimationFrame(fadeOutAnim)
+      }
+      requestAnimationFrame(fadeOutAnim)
+    }
+
+    // After tiles drop, re-render mask and fade waves back in
     this.city.onTilesChanged = (animDuration = 0) => {
       const opacity = this.city._waveOpacity
+      const gradOpacity = this.city._waveGradientOpacity
+      const maskStrength = this.city._waveMaskStrength
       if (!opacity) return
-      const savedOpacity = opacity.value
+
+      const savedOpacity = this._savedWaveOpacity ?? this.params.waves.opacity
+      const savedGradOpacity = this._savedGradOpacity ?? this.params.waves.gradientOpacity
 
       // Fade in sparkles on first grid build
       const sparkleOpacity = this.city._waterOpacity
@@ -155,36 +181,29 @@ export class App {
         }, delay)
       }
 
-      const delay = animDuration + 1000
+      // After drop animation, re-render mask and fade back in
+      const delay = animDuration + 500
+      const fadeInMs = 2000
       setTimeout(() => {
-        // Fade out (1s), re-render mask, fade back in (1s)
-        const fadeOutMs = 2000
-        const fadeInMs = 2000
-        const startTime = performance.now()
-        const fadeOutAnim = () => {
-          const t = Math.min((performance.now() - startTime) / fadeOutMs, 1)
-          opacity.value = savedOpacity * (1 - t)
-          if (t < 1) {
-            requestAnimationFrame(fadeOutAnim)
-          } else {
-            // Fully faded out — re-render mask
-            const tileMeshes = []
-            for (const grid of this.city.grids.values()) {
-              if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
-            }
-            this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane)
-
-            // Fade back in
-            const inStart = performance.now()
-            const fadeInAnim = () => {
-              const t = Math.min((performance.now() - inStart) / fadeInMs, 1)
-              opacity.value = savedOpacity * t
-              if (t < 1) requestAnimationFrame(fadeInAnim)
-            }
-            requestAnimationFrame(fadeInAnim)
-          }
+        opacity.value = 0
+        if (gradOpacity) gradOpacity.value = 0
+        if (maskStrength) maskStrength.value = 0
+        const tileMeshes = []
+        for (const grid of this.city.grids.values()) {
+          if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
         }
-        requestAnimationFrame(fadeOutAnim)
+        this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane)
+
+        // Fade back in
+        const inStart = performance.now()
+        const fadeInAnim = () => {
+          const t = Math.min((performance.now() - inStart) / fadeInMs, 1)
+          opacity.value = savedOpacity * t
+          if (gradOpacity) gradOpacity.value = savedGradOpacity * t
+          if (maskStrength) maskStrength.value = t
+          if (t < 1) requestAnimationFrame(fadeInAnim)
+        }
+        requestAnimationFrame(fadeInAnim)
       }, delay)
     }
 

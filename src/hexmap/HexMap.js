@@ -354,6 +354,8 @@ export class HexMap {
       return
     }
 
+    this.onBeforeTilesChanged?.()
+
     const ctx = this._setupPopulateContext(grid, options)
     log(`[${ctx.gridKey}] POPULATING GRID (${ctx.solveCells.length} cells, ${ctx.initialFixedCount} fixed)`, 'color: blue')
     await setStatusAsync(`[${ctx.gridKey}] Solving WFC...`)
@@ -1315,6 +1317,7 @@ export class HexMap {
   get _waveOffset() { return this.water?._waveOffset }
   get _waveGradientOpacity() { return this.water?._waveGradientOpacity }
   get _waveGradientColor() { return this.water?._waveGradientColor }
+  get _waveMaskStrength() { return this.water?._waveMaskStrength }
 
   // === Accessors for backward compatibility ===
 

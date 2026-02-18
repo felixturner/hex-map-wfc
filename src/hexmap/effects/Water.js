@@ -41,6 +41,7 @@ export class Water {
     this._waveOffset = uniform(0.3)
     this._waveGradientOpacity = uniform(0.1)
     this._waveGradientColor = uniform(new Color(0.8, 0.7, 0.2))
+    this._waveMaskStrength = uniform(1)
 
     // Coast gradient texture — pre-blurred RT from WavesMask (set before init)
     this._coastGradNode = texture(this.coastMaskTexture || new DataTexture(new Uint8Array(4), 1, 1))
@@ -119,12 +120,14 @@ export class Water {
     const nearCoast = clamp(gradSample.mul(3.0), 0, 1)
     const waveAlpha = broken.mul(fadeIn).mul(fadeOut).mul(inRange).mul(nearCoast).mul(this._waveOpacity)
 
-    // Fade sparkles to deep water only (gradSample 0=deep water, 1=land)
-    // Sparkles fade in where outwardDist > 0.6, full at 1.0 (gentle ramp over 0.4 range)
-    const deepWaterFade = clamp(outwardDist.sub(0.75).mul(4.0), 0, 1)
+    // Alt: deep water only — sparkles fade in where outwardDist > 0.75
+    // const deepWaterFade = clamp(outwardDist.sub(0.75).mul(4.0), 0, 1)
+    // const sparkleWithBreaks = waterColor.mul(totalAlpha).mul(deepWaterFade).mul(breakMask)
 
-    // Apply wave break noise to sparkles too for organic variation
-    const sparkleWithBreaks = waterColor.mul(totalAlpha).mul(deepWaterFade).mul(breakMask)
+    // U-shaped mask — sparkles near coast (rivers) + deep water, suppressed in wave zone
+    const uMask = clamp(outwardDist.sub(0.5).abs().sub(0.3).mul(10.0), 0, 1)
+    const sparkleMask = mix(float(1), uMask, this._waveMaskStrength)
+    const sparkleWithBreaks = waterColor.mul(totalAlpha).mul(sparkleMask).mul(breakMask)
 
     // Additive compositing in PostFX — caustic water + coast waves + gradient tint
     const gradientColor = vec3(this._waveGradientColor)

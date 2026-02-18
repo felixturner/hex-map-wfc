@@ -584,10 +584,10 @@ export class GUIManager {
     if (app.city._waveSpeed) app.city._waveSpeed.value = params.waves.speed
     if (app.city._waveCount) app.city._waveCount.value = params.waves.count
     if (app.city._waveOpacity) app.city._waveOpacity.value = params.waves.opacity
+    if (app.city._waveGradientOpacity) app.city._waveGradientOpacity.value = params.waves.gradientOpacity
     if (app.city._waveNoiseBreak) app.city._waveNoiseBreak.value = params.waves.break
     if (app.city._waveWidth) app.city._waveWidth.value = 1 - params.waves.width
     if (app.city._waveOffset) app.city._waveOffset.value = params.waves.offset
-    if (app.city._waveGradientOpacity) app.city._waveGradientOpacity.value = params.waves.gradientOpacity
     if (app.city._waveGradientColor) app.city._waveGradientColor.value.set(params.waves.gradientColor)
 
     // Renderer
