@@ -122,8 +122,10 @@ export class GUIManager {
       count: 4,
       opacity: 0.5,
       break: 0.135,
-      width: 0.72,
-      offset: 0.52,
+      width: 0.39,
+      offset: 0.3,
+      gradientOpacity: 0.1,
+      gradientColor: '#ccb233',
       showMask: false,
     },
     weather: {
@@ -327,13 +329,19 @@ export class GUIManager {
       if (app.city._waveNoiseBreak) app.city._waveNoiseBreak.value = v
     })
     wavesFolder.add(allParams.waves, 'width', 0.1, 0.98, 0.01).name('Width').onChange((v) => {
-      if (app.city._waveWidth) app.city._waveWidth.value = v
+      if (app.city._waveWidth) app.city._waveWidth.value = 1 - v
     })
     wavesFolder.add(allParams.waves, 'offset', 0, 0.8, 0.01).name('Offset').onChange((v) => {
       if (app.city._waveOffset) app.city._waveOffset.value = v
     })
+    wavesFolder.add(allParams.waves, 'gradientOpacity', 0, 1, 0.01).name('Gradient Opacity').onChange((v) => {
+      if (app.city._waveGradientOpacity) app.city._waveGradientOpacity.value = v
+    })
+    wavesFolder.addColor(allParams.waves, 'gradientColor').name('Gradient Color').onChange((v) => {
+      if (app.city._waveGradientColor) app.city._waveGradientColor.value.set(v)
+    })
     wavesFolder.add(allParams.waves, 'showMask', false).name('Show Mask').onChange((v) => {
-      if (app.coastMask) app.coastMask.showDebug = v
+      if (app.wavesMask) app.wavesMask.showDebug = v
     })
 
     // Weather folder
@@ -566,7 +574,7 @@ export class GUIManager {
 
     // Water
     if (app.city.waterPlane) app.city.waterPlane.position.y = params.water.y
-    if (app.city._waterOpacity) app.city._waterOpacity.value = params.water.opacity
+    // Don't set _waterOpacity here — starts at 0 and fades in with waves after first grid
     if (app.city._waterSpeed) app.city._waterSpeed.value = params.water.speed
     if (app.city._waterFreq) app.city._waterFreq.value = params.water.freq
     if (app.city._waterDirSpeed) app.city._waterDirSpeed.value = params.water.dirSpeed
@@ -577,8 +585,10 @@ export class GUIManager {
     if (app.city._waveCount) app.city._waveCount.value = params.waves.count
     if (app.city._waveOpacity) app.city._waveOpacity.value = params.waves.opacity
     if (app.city._waveNoiseBreak) app.city._waveNoiseBreak.value = params.waves.break
-    if (app.city._waveWidth) app.city._waveWidth.value = params.waves.width
+    if (app.city._waveWidth) app.city._waveWidth.value = 1 - params.waves.width
     if (app.city._waveOffset) app.city._waveOffset.value = params.waves.offset
+    if (app.city._waveGradientOpacity) app.city._waveGradientOpacity.value = params.waves.gradientOpacity
+    if (app.city._waveGradientColor) app.city._waveGradientColor.value.set(params.waves.gradientColor)
 
     // Renderer
     app.renderer.setPixelRatio(params.renderer.dpr)

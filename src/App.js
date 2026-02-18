@@ -19,7 +19,7 @@ import { GUIManager } from './GUI.js'
 import { HexMap } from './hexmap/HexMap.js'
 import { Lighting } from './Lighting.js'
 import { PostFX } from './PostFX.js'
-import { CoastMask } from './CoastMask.js'
+import { WavesMask } from './hexmap/effects/WavesMask.js'
 import { setSeed } from './SeededRandom.js'
 import { LEVELS_COUNT } from './hexmap/HexTileData.js'
 
@@ -86,7 +86,7 @@ export class App {
       return
     }
 
-    const seed = Math.floor(Math.random() * 100000)
+    const seed = 23982
     setSeed(seed)
     console.log(`%c[SEED] ${seed}`, 'color: black')
     console.log(`%c[LEVELS] ${LEVELS_COUNT}`, 'color: black')
@@ -127,7 +127,7 @@ export class App {
     this.lighting = new Lighting(this.scene, this.renderer, this.params)
     this.city = new HexMap(this.scene, this.params)
     // Pass coast mask RT texture so water shader can sample it directly
-    this.city.coastMaskTexture = this.coastMask.texture
+    this.city.coastMaskTexture = this.wavesMask.texture
 
     await this.lighting.init()
     await this.city.init()
@@ -138,11 +138,28 @@ export class App {
       if (!opacity) return
       const savedOpacity = opacity.value
 
+      // Fade in sparkles on first grid build
+      const sparkleOpacity = this.city._waterOpacity
+      if (sparkleOpacity && sparkleOpacity.value === 0) {
+        const targetSparkle = this.params.water.opacity
+        const delay = animDuration + 1000
+        const fadeMs = 2000
+        setTimeout(() => {
+          const start = performance.now()
+          const anim = () => {
+            const t = Math.min((performance.now() - start) / fadeMs, 1)
+            sparkleOpacity.value = targetSparkle * t
+            if (t < 1) requestAnimationFrame(anim)
+          }
+          requestAnimationFrame(anim)
+        }, delay)
+      }
+
       const delay = animDuration + 1000
       setTimeout(() => {
         // Fade out (1s), re-render mask, fade back in (1s)
-        const fadeOutMs = 1000
-        const fadeInMs = 1000
+        const fadeOutMs = 2000
+        const fadeInMs = 2000
         const startTime = performance.now()
         const fadeOutAnim = () => {
           const t = Math.min((performance.now() - startTime) / fadeOutMs, 1)
@@ -155,7 +172,7 @@ export class App {
             for (const grid of this.city.grids.values()) {
               if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
             }
-            this.coastMask.render(this.scene, tileMeshes, this.city.waterPlane)
+            this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane)
 
             // Fade back in
             const inStart = performance.now()
@@ -316,7 +333,7 @@ export class App {
   initPostProcessing() {
     this.postFX = new PostFX(this.renderer, this.scene, this.camera)
     this.postFX.fadeOpacity.value = 0 // Start black
-    this.coastMask = new CoastMask(this.renderer)
+    this.wavesMask = new WavesMask(this.renderer)
 
     // Expose uniforms for GUI access (aliased from PostFX)
     this.aoEnabled = this.postFX.aoEnabled
@@ -501,7 +518,7 @@ export class App {
     postFX.render()
 
     // Debug: show coast mask RT in bottom-left corner
-    if (this.coastMask?.showDebug) this.coastMask.renderDebug()
+    if (this.wavesMask?.showDebug) this.wavesMask.renderDebug()
 
     // Always render CSS labels (individual label.visible controls what shows)
     if (this.cssRenderer) {

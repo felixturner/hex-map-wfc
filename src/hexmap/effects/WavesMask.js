@@ -5,7 +5,7 @@ import {
 import { vec3, vec2, uv, float, texture, uniform, select } from 'three/tsl'
 
 /**
- * Standalone coast mask renderer with GPU expand + blur.
+ * Standalone waves mask renderer with GPU expand + blur.
  *
  * Dimensions:
  *   Map radius ≈ 84 WU, camera extent = 180 WU (-90..90)
@@ -18,7 +18,7 @@ import { vec3, vec2, uv, float, texture, uniform, select } from 'three/tsl'
  *   2. Dilation: blue pixels → black (water), non-blue bright → white (land), max-filter expand
  *   3. Blur: smooth into coast distance gradient
  */
-export class CoastMask {
+export class WavesMask {
   constructor(renderer) {
     this.renderer = renderer
     const size = 2048
@@ -147,7 +147,7 @@ export class CoastMask {
   }
 
   /**
-   * Render coast mask and process it. Call once after each grid build.
+   * Render waves mask and process it. Call once after each grid build.
    * Hides everything in the scene except the tile meshes and water plane.
    * @param {Scene} mainScene
    * @param {Object3D[]} showMeshes - tile BatchedMeshes to render
@@ -222,10 +222,10 @@ export class CoastMask {
     // Result in rtA — this.texture already points to _rtA.texture
     renderer.setRenderTarget(null)
     renderer.setClearColor(savedClearColor, savedClearAlpha)
-    console.log('%c[COAST] mask rendered + blurred (2048px)', 'color: green')
+    console.log('%c[WAVES] mask rendered + blurred (2048px)', 'color: green')
   }
 
-  /** Render coast mask RT to a small debug viewport in bottom-left corner */
+  /** Render waves mask RT to a small debug viewport in bottom-left corner */
   renderDebug() {
     const { renderer, _blurCam, _debugScene } = this
     const vp = new Vector4()
