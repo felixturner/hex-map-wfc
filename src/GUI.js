@@ -109,10 +109,22 @@ export class GUIManager {
       windFreq: 0.902,
     },
     water: {
-      y: 0.92,
-      opacity: 0.25,
-      speed: 1.1,
-      freq: 4.4,
+      y: 0.88,
+      opacity: 0.15,
+      speed: 0.55,
+      freq: 1.5,
+      dirSpeed: 1.3,
+      brightness: 0.53,
+      contrast: 17.5,
+    },
+    waves: {
+      speed: 2,
+      count: 4,
+      opacity: 0.5,
+      break: 0.135,
+      width: 0.72,
+      offset: 0.52,
+      showMask: false,
     },
     weather: {
       mode: 'none',
@@ -285,11 +297,43 @@ export class GUIManager {
     waterFolder.add(allParams.water, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
       if (app.city._waterOpacity) app.city._waterOpacity.value = v
     })
-    waterFolder.add(allParams.water, 'speed', 0, 5, 0.1).name('Speed').onChange((v) => {
+    waterFolder.add(allParams.water, 'speed', 0, 2, 0.05).name('Speed').onChange((v) => {
       if (app.city._waterSpeed) app.city._waterSpeed.value = v
     })
-    waterFolder.add(allParams.water, 'freq', 0.1, 5, 0.1).name('Frequency').onChange((v) => {
+    waterFolder.add(allParams.water, 'freq', 0.1, 3, 0.05).name('Frequency').onChange((v) => {
       if (app.city._waterFreq) app.city._waterFreq.value = v
+    })
+    waterFolder.add(allParams.water, 'dirSpeed', 0, 3, 0.05).name('Dir Speed').onChange((v) => {
+      if (app.city._waterDirSpeed) app.city._waterDirSpeed.value = v
+    })
+    waterFolder.add(allParams.water, 'brightness', 0.1, 0.9, 0.01).name('Brightness').onChange((v) => {
+      if (app.city._waterBrightness) app.city._waterBrightness.value = v
+    })
+    waterFolder.add(allParams.water, 'contrast', 1, 40, 0.5).name('Contrast').onChange((v) => {
+      if (app.city._waterContrast) app.city._waterContrast.value = v
+    })
+    // Waves folder
+    const wavesFolder = gui.addFolder('Waves').close()
+    wavesFolder.add(allParams.waves, 'speed', 0.1, 5.0, 0.05).name('Speed').onChange((v) => {
+      if (app.city._waveSpeed) app.city._waveSpeed.value = v
+    })
+    wavesFolder.add(allParams.waves, 'count', 1, 20, 1).name('Count').onChange((v) => {
+      if (app.city._waveCount) app.city._waveCount.value = v
+    })
+    wavesFolder.add(allParams.waves, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
+      if (app.city._waveOpacity) app.city._waveOpacity.value = v
+    })
+    wavesFolder.add(allParams.waves, 'break', 0, 0.5, 0.005).name('Break').onChange((v) => {
+      if (app.city._waveNoiseBreak) app.city._waveNoiseBreak.value = v
+    })
+    wavesFolder.add(allParams.waves, 'width', 0.1, 0.98, 0.01).name('Width').onChange((v) => {
+      if (app.city._waveWidth) app.city._waveWidth.value = v
+    })
+    wavesFolder.add(allParams.waves, 'offset', 0, 0.8, 0.01).name('Offset').onChange((v) => {
+      if (app.city._waveOffset) app.city._waveOffset.value = v
+    })
+    wavesFolder.add(allParams.waves, 'showMask', false).name('Show Mask').onChange((v) => {
+      if (app.coastMask) app.coastMask.showDebug = v
     })
 
     // Weather folder
@@ -519,6 +563,22 @@ export class GUIManager {
 
     // Level bias
     if (app.city._levelBias) app.city._levelBias.value = params.debug.levelBias
+
+    // Water
+    if (app.city.waterPlane) app.city.waterPlane.position.y = params.water.y
+    if (app.city._waterOpacity) app.city._waterOpacity.value = params.water.opacity
+    if (app.city._waterSpeed) app.city._waterSpeed.value = params.water.speed
+    if (app.city._waterFreq) app.city._waterFreq.value = params.water.freq
+    if (app.city._waterDirSpeed) app.city._waterDirSpeed.value = params.water.dirSpeed
+    if (app.city._waterBrightness) app.city._waterBrightness.value = params.water.brightness
+    if (app.city._waterContrast) app.city._waterContrast.value = params.water.contrast
+    // Waves
+    if (app.city._waveSpeed) app.city._waveSpeed.value = params.waves.speed
+    if (app.city._waveCount) app.city._waveCount.value = params.waves.count
+    if (app.city._waveOpacity) app.city._waveOpacity.value = params.waves.opacity
+    if (app.city._waveNoiseBreak) app.city._waveNoiseBreak.value = params.waves.break
+    if (app.city._waveWidth) app.city._waveWidth.value = params.waves.width
+    if (app.city._waveOffset) app.city._waveOffset.value = params.waves.offset
 
     // Renderer
     app.renderer.setPixelRatio(params.renderer.dpr)

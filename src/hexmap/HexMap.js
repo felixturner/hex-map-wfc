@@ -6,8 +6,10 @@ import {
   MeshStandardMaterial,
   TextureLoader,
   SRGBColorSpace,
+  DataTexture,
+  LinearFilter,
 } from 'three/webgpu'
-import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor } from 'three/tsl'
+import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor, vec2 } from 'three/tsl'
 import { cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, globalToLocalGrid } from './HexWFCCore.js'
 import { WFCManager } from './WFCManager.js'
 import { ConflictResolver } from './ConflictResolver.js'
@@ -302,9 +304,31 @@ export class HexMap {
     geometry.rotateX(-Math.PI / 2)
 
     // GUI-controllable uniforms
-    this._waterOpacity = uniform(0)
-    this._waterSpeed = uniform(1.1)
-    this._waterFreq = uniform(4.4)
+    this._waterOpacity = uniform(0.7)
+    this._waterSpeed = uniform(0.3)
+    this._waterFreq = uniform(0.9)
+    this._waterDirSpeed = uniform(0)       // directional drift speed
+    this._waterBrightness = uniform(0.29)  // threshold cutoff (lower = more sparkle)
+    this._waterContrast = uniform(17.5)    // sharpness multiplier after threshold
+
+    // Wave uniforms
+    this._waveSpeed = uniform(2)
+    this._waveCount = uniform(4)
+    this._waveOpacity = uniform(0.5)
+    this._waveNoiseBreak = uniform(0.135)
+    this._waveWidth = uniform(0.72)
+    this._waveOffset = uniform(0.52)
+
+    // Coast gradient texture — pre-blurred RT from CoastMask (set before init)
+    this._coastGradNode = texture(this.coastMaskTexture || new DataTexture(new Uint8Array(4), 1, 1))
+
+    // Caustic texture — tileable grayscale, replaces expensive Worley noise
+    const causticLoader = new TextureLoader()
+    const causticTex = causticLoader.load('./assets/caustic.jpg')
+    causticTex.wrapS = causticTex.wrapT = 1000 // RepeatWrapping
+    causticTex.minFilter = LinearFilter
+    causticTex.magFilter = LinearFilter
+    const causticNode = texture(causticTex)
 
     const material = new MeshPhysicalNodeMaterial({
       transparent: true,
@@ -312,37 +336,79 @@ export class HexMap {
       depthTest: true,
     })
 
-    // 2D hash noise: fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453)
-    const hash2d = (x, z) => fract(sin(x.mul(127.1).add(z.mul(311.7))).mul(43758.5453))
+    // Single scrolling caustic texture with directional drift
+    const waterUV = vec2(
+      positionWorld.x.mul(this._waterFreq).mul(0.1).add(tslTime.mul(this._waterDirSpeed.mul(0.02))),
+      positionWorld.z.mul(this._waterFreq).mul(0.1).add(tslTime.mul(this._waterSpeed.mul(0.015)))
+    )
+    const causticVal = causticNode.sample(waterUV).r
+    const sparkle = clamp(causticVal.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
+    const waterColor = vec3(sparkle, sparkle, sparkle)
+    const totalAlpha = sparkle.mul(this._waterOpacity)
 
-    // 2D value noise with smoothstep interpolation
-    const valueNoise = (x, z) => {
-      const ix = tslFloor(x), iz = tslFloor(z)
-      const fx = fract(x), fz = fract(z)
-      const ux = fx.mul(fx).mul(float(3).sub(fx.mul(2)))
-      const uz = fz.mul(fz).mul(float(3).sub(fz.mul(2)))
-      const a = hash2d(ix, iz)
-      const b = hash2d(ix.add(1), iz)
-      const c = hash2d(ix, iz.add(1))
-      const d = hash2d(ix.add(1), iz.add(1))
-      return mix(mix(a, b, ux), mix(c, d, ux), uz)
-    }
+    // ---- Coast wave bands ----
+    const PI2 = float(Math.PI * 2)
+    const coastUV = vec2(
+      positionWorld.x.div(180).add(0.5),
+      positionWorld.z.div(180).add(0.5)
+    )
+    const cs = this._coastGradNode.sample(coastUV)
+    const gradSample = cs.r.mul(0.2126).add(cs.g.mul(0.7152)).add(cs.b.mul(0.0722))
 
-    // Two noise layers at different scales/speeds
-    const px = positionWorld.x, pz = positionWorld.z
-    const speed = this._waterSpeed
-    const freq = this._waterFreq
-    const noise1 = valueNoise(px.mul(freq.mul(0.8)).add(tslTime.mul(speed.mul(0.5))), pz.mul(freq.mul(0.8)).add(tslTime.mul(speed.mul(0.3))))
-    const noise2 = valueNoise(px.mul(freq.mul(1.5)).add(tslTime.mul(speed.mul(-0.4))), pz.mul(freq.mul(1.5)).add(tslTime.mul(speed.mul(0.6))))
+    // outwardDist: 0 at coastline, 1 at far open water
+    const outwardDist = clamp(float(1).sub(gradSample), 0, 1)
 
-    // Combine and threshold for discrete sparkle points
-    const combined = noise1.add(noise2).mul(0.5)
-    const sparkle = clamp(combined.sub(0.6).mul(5.0), 0.0, 1.0)
+    // Wave band zone: offset to offset+0.6
+    const waveStart = this._waveOffset
+    const waveEnd = this._waveOffset.add(0.6)
+    const localDist = clamp(outwardDist.sub(waveStart).div(float(0.6)), 0, 1)
+    const inRange = clamp(outwardDist.sub(waveStart).mul(20.0), 0, 1)
+      .mul(clamp(waveEnd.sub(outwardDist).mul(20.0), 0, 1))
 
-    // Black base, sparkle via emissive so it glows regardless of lighting
+    // Sine bands emanating outward
+    const wavePhase = sin(localDist.mul(this._waveCount).mul(PI2).sub(tslTime.mul(this._waveSpeed)))
+      .mul(0.5).add(0.5)
+    const waveThreshold = mix(this._waveWidth, float(0.99), localDist)
+    const waveBand = clamp(wavePhase.sub(waveThreshold).mul(40.0), 0, 1)
+
+    // Multi-scale animated breaks along the wave lines
+    // High freq: small gaps (~0.3 WU)
+    const breakNoiseHi = mx_noise_float(vec3(
+      positionWorld.x.mul(3.0),
+      positionWorld.z.mul(3.0),
+      tslTime.mul(0.15)
+    ))
+    // Low freq: large gaps (~1.5 WU) for variation
+    const breakNoiseLo = mx_noise_float(vec3(
+      positionWorld.x.mul(0.6),
+      positionWorld.z.mul(0.6),
+      tslTime.mul(0.08)
+    ))
+    // Combine: min of both so either scale can create a break
+    const breakNoiseCombined = breakNoiseHi.mul(0.6).add(breakNoiseLo.mul(0.4))
+    const noiseVal = breakNoiseCombined.mul(0.5).add(0.5)
+    const breakMask = clamp(noiseVal.sub(this._waveNoiseBreak.mul(3.0)).mul(20.0), 0, 1)
+    const broken = waveBand.mul(breakMask)
+
+    // Fades
+    const fadeIn = clamp(localDist.mul(8.0), 0, 1)
+    const fadeOut = clamp(float(1).sub(localDist).mul(5.0), 0, 1)
+    const nearCoast = clamp(gradSample.mul(3.0), 0, 1)
+    const waveAlpha = broken.mul(fadeIn).mul(fadeOut).mul(inRange).mul(nearCoast).mul(this._waveOpacity)
+
+    // Fade sparkles to deep water only (gradSample 0=deep water, 1=land)
+    // Sparkles fade in where outwardDist > 0.6 (far into open water)
+    const deepWaterFade = clamp(outwardDist.sub(0.6).mul(3.0), 0, 1)
+
+    // Apply wave break noise to sparkles too for organic variation
+    const sparkleWithBreaks = waterColor.mul(totalAlpha).mul(deepWaterFade).mul(breakMask)
+
+    // Additive compositing in PostFX — caustic water + coast waves + yellow tint
+    const yellow = vec3(0.8, 0.7, 0.2)
+    const waveWhite = vec3(waveAlpha, waveAlpha, waveAlpha)
     material.colorNode = vec3(0, 0, 0)
-    material.emissiveNode = vec3(sparkle, sparkle, sparkle)
-    material.opacityNode = sparkle.mul(this._waterOpacity)
+    material.emissiveNode = sparkleWithBreaks.add(waveWhite).add(yellow.mul(gradSample).mul(0.1))
+    material.opacityNode = float(1)
 
     this.waterPlane = new Mesh(geometry, material)
     this.waterPlane.position.y = 0.92
@@ -778,6 +844,10 @@ export class HexMap {
 
     // Apply current helper visibility state
     grid.setHelperVisible(this.helpersVisible)
+
+    // Notify listeners that tiles changed (for coast mask rebuild)
+    // Pass animDuration so caller can wait for drop animation to finish
+    this.onTilesChanged?.(animDuration)
 
     return animDuration
   }
@@ -1385,6 +1455,11 @@ export class HexMap {
   updateTileColors() { this.debug.updateTileColors() }
   getOverlayObjects() { return this.debug.getOverlayObjects() }
   getEffectsObjects() { return this.debug.getEffectsObjects() }
+  getWaterObjects() {
+    const water = []
+    if (this.waterPlane) water.push(this.waterPlane)
+    return water
+  }
 
   /**
    * Swap a biome texture at runtime (lo or hi) — stays on HexMap (tightly coupled to material init)

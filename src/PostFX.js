@@ -70,13 +70,19 @@ export class PostFX {
     this.overlayTarget = new RenderTarget(w, h, { samples: 1 })
     this.overlayTarget.texture.format = RGBAFormat
 
-    // Effects render target (weather, water — depth-tested against scene, no AO)
+    // Effects render target (weather — depth-tested against scene, no AO)
     this.effectsTarget = new RenderTarget(w, h, { samples: 1 })
     this.effectsTarget.texture.format = RGBAFormat
+
+    // Water render target (water planes — masked to blue areas)
+    this.waterTarget = new RenderTarget(w, h, { samples: 1 })
+    this.waterTarget.texture.format = RGBAFormat
 
     // Object lists (set externally each frame)
     this.overlayObjects = []
     this.effectsObjects = []
+    this.waterObjects = []
+
 
     // Load default LUT texture
     this._loadLutTexture('./assets/lut/etikate.png')
@@ -148,13 +154,28 @@ export class PostFX {
     const blendedAO = mix(float(1), softenedAO, this.aoIntensity)
     const withAO = mix(afterDof, afterDof.mul(blendedAO), this.aoEnabled)
 
-    // ---- Effects layer compositing (weather, water) ----
+    // ---- Effects layer compositing (weather) ----
     const effectsTexture = texture(this.effectsTarget.texture)
     const withEffects = withAO.add(effectsTexture.rgb.mul(effectsTexture.a))
 
+    // ---- Water layer compositing (masked to blue areas) ----
+    const sceneR = scenePassColor.r
+    const sceneG = scenePassColor.g
+    const sceneB = scenePassColor.b
+    // #2d85d0 and #2ea9ee — strong saturated blues, reject grey by requiring high saturation
+    const isWaterBlue = sceneB.greaterThan(sceneR.mul(2.0))
+      .and(sceneB.greaterThan(sceneG.mul(1.15)))
+      .and(sceneB.sub(sceneR).greaterThan(0.15))
+    const waterMask = select(isWaterBlue, float(1), float(0))
+
+    // Water RT: additive blend, masked to blue areas
+    const waterTexture = texture(this.waterTarget.texture)
+    const waterAlpha = waterTexture.a.mul(waterMask)
+    const withWater = withEffects.add(waterTexture.rgb.mul(waterAlpha))
+
     // ---- Overlay layer compositing (UI) ----
     const overlayTexture = texture(this.overlayTarget.texture)
-    const withOverlay = withEffects.add(overlayTexture.rgb.mul(overlayTexture.a))
+    const withOverlay = withWater.add(overlayTexture.rgb.mul(overlayTexture.a))
 
     // ---- Bleach bypass (after overlay, before LUT) ----
     const bleachedColor = bleach(withOverlay, this.bleachAmount)
@@ -274,6 +295,7 @@ export class PostFX {
     const h = window.innerHeight * dpr
     this.overlayTarget.setSize(w, h)
     this.effectsTarget.setSize(w, h)
+    this.waterTarget.setSize(w, h)
   }
 
   setOverlayObjects(objects) {
@@ -282,6 +304,10 @@ export class PostFX {
 
   setEffectsObjects(objects) {
     this.effectsObjects = objects
+  }
+
+  setWaterObjects(objects) {
+    this.waterObjects = objects
   }
 
   render() {
@@ -337,13 +363,39 @@ export class PostFX {
       for (const [child, vis] of savedEffVis) child.visible = vis
     }
 
+    // ---- Water pass: render water planes to separate RT ----
+    const { waterObjects, waterTarget } = this
+    renderer.setRenderTarget(waterTarget)
+    renderer.setClearColor(0x000000, 0)
+    renderer.clear()
+
+    if (waterObjects.length > 0) {
+      const savedWaterVis = new Map()
+      scene.traverse((child) => {
+        if (!child.isMesh && !child.isLine && !child.isLineSegments && !child.isPoints) return
+        const isWater = waterObjects.some(o => o === child || o.getObjectById?.(child.id))
+        if (!isWater) {
+          savedWaterVis.set(child, child.visible)
+          child.visible = false
+        }
+      })
+
+      renderer.render(scene, camera)
+
+      for (const [child, vis] of savedWaterVis) child.visible = vis
+    }
+
     scene.background = savedBackground
     scene.environment = savedEnvironment
     renderer.setRenderTarget(null)
     renderer.setClearColor(savedClearColor, savedClearAlpha)
 
-    // ---- Main pass: hide effects + overlay, render with AO ----
+    // ---- Main pass: hide effects + overlay + water, render with AO ----
     const savedMainVis = new Map()
+    for (const obj of waterObjects) {
+      savedMainVis.set(obj, obj.visible)
+      obj.visible = false
+    }
     for (const obj of effectsObjects) {
       savedMainVis.set(obj, obj.visible)
       obj.visible = false
