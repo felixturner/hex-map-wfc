@@ -804,13 +804,9 @@ export class HexMap {
     this._waterOpacity = uniform(0.7)
     this._waterSpeed = uniform(0.3)
     this._waterFreq = uniform(0.9)
-    this._waterDirAngle = uniform(209 * Math.PI / 180)  // radians
     this._waterDirSpeed = uniform(0)       // directional drift speed
     this._waterBrightness = uniform(0.29)  // threshold cutoff (lower = more sparkle)
     this._waterContrast = uniform(17.5)    // sharpness multiplier after threshold
-    this._waterEdgePow = uniform(2.5)     // voronoi power — higher = thinner edges, bigger holes
-    this._waterStretch = uniform(1)        // along-wave scale factor (< 1 = elongated waves)
-    this._waterDarkOpacity = uniform(0.15) // dark underlay intensity
 
     // Wave uniforms
     this._waveSpeed = uniform(2)
@@ -823,76 +819,29 @@ export class HexMap {
     // Coast gradient texture — pre-blurred RT from CoastMask (set before init)
     this._coastGradNode = texture(this.coastMaskTexture || new DataTexture(new Uint8Array(4), 1, 1))
 
+    // Caustic texture — tileable grayscale, replaces expensive Worley noise
+    const causticLoader = new TextureLoader()
+    const causticTex = causticLoader.load('./assets/caustic.jpg')
+    causticTex.wrapS = causticTex.wrapT = 1000 // RepeatWrapping
+    causticTex.minFilter = LinearFilter
+    causticTex.magFilter = LinearFilter
+    const causticNode = texture(causticTex)
+
     const material = new MeshPhysicalNodeMaterial({
       transparent: true,
       depthWrite: false,
       depthTest: true,
     })
 
-    // Rotate world pos into wave-aligned coordinates (across, along)
-    const px = positionWorld.x, pz = positionWorld.z
-    const cosA = cos(this._waterDirAngle)
-    const sinA = sin(this._waterDirAngle)
-    const acrossWave = px.mul(cosA).add(pz.mul(sinA))
-    const alongWave = px.mul(sinA.negate()).add(pz.mul(cosA))
-
-    // 2nd layer rotated slightly (~15°) for more natural interference
-    const angleOffset = float(0.26) // ~15 degrees in radians
-    const cosA2 = cos(this._waterDirAngle.add(angleOffset))
-    const sinA2 = sin(this._waterDirAngle.add(angleOffset))
-    const acrossWave2 = px.mul(cosA2).add(pz.mul(sinA2))
-    const alongWave2 = px.mul(sinA2.negate()).add(pz.mul(cosA2))
-
-    // Directional drift (moves along acrossWave direction)
-    const drift = tslTime.mul(this._waterDirSpeed)
-
-    const speed = this._waterSpeed
-    const freq = this._waterFreq
-    const stretch = this._waterStretch
-
-    // Bright voronoi — two 3D layers
-    const pos1 = vec3(
-      acrossWave.mul(freq.mul(0.8)).mul(stretch).add(drift.mul(stretch)),
-      alongWave.mul(freq.mul(0.8)),
-      tslTime.mul(speed.mul(0.5))
+    // Single scrolling caustic texture with directional drift
+    const waterUV = vec2(
+      positionWorld.x.mul(this._waterFreq).mul(0.1).add(tslTime.mul(this._waterDirSpeed.mul(0.02))),
+      positionWorld.z.mul(this._waterFreq).mul(0.1).add(tslTime.mul(this._waterSpeed.mul(0.015)))
     )
-    const pos2 = vec3(
-      acrossWave2.mul(freq.mul(1.5)).mul(stretch).add(drift.mul(stretch)),
-      alongWave2.mul(freq.mul(1.5)),
-      tslTime.mul(speed.mul(0.4))
-    )
-    const noise1 = mx_worley_noise_float(pos1).pow(this._waterEdgePow)
-    const noise2 = mx_worley_noise_float(pos2).pow(this._waterEdgePow)
-    const combined = noise1.add(noise2).mul(0.5)
-    const sparkle = clamp(combined.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
-
-    // Dark voronoi — offset positions so it doesn't overlap bright layer
-    const darkPos1 = vec3(
-      acrossWave.mul(freq.mul(0.8)).mul(stretch).add(drift.mul(stretch)).add(100.0),
-      alongWave.mul(freq.mul(0.8)).add(100.0),
-      tslTime.mul(speed.mul(0.5))
-    )
-    const darkPos2 = vec3(
-      acrossWave2.mul(freq.mul(1.5)).mul(stretch).add(drift.mul(stretch)).add(100.0),
-      alongWave2.mul(freq.mul(1.5)).add(100.0),
-      tslTime.mul(speed.mul(0.4))
-    )
-    const darkNoise1 = mx_worley_noise_float(darkPos1).pow(this._waterEdgePow)
-    const darkNoise2 = mx_worley_noise_float(darkPos2).pow(this._waterEdgePow)
-    const darkCombined = darkNoise1.add(darkNoise2).mul(0.5)
-    const darkSparkle = clamp(darkCombined.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
-
-    // Blend bright (white) and dark (black) into one RGBA output
-    // Where bright sparkle: white with high alpha. Where dark: black with some alpha.
-    // Where neither: alpha 0 (transparent)
-    const brightAlpha = sparkle.mul(this._waterOpacity)
-    const darkAlpha = darkSparkle.mul(this._waterDarkOpacity)
-    const totalAlpha = clamp(brightAlpha.add(darkAlpha), 0.0, 1.0)
-    // Weighted color: bright pushes toward white, dark pushes toward black
-    const waterColor = select(totalAlpha.greaterThan(0.001),
-      vec3(brightAlpha, brightAlpha, brightAlpha).div(totalAlpha),
-      vec3(0, 0, 0)
-    )
+    const causticVal = causticNode.sample(waterUV).r
+    const sparkle = clamp(causticVal.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)
+    const waterColor = vec3(sparkle, sparkle, sparkle)
+    const totalAlpha = sparkle.mul(this._waterOpacity)
 
     // ---- Coast wave bands ----
     const PI2 = float(Math.PI * 2)
@@ -944,11 +893,18 @@ export class HexMap {
     const nearCoast = clamp(gradSample.mul(3.0), 0, 1)
     const waveAlpha = broken.mul(fadeIn).mul(fadeOut).mul(inRange).mul(nearCoast).mul(this._waveOpacity)
 
-    // Additive compositing in PostFX — emissive color is added on top of scene
+    // Fade sparkles to deep water only (gradSample 0=deep water, 1=land)
+    // Sparkles fade in where outwardDist > 0.6 (far into open water)
+    const deepWaterFade = clamp(outwardDist.sub(0.6).mul(3.0), 0, 1)
+
+    // Apply wave break noise to sparkles too for organic variation
+    const sparkleWithBreaks = waterColor.mul(totalAlpha).mul(deepWaterFade).mul(breakMask)
+
+    // Additive compositing in PostFX — caustic water + coast waves + yellow tint
     const yellow = vec3(0.8, 0.7, 0.2)
     const waveWhite = vec3(waveAlpha, waveAlpha, waveAlpha)
     material.colorNode = vec3(0, 0, 0)
-    material.emissiveNode = yellow.mul(gradSample).mul(0.1).add(waveWhite)
+    material.emissiveNode = sparkleWithBreaks.add(waveWhite).add(yellow.mul(gradSample).mul(0.1))
     material.opacityNode = float(1)
 
     this.waterPlane = new Mesh(geometry, material)
