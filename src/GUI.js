@@ -122,6 +122,15 @@ export class GUIManager {
       stretch: 1,
       darkOpacity: 0.15,
     },
+    waves: {
+      speed: 2,
+      count: 4,
+      opacity: 0.5,
+      break: 0.135,
+      width: 0.72,
+      offset: 0.52,
+      showMask: false,
+    },
     weather: {
       mode: 'none',
       intensity: 0.1,
@@ -319,6 +328,29 @@ export class GUIManager {
     })
     waterFolder.add(allParams.water, 'darkOpacity', 0, 1, 0.05).name('Dark Opacity').onChange((v) => {
       if (demo.city._waterDarkOpacity) demo.city._waterDarkOpacity.value = v
+    })
+    // Waves folder
+    const wavesFolder = gui.addFolder('Waves').close()
+    wavesFolder.add(allParams.waves, 'speed', 0.1, 5.0, 0.05).name('Speed').onChange((v) => {
+      if (demo.city._waveSpeed) demo.city._waveSpeed.value = v
+    })
+    wavesFolder.add(allParams.waves, 'count', 1, 20, 1).name('Count').onChange((v) => {
+      if (demo.city._waveCount) demo.city._waveCount.value = v
+    })
+    wavesFolder.add(allParams.waves, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
+      if (demo.city._waveOpacity) demo.city._waveOpacity.value = v
+    })
+    wavesFolder.add(allParams.waves, 'break', 0, 0.5, 0.005).name('Break').onChange((v) => {
+      if (demo.city._waveNoiseBreak) demo.city._waveNoiseBreak.value = v
+    })
+    wavesFolder.add(allParams.waves, 'width', 0.1, 0.98, 0.01).name('Width').onChange((v) => {
+      if (demo.city._waveWidth) demo.city._waveWidth.value = v
+    })
+    wavesFolder.add(allParams.waves, 'offset', 0, 0.8, 0.01).name('Offset').onChange((v) => {
+      if (demo.city._waveOffset) demo.city._waveOffset.value = v
+    })
+    wavesFolder.add(allParams.waves, 'showMask', false).name('Show Mask').onChange((v) => {
+      if (demo.coastMask) demo.coastMask.showDebug = v
     })
 
     // Weather folder
@@ -561,6 +593,13 @@ export class GUIManager {
     if (demo.city._waterEdgePow) demo.city._waterEdgePow.value = params.water.edgePow
     if (demo.city._waterStretch) demo.city._waterStretch.value = params.water.stretch
     if (demo.city._waterDarkOpacity) demo.city._waterDarkOpacity.value = params.water.darkOpacity
+    // Waves
+    if (demo.city._waveSpeed) demo.city._waveSpeed.value = params.waves.speed
+    if (demo.city._waveCount) demo.city._waveCount.value = params.waves.count
+    if (demo.city._waveOpacity) demo.city._waveOpacity.value = params.waves.opacity
+    if (demo.city._waveNoiseBreak) demo.city._waveNoiseBreak.value = params.waves.break
+    if (demo.city._waveWidth) demo.city._waveWidth.value = params.waves.width
+    if (demo.city._waveOffset) demo.city._waveOffset.value = params.waves.offset
 
     // Renderer
     demo.renderer.setPixelRatio(params.renderer.dpr)

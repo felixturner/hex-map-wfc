@@ -14,6 +14,8 @@ import {
   Float32BufferAttribute,
   LineSegments,
   LineBasicNodeMaterial,
+  DataTexture,
+  LinearFilter,
 } from 'three/webgpu'
 import WFCWorker from './workers/wfc.worker.js?worker'
 import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, mx_worley_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor, vec2 } from 'three/tsl'
@@ -810,6 +812,17 @@ export class HexMap {
     this._waterStretch = uniform(1)        // along-wave scale factor (< 1 = elongated waves)
     this._waterDarkOpacity = uniform(0.15) // dark underlay intensity
 
+    // Wave uniforms
+    this._waveSpeed = uniform(2)
+    this._waveCount = uniform(4)
+    this._waveOpacity = uniform(0.5)
+    this._waveNoiseBreak = uniform(0.135)
+    this._waveWidth = uniform(0.72)
+    this._waveOffset = uniform(0.52)
+
+    // Coast gradient texture — pre-blurred RT from CoastMask (set before init)
+    this._coastGradNode = texture(this.coastMaskTexture || new DataTexture(new Uint8Array(4), 1, 1))
+
     const material = new MeshPhysicalNodeMaterial({
       transparent: true,
       depthWrite: false,
@@ -881,9 +894,62 @@ export class HexMap {
       vec3(0, 0, 0)
     )
 
+    // ---- Coast wave bands ----
+    const PI2 = float(Math.PI * 2)
+    const coastUV = vec2(
+      positionWorld.x.div(180).add(0.5),
+      positionWorld.z.div(180).add(0.5)
+    )
+    const cs = this._coastGradNode.sample(coastUV)
+    const gradSample = cs.r.mul(0.2126).add(cs.g.mul(0.7152)).add(cs.b.mul(0.0722))
+
+    // outwardDist: 0 at coastline, 1 at far open water
+    const outwardDist = clamp(float(1).sub(gradSample), 0, 1)
+
+    // Wave band zone: offset to offset+0.6
+    const waveStart = this._waveOffset
+    const waveEnd = this._waveOffset.add(0.6)
+    const localDist = clamp(outwardDist.sub(waveStart).div(float(0.6)), 0, 1)
+    const inRange = clamp(outwardDist.sub(waveStart).mul(20.0), 0, 1)
+      .mul(clamp(waveEnd.sub(outwardDist).mul(20.0), 0, 1))
+
+    // Sine bands emanating outward
+    const wavePhase = sin(localDist.mul(this._waveCount).mul(PI2).sub(tslTime.mul(this._waveSpeed)))
+      .mul(0.5).add(0.5)
+    const waveThreshold = mix(this._waveWidth, float(0.99), localDist)
+    const waveBand = clamp(wavePhase.sub(waveThreshold).mul(40.0), 0, 1)
+
+    // Multi-scale animated breaks along the wave lines
+    // High freq: small gaps (~0.3 WU)
+    const breakNoiseHi = mx_noise_float(vec3(
+      positionWorld.x.mul(3.0),
+      positionWorld.z.mul(3.0),
+      tslTime.mul(0.15)
+    ))
+    // Low freq: large gaps (~1.5 WU) for variation
+    const breakNoiseLo = mx_noise_float(vec3(
+      positionWorld.x.mul(0.6),
+      positionWorld.z.mul(0.6),
+      tslTime.mul(0.08)
+    ))
+    // Combine: min of both so either scale can create a break
+    const breakNoiseCombined = breakNoiseHi.mul(0.6).add(breakNoiseLo.mul(0.4))
+    const noiseVal = breakNoiseCombined.mul(0.5).add(0.5)
+    const breakMask = clamp(noiseVal.sub(this._waveNoiseBreak.mul(3.0)).mul(20.0), 0, 1)
+    const broken = waveBand.mul(breakMask)
+
+    // Fades
+    const fadeIn = clamp(localDist.mul(8.0), 0, 1)
+    const fadeOut = clamp(float(1).sub(localDist).mul(5.0), 0, 1)
+    const nearCoast = clamp(gradSample.mul(3.0), 0, 1)
+    const waveAlpha = broken.mul(fadeIn).mul(fadeOut).mul(inRange).mul(nearCoast).mul(this._waveOpacity)
+
+    // Additive compositing in PostFX — emissive color is added on top of scene
+    const yellow = vec3(0.8, 0.7, 0.2)
+    const waveWhite = vec3(waveAlpha, waveAlpha, waveAlpha)
     material.colorNode = vec3(0, 0, 0)
-    material.emissiveNode = waterColor
-    material.opacityNode = totalAlpha
+    material.emissiveNode = yellow.mul(gradSample).mul(0.1).add(waveWhite)
+    material.opacityNode = float(1)
 
     this.waterPlane = new Mesh(geometry, material)
     this.waterPlane.position.y = 0.92
@@ -1389,6 +1455,10 @@ export class HexMap {
 
     // Apply current helper visibility state
     grid.setHelperVisible(this.helpersVisible)
+
+    // Notify listeners that tiles changed (for coast mask rebuild)
+    // Pass animDuration so caller can wait for drop animation to finish
+    this.onTilesChanged?.(animDuration)
 
     return animDuration
   }

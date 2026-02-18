@@ -83,6 +83,7 @@ export class PostFX {
     this.effectsObjects = []
     this.waterObjects = []
 
+
     // Load default LUT texture
     this._loadLutTexture('./assets/lut/etikate.png')
 
@@ -167,10 +168,10 @@ export class PostFX {
       .and(sceneB.sub(sceneR).greaterThan(0.15))
     const waterMask = select(isWaterBlue, float(1), float(0))
 
-    // Water RT: standard alpha blend, masked to blue areas
+    // Water RT: additive blend, masked to blue areas
     const waterTexture = texture(this.waterTarget.texture)
     const waterAlpha = waterTexture.a.mul(waterMask)
-    const withWater = mix(withEffects, waterTexture.rgb, waterAlpha)
+    const withWater = withEffects.add(waterTexture.rgb.mul(waterAlpha))
 
     // ---- Overlay layer compositing (UI) ----
     const overlayTexture = texture(this.overlayTarget.texture)

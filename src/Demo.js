@@ -19,6 +19,7 @@ import { GUIManager } from './GUI.js'
 import { HexMap } from './HexMap.js'
 import { Lighting } from './Lighting.js'
 import { PostFX } from './PostFX.js'
+import { CoastMask } from './CoastMask.js'
 import { setSeed } from './SeededRandom.js'
 import { LEVELS_COUNT } from './HexTileData.js'
 
@@ -125,9 +126,50 @@ export class Demo {
     // Initialize modules
     this.lighting = new Lighting(this.scene, this.renderer, this.params)
     this.city = new HexMap(this.scene, this.params)
+    // Pass coast mask RT texture so water shader can sample it directly
+    this.city.coastMaskTexture = this.coastMask.texture
 
     await this.lighting.init()
     await this.city.init()
+
+    // Wire coast mask: wait for drop anim, then quick fade out/in around mask re-render
+    this.city.onTilesChanged = (animDuration = 0) => {
+      const opacity = this.city._waveOpacity
+      if (!opacity) return
+      const savedOpacity = opacity.value
+
+      const delay = animDuration + 1000
+      setTimeout(() => {
+        // Fade out (1s), re-render mask, fade back in (1s)
+        const fadeOutMs = 1000
+        const fadeInMs = 1000
+        const startTime = performance.now()
+        const fadeOutAnim = () => {
+          const t = Math.min((performance.now() - startTime) / fadeOutMs, 1)
+          opacity.value = savedOpacity * (1 - t)
+          if (t < 1) {
+            requestAnimationFrame(fadeOutAnim)
+          } else {
+            // Fully faded out — re-render mask
+            const tileMeshes = []
+            for (const grid of this.city.grids.values()) {
+              if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
+            }
+            this.coastMask.render(this.scene, tileMeshes, this.city.waterPlane)
+
+            // Fade back in
+            const inStart = performance.now()
+            const fadeInAnim = () => {
+              const t = Math.min((performance.now() - inStart) / fadeInMs, 1)
+              opacity.value = savedOpacity * t
+              if (t < 1) requestAnimationFrame(fadeInAnim)
+            }
+            requestAnimationFrame(fadeInAnim)
+          }
+        }
+        requestAnimationFrame(fadeOutAnim)
+      }, delay)
+    }
 
     // Set up hover and click detection on hex tiles and placeholders
     this.pointerHandler.setRaycastTargets(
@@ -274,6 +316,7 @@ export class Demo {
   initPostProcessing() {
     this.postFX = new PostFX(this.renderer, this.scene, this.camera)
     this.postFX.fadeOpacity.value = 0 // Start black
+    this.coastMask = new CoastMask(this.renderer)
 
     // Expose uniforms for GUI access (aliased from PostFX)
     this.aoEnabled = this.postFX.aoEnabled
@@ -456,6 +499,9 @@ export class Demo {
     postFX.setWaterObjects(this.city.getWaterObjects())
 
     postFX.render()
+
+    // Debug: show coast mask RT in bottom-left corner
+    if (this.coastMask?.showDebug) this.coastMask.renderDebug()
 
     // Always render CSS labels (individual label.visible controls what shows)
     if (this.cssRenderer) {
