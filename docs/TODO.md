@@ -1,17 +1,14 @@
 # TODO
 
+- send link to KAY. ask for feedback and new tiles?
+
+
 - fix weather
   - fix rain looks like poles
   - diff speed for rain/snow
   - do weather scaling to lock min/max rain/snow sizes on zoom.
 
-- fix tree rotation with wind sway (currently rotation disabled — positionNode runs pre-batch so displacement gets rotated per-instance. need to counter-rotate using batch color channel or similar)
-- send link to KAY. ask for feedback and new tiles?
-
-
-- WATER
-  - add a new texture png with just black and white for rendering water for mask pass (so trees dont get sparkles)?  
-  - fade out water at distance
+- fade out water effect at distance
 
 - WORLD FEATURES
   - use bigger world noise fields for water, mountains + forests, cities? WIP
@@ -22,18 +19,30 @@
 
 # NEW TILES
 - Add new TILES to help WFC: (claculate tiles needed for Sub-Complete Tileset)
-  - River dead-end, DONE
-  - river slopes? DONE
-  - coast slopes. DONE
-  - rivers into coasts? DONE
   - 4x road slope dead-ends (low/high). 
   - branching bridges?.
- - add extra tile with just 1 small bit of hill to fill jagged gaps in cliffs?(like coast)
+  - add extra tile with just 1 small bit of hill to fill jagged gaps in cliffs?(like coast)
+
+- need new meshes for:
+  - RIVER_END 
+  - COAST_SLOPE_A_LOW
+  - COAST_SLOPE_A_HIGH                                                                
+  - RIVER_A_SLOPE_LOW
+  - RIVER_INTO_COAST       
 
 - commision kaykit to add some tiles or hire 3d modeler - send him live link
   - add bushes like bad north
-  - find/make simpler house models
+  - find/make simpler more minimal building models
 
+
+# MORE DEC
+- boats and ports
+- add a little minifig meeple have his hex outline lit up. control him to walk around.
+- day/night (cross fade skybox)
+- add animated fires
+- smoke from chimneys as meshes or puffs that fade
+- add sound effects birds wind sounds. ticking build sound for wfc
+- add village furniture - barrels, water troghs, carts etc
 
 
 # LATER
@@ -47,15 +56,11 @@
 - add dungeon mouth buildings
 - Update to latest threejs
 
+
+
 - fix build order UI to dissallow surrounding a tile (harder for WFC)
-- add a little minifig meeple have his hex outline lit up. control him to walk around.
-- day/night (cross fade skybox)
-- add animated fires
-- smoke from chimneys as meshes or puffs that fade
-- add sound effects birds wind sounds. ticking build sound for wfc
 - fix lillies can get cropped by coast
 - prebake AO in blender?
-- add village furniture - barrels, water troghs, carts etc
 - smooth cam zoom
 - animate rotate tiles in like railway board
 

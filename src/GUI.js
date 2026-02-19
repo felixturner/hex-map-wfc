@@ -17,7 +17,6 @@ export class GUIManager {
   // Default params - single source of truth
   static defaultParams = {
     camera: {
-      perspective: true,
       fov: 20,
     },
     scene: {
@@ -62,8 +61,8 @@ export class GUIManager {
       dots: true,
       debris: true,
       dof: true,
-      dofAperture: 0.33,
-      dofMaxblur: 0.018,
+      dofAperture: 0.41,
+      dofMaxblur: 0.009,
       bleach: false,
       bleachAmount: 0.3,
       lut: true,
@@ -76,7 +75,7 @@ export class GUIManager {
     debug: {
       view: 'final',
       originHelper: false,
-      debugCam: true,
+      debugCam: false,
       hexGrid: false,
       debugPlanes: true,
       tileLabels: false,
@@ -112,16 +111,16 @@ export class GUIManager {
     water: {
       y: 0.88,
       opacity: 0.15,
-      speed: 0.55,
+      speed: 1.3,
       freq: 1.5,
-      dirSpeed: 1.3,
+      angle: 0,
       brightness: 0.53,
       contrast: 17.5,
     },
     waves: {
       speed: 2,
       count: 4,
-      opacity: 0.5,
+      opacity: 0.4,
       break: 0.135,
       width: 0.39,
       offset: 0.3,
@@ -143,6 +142,7 @@ export class GUIManager {
   init() {
     const { app } = this
     const gui = new GUI()
+    gui.close()
     this.gui = gui
 
     // Store params on app for single source of truth
@@ -156,9 +156,6 @@ export class GUIManager {
     })
 
     // Top-level controls (no folder)
-    gui.add(allParams.camera, 'perspective').name('Perspective Cam').onChange((v) => {
-      app.switchCamera(v)
-    })
     this.fovController = gui.add(allParams.camera, 'fov', 20, 90, 1).name('FOV').onChange((v) => {
       app.perspCamera.fov = v
       app.perspCamera.updateProjectionMatrix()
@@ -225,6 +222,8 @@ export class GUIManager {
       if (app.city._levelBias) app.city._levelBias.value = v
     })
 
+    gui.add(allParams.roads, 'animateWFC').name('Animate WFC')
+
     // Action buttons
     gui.add({ regen: () => {
       app.city.regenerate({
@@ -270,11 +269,6 @@ export class GUIManager {
       }
     }, 'logControls').name('Log Orbit State')
 
-    // Roads folder
-    const mapFolder = gui.addFolder('Map').close()
-    mapFolder.add(allParams.roads, 'animateWFC').name('Animate WFC')
-
-
     // Decoration folder
     const decorationFolder = gui.addFolder('Decoration').close()
     decorationFolder.add(allParams.decoration, 'treeNoiseFreq', 0.01, 0.2, 0.01).name('Tree Noise Freq').onChange((v) => {
@@ -285,15 +279,6 @@ export class GUIManager {
       setTreeThreshold(v)
       app.city.repopulateDecorations()
     })
-    decorationFolder.add(allParams.decoration, 'windStrength', 0, 0.15).name('Wind Strength').onChange((v) => {
-      if (app.city._windStrength) app.city._windStrength.value = v
-    })
-    decorationFolder.add(allParams.decoration, 'windSpeed', 0, 2.0).name('Wind Speed').onChange((v) => {
-      if (app.city._windSpeed) app.city._windSpeed.value = v
-    })
-    decorationFolder.add(allParams.decoration, 'windFreq', 0, 1.0).name('Wind Noise Freq').onChange((v) => {
-      if (app.city._windFreq) app.city._windFreq.value = v
-    })
 
     // Water folder
     const waterFolder = gui.addFolder('Water').close()
@@ -303,14 +288,14 @@ export class GUIManager {
     waterFolder.add(allParams.water, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
       if (app.city._waterOpacity) app.city._waterOpacity.value = v
     })
-    waterFolder.add(allParams.water, 'speed', 0, 2, 0.05).name('Speed').onChange((v) => {
+    waterFolder.add(allParams.water, 'speed', 0, 5, 0.05).name('Speed').onChange((v) => {
       if (app.city._waterSpeed) app.city._waterSpeed.value = v
     })
     waterFolder.add(allParams.water, 'freq', 0.1, 3, 0.05).name('Frequency').onChange((v) => {
       if (app.city._waterFreq) app.city._waterFreq.value = v
     })
-    waterFolder.add(allParams.water, 'dirSpeed', 0, 3, 0.05).name('Dir Speed').onChange((v) => {
-      if (app.city._waterDirSpeed) app.city._waterDirSpeed.value = v
+    waterFolder.add(allParams.water, 'angle', 0, 360, 1).name('Angle').onChange((v) => {
+      if (app.city._waterAngle) app.city._waterAngle.value = v * Math.PI / 180
     })
     waterFolder.add(allParams.water, 'brightness', 0.1, 0.9, 0.01).name('Brightness').onChange((v) => {
       if (app.city._waterBrightness) app.city._waterBrightness.value = v
@@ -370,6 +355,15 @@ export class GUIManager {
     })
     weatherFolder.add(allParams.weather, 'snowSize', 1, 20, 0.5).name('Snow Size').onChange((v) => {
       app.city.weather?.setSnowSize(v)
+    })
+    weatherFolder.add(allParams.decoration, 'windStrength', 0, 0.15).name('Wind Strength').onChange((v) => {
+      if (app.city._windStrength) app.city._windStrength.value = v
+    })
+    weatherFolder.add(allParams.decoration, 'windSpeed', 0, 2.0).name('Wind Speed').onChange((v) => {
+      if (app.city._windSpeed) app.city._windSpeed.value = v
+    })
+    weatherFolder.add(allParams.decoration, 'windFreq', 0, 1.0).name('Wind Noise Freq').onChange((v) => {
+      if (app.city._windFreq) app.city._windFreq.value = v
     })
 
     // Lights folder
@@ -469,7 +463,7 @@ export class GUIManager {
     fxFolder.add(allParams.fx, 'dofAperture', 0, 1, 0.01).name('DOF Aperture').onChange((v) => {
       app.dofAperture.value = v / 1000
     })
-    fxFolder.add(allParams.fx, 'dofMaxblur', 0.001, 0.05, 0.001).name('DOF Max Blur').onChange((v) => {
+    fxFolder.add(allParams.fx, 'dofMaxblur', 0.001, 0.02, 0.001).name('DOF Max Blur').onChange((v) => {
       app.dofMaxblur.value = v
     })
     fxFolder.add(allParams.fx, 'bleach').name('Bleach Bypass').onChange((v) => {
@@ -582,7 +576,7 @@ export class GUIManager {
     // Don't set _waterOpacity here — starts at 0 and fades in with waves after first grid
     if (app.city._waterSpeed) app.city._waterSpeed.value = params.water.speed
     if (app.city._waterFreq) app.city._waterFreq.value = params.water.freq
-    if (app.city._waterDirSpeed) app.city._waterDirSpeed.value = params.water.dirSpeed
+    if (app.city._waterAngle) app.city._waterAngle.value = params.water.angle * Math.PI / 180
     if (app.city._waterBrightness) app.city._waterBrightness.value = params.water.brightness
     if (app.city._waterContrast) app.city._waterContrast.value = params.water.contrast
     // Waves

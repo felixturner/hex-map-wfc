@@ -89,7 +89,7 @@ export class App {
       return
     }
 
-    const seed = 23982
+    const seed = Math.floor(Math.random() * 100000)
     setSeed(seed)
     console.log(`%c[SEED] ${seed}`, 'color: black')
     console.log(`%c[LEVELS] ${LEVELS_COUNT}`, 'color: black')
@@ -362,26 +362,6 @@ export class App {
   updatePerspFrustum() {
     this.perspCamera.aspect = window.innerWidth / window.innerHeight
     this.perspCamera.updateProjectionMatrix()
-  }
-
-  switchCamera(usePerspective) {
-    const oldCamera = this.camera
-    this.camera = usePerspective ? this.perspCamera : this.orthoCamera
-
-    // Copy position and target from old camera
-    this.camera.position.copy(oldCamera.position)
-    if (usePerspective) {
-      this.updatePerspFrustum()
-    } else {
-      this.updateOrthoFrustum()
-    }
-
-    // Update controls to use new camera
-    this.controls.object = this.camera
-    this.controls.update()
-
-    // Reinitialize post-processing with new camera
-    this.initPostProcessing()
   }
 
   initPostProcessing() {

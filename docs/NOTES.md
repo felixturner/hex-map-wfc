@@ -43,10 +43,18 @@ When WFC fails and soft cells were unfixed during that attempt, those cells are 
 - Ensures edge compatibility (either WFC succeeds with matching cells, or fails cleanly)
 - After success, persisted-unfixed cells are compared against originals — changed tiles update source grids (orange labels)
 
-### Failure Fallback
-If WFC fails after soft cell unfixing:
-1. **Replace phase** (max 5 attempts): Try `tryReplaceFixedCell` on cells nearest the failure point (grass-any-level matching). Skipped if failure was a seed conflict. If a seed conflict occurs during replace phase, falls through to drop.
-2. **Drop phase**: Drop fixed cells one by one sorted by proximity to failure point, re-running WFC after each drop. Re-sorts when failure point changes. Mountains are placed on dropped cells to hide edge mismatches.
+### Retry Logic (Two Levels)
+
+**Inner loop** (WFC worker, `wfc.worker.js`): Runs the core solve with backtracking (max 500 backtracks). On backtrack limit, does a full restart (re-init from scratch). `maxRestarts` controls restart count (currently 1 for grids with neighbors, 10 for first grid). Also handles soft fixed cell unfixing during seeding. Returns success or failure.
+
+**Outer loop** (`_runWfcWithRecovery` in `HexMap.js`): When the inner loop fails, three recovery phases run in sequence. Each phase retries a fresh inner WFC solve after modifying fixed cells:
+
+1. **Conflict-WFC phase** (max 3 attempts): Only for seed conflicts with a known source. Re-solves a radius-2 region around the conflict source in the neighbor grid, updates `globalCells`, rebuilds `fixedCells`, then retries.
+2. **Replace phase** (max 5 attempts): Skipped for seed conflicts. Swaps the nearest fixed cell with a compatible tile (`tryReplaceFixedCell`), then retries.
+3. **Drop phase** (unbounded): Last resort. Drops fixed cells one by one nearest the failure point, placing mountains to hide mismatches. Re-sorts when failure point changes.
+
+### Conflict-WFC Recovery
+On seed conflict, re-solves a radius-2 region around the conflict source in the neighbor grid (max 3 attempts, `maxRestarts: 5` each). Updates `globalCells` and source grid visuals, rebuilds fixed cells, then retries the original grid. Falls through to replace/drop on failure.
 
 ### Build All
 `populateAllGrids()` creates all 19 grids upfront, collects all cells, and runs a single WFC pass with zero fixed cells. No soft cells or fallbacks needed — just one big solve relying on backtracking.
@@ -144,6 +152,19 @@ Conversion (pointy-top odd-row offset):
 - Purple = Seed conflict (0 possibilities during initial propagation from fixed cells)
 - Orange = Replaced fixed cell (soft cell change or persisted-unfixed cell change)
 - Red = Dropped fixed cell (mountain placed to hide mismatch)
+
+## Fragile Code
+
+Code that depends on Three.js internals or specific behavior that could break on upgrades.
+
+### Tree Wind Sway (`HexMap.js` — `setupPosition` override)
+The tree material overrides `setupPosition()` and replicates Three.js `BatchNode` internals: reads `_indirectTexture` and `_matricesTexture` via `textureLoad` to reconstruct the per-instance `batchingMatrix`, applies the batch transform manually, then adds wind sway displacement in post-batch world space. This is necessary because `positionNode` runs pre-batch in local space — sway would rotate per-instance. If Three.js changes how `BatchedMesh` stores instance matrices (texture format, lookup logic, field names), this will break. ~30 lines of BatchNode replication.
+
+### setupDiffuseColor Override (`HexMap.js`)
+Both `roadMaterial` and `treeMaterial` override `setupDiffuseColor` to skip BatchedMesh's automatic instance color multiply into diffuse. We read `vBatchColor` ourselves for level data. If Three.js changes how batch colors are composited, the override may need updating.
+
+### Water Mask Material (`HexMap.js` / `PostFX.js`)
+The `waterMaskMaterial` (MeshBasicNodeMaterial) borrows the same `setupDiffuseColor` override. It's swapped onto BatchedMeshes each frame for the mask render pass. Depends on material swapping working correctly with BatchedMesh shader caching.
 
 ## References
 

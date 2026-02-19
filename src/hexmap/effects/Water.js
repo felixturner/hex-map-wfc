@@ -7,7 +7,7 @@ import {
   LinearFilter,
   Color,
 } from 'three/webgpu'
-import { uniform, vec3, vec2, texture, positionWorld, mx_noise_float, float, clamp, time as tslTime, sin, mix } from 'three/tsl'
+import { uniform, vec3, vec2, texture, positionWorld, mx_noise_float, float, clamp, time as tslTime, sin, cos, mix } from 'three/tsl'
 
 /**
  * Water plane with caustic sparkles and coast wave bands.
@@ -28,7 +28,7 @@ export class Water {
     this._waterOpacity = uniform(0)
     this._waterSpeed = uniform(0.3)
     this._waterFreq = uniform(0.9)
-    this._waterDirSpeed = uniform(0)       // directional drift speed
+    this._waterAngle = uniform(0)          // drift direction in radians
     this._waterBrightness = uniform(0.29)  // threshold cutoff (lower = more sparkle)
     this._waterContrast = uniform(17.5)    // sharpness multiplier after threshold
 
@@ -61,9 +61,11 @@ export class Water {
     })
 
     // ---- Sparkles: scrolling caustic texture with directional drift ----
+    const driftX = cos(this._waterAngle).mul(this._waterSpeed).mul(0.015)
+    const driftZ = sin(this._waterAngle).mul(this._waterSpeed).mul(0.015)
     const waterUV = vec2(
-      positionWorld.x.mul(this._waterFreq).mul(0.1).add(tslTime.mul(this._waterDirSpeed.mul(0.02))),
-      positionWorld.z.mul(this._waterFreq).mul(0.1).add(tslTime.mul(this._waterSpeed.mul(0.015)))
+      positionWorld.x.mul(this._waterFreq).mul(0.1).add(tslTime.mul(driftX)),
+      positionWorld.z.mul(this._waterFreq).mul(0.1).add(tslTime.mul(driftZ))
     )
     const causticVal = causticNode.sample(waterUV).r
     const sparkle = clamp(causticVal.sub(this._waterBrightness).mul(this._waterContrast), 0.0, 1.0)

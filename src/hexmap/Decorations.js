@@ -119,7 +119,9 @@ export class Decorations {
     if (geomId === undefined) return -1
     const instanceId = this._addInstance(mesh, geomId)
     if (instanceId === -1) return -1
-    mesh.setColorAt(instanceId, levelColor(level))
+    const c = levelColor(level)
+    c.b = rotY / (Math.PI * 2)
+    mesh.setColorAt(instanceId, c)
     this.dummy.position.set(x, y, z)
     this.dummy.rotation.set(0, rotY, 0)
     this.dummy.scale.setScalar(scale)
@@ -255,13 +257,14 @@ export class Decorations {
       const geomId = this.treeGeomIds.get(meshName)
       const instanceId = this._addInstance(this.treeMesh, geomId)
       if (instanceId === -1) break
-      this.treeMesh.setColorAt(instanceId, levelColor(tile.level))
 
       // Position at tile center with random offset (local coords since mesh is in group)
-      const rotationY = 0 // random() * Math.PI * 2  // TEMP: disabled for wind debug
-      random() // consume RNG to keep sequence stable
-      const ox = (random() - 0.5) * 1.0
-      const oz = (random() - 0.5) * 1.0
+      const rotationY = random() * Math.PI * 2
+      const ox = (random() - 0.5) * 0.2
+      const oz = (random() - 0.5) * 0.2
+      const c = levelColor(tile.level)
+      c.b = rotationY / (Math.PI * 2)
+      this.treeMesh.setColorAt(instanceId, c)
       this.dummy.position.set(
         localPos.x + ox,
         tile.level * LEVEL_HEIGHT + TILE_SURFACE,
@@ -816,18 +819,20 @@ export class Decorations {
             const geomId = this.treeGeomIds.get(meshName)
             const instanceId = this._addInstance(this.treeMesh, geomId)
             if (instanceId !== -1) {
-              this.treeMesh.setColorAt(instanceId, levelColor(tile.level))
-              random() // consume for rotation (kept stable)
-              const ox = (random() - 0.5) * 1.0
-              const oz = (random() - 0.5) * 1.0
+              const rotY = random() * Math.PI * 2
+              const c = levelColor(tile.level)
+              c.b = rotY / (Math.PI * 2)
+              this.treeMesh.setColorAt(instanceId, c)
+              const ox = (random() - 0.5) * 0.2
+              const oz = (random() - 0.5) * 0.2
               const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
               this.dummy.position.set(localPos.x + ox, y, localPos.z + oz)
-              this.dummy.rotation.set(0, 0, 0)
+              this.dummy.rotation.set(0, rotY, 0)
               this.dummy.scale.setScalar(1)
               this.dummy.updateMatrix()
               this.treeMesh.setMatrixAt(instanceId, this.dummy.matrix)
-              this.trees.push({ tile, meshName, instanceId, rotationY: 0, ox, oz })
-              newItems.push({ mesh: this.treeMesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY: 0 })
+              this.trees.push({ tile, meshName, instanceId, rotationY: rotY, ox, oz })
+              newItems.push({ mesh: this.treeMesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY: rotY })
               treeTileIds.add(tile.id)
             }
           }

@@ -8,7 +8,7 @@ import {
   TextureLoader,
   SRGBColorSpace,
 } from 'three/webgpu'
-import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor } from 'three/tsl'
+import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, normalLocal, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor, instanceIndex, drawIndex, textureLoad, textureSize, mat3, mat4, int, ivec2 } from 'three/tsl'
 import { cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, globalToLocalGrid } from './HexWFCCore.js'
 import { WFCManager } from './WFCManager.js'
 import { ConflictResolver } from './ConflictResolver.js'
@@ -86,9 +86,6 @@ export class HexMap {
     // WFC solver (owns worker, rules, and cell helpers)
     this.wfcManager = new WFCManager(this.globalCells)
 
-    // Conflict resolution (replacement/validation of fixed cells)
-    this.conflictResolver = new ConflictResolver(this.globalCells, this.grids, this.replacedCells)
-
     // Debug tile labels
     this.tileLabels = new Object3D()
     this.tileLabels.visible = false
@@ -96,6 +93,9 @@ export class HexMap {
     this.failedCells = new Set()   // Track global coords of cells that caused WFC failures (purple labels)
     this.droppedCells = new Set() // Track global coords of dropped fixed cells (red labels)
     this.replacedCells = new Set() // Track global coords of replaced fixed cells (orange labels)
+
+    // Conflict resolution (replacement/validation of fixed cells)
+    this.conflictResolver = new ConflictResolver(this.globalCells, this.grids, this.replacedCells)
 
     // Interaction (hover, pointer events)
     this.interaction = new HexMapInteraction(this)
@@ -181,9 +181,9 @@ export class HexMap {
     this.roadMaterial.colorNode = this._combinedColor
     this.treeMaterial.colorNode = this._combinedColor
 
-    // Wind sway — override setupPosition to add displacement AFTER batching.
-    // Nodes must be built inside setupPosition so positionLocal references the
-    // post-batch value (built outside, it resolves to the raw attribute).
+    // Wind sway — override setupPosition to apply sway AFTER batch transform.
+    // Replicates BatchNode logic inline so positionLocal is post-batch (world space)
+    // before sway is added, ensuring consistent sway direction across all instances.
     this._windStrength = uniform(0.0375)
     this._windSpeed = uniform(1.46)
     this._windFreq = uniform(0.902)
@@ -192,15 +192,62 @@ export class HexMap {
     const windSpeed = this._windSpeed
     const windFreq = this._windFreq
 
-    // positionNode is evaluated after batching in Three.js pipeline.
-    // The isPositionNodeInput context makes positionLocal resolve to post-batch value.
-    const worldPos = modelWorldMatrix.mul(vec4(positionLocal, float(1))).xyz
-    const phase = worldPos.x.mul(windFreq).add(worldPos.z.mul(windFreq).mul(0.6))
-    const swayMask = positionGeometry.y.mul(windStrength)
-    const swayX = sin(time.mul(windSpeed).add(phase)).mul(swayMask)
-    const swayZ = sin(time.mul(windSpeed).mul(0.85).add(phase).add(1.5)).mul(swayMask)
+    this.treeMaterial.setupPosition = function(builder) {
+      const { object } = builder
 
-    this.treeMaterial.positionNode = positionLocal.add(vec3(swayX, float(0), swayZ))
+      if (object.isBatchedMesh) {
+        // --- Replicate BatchNode logic to get batchingMatrix ---
+        const batchingIdNode = builder.getDrawIndex() === null ? instanceIndex : drawIndex
+
+        // Indirect index lookup
+        const indTex = object._indirectTexture
+        const indSize = textureSize(textureLoad(indTex), 0)
+        const indX = int(batchingIdNode).modInt(int(indSize))
+        const indY = int(batchingIdNode).div(int(indSize))
+        const indirectId = textureLoad(indTex, ivec2(indX, indY)).x
+
+        // Per-instance matrix from _matricesTexture
+        const matTex = object._matricesTexture
+        const matSize = textureSize(textureLoad(matTex), 0)
+        const j = float(indirectId).mul(4).toInt().toVar()
+        const mx = j.modInt(matSize)
+        const my = j.div(int(matSize))
+        const batchingMatrix = mat4(
+          textureLoad(matTex, ivec2(mx, my)),
+          textureLoad(matTex, ivec2(mx.add(1), my)),
+          textureLoad(matTex, ivec2(mx.add(2), my)),
+          textureLoad(matTex, ivec2(mx.add(3), my))
+        )
+
+        // Apply batch transform to position
+        positionLocal.assign(batchingMatrix.mul(positionLocal))
+
+        // Transform normals
+        const bm = mat3(batchingMatrix)
+        const transformedNormal = normalLocal.div(vec3(bm[0].dot(bm[0]), bm[1].dot(bm[1]), bm[2].dot(bm[2])))
+        normalLocal.assign(bm.mul(transformedNormal).xyz)
+
+        // Per-instance colors (level data + rotation)
+        if (object._colorsTexture) {
+          const colSize = textureSize(textureLoad(object._colorsTexture), 0).x
+          const cx = int(indirectId).modInt(colSize)
+          const cy = int(indirectId).div(colSize)
+          varyingProperty('vec3', 'vBatchColor').assign(
+            textureLoad(object._colorsTexture, ivec2(cx, cy)).rgb
+          )
+        }
+
+        // --- Wind sway in world space (positionLocal is now post-batch) ---
+        const wPos = modelWorldMatrix.mul(vec4(positionLocal, float(1))).xyz
+        const phase = wPos.x.mul(windFreq).add(wPos.z.mul(windFreq).mul(0.6))
+        const swayMask = positionGeometry.y.mul(windStrength)
+        const swayX = sin(time.mul(windSpeed).add(phase)).mul(swayMask)
+        const swayZ = sin(time.mul(windSpeed).mul(0.85).add(phase).add(1.5)).mul(swayMask)
+        positionLocal.addAssign(vec3(swayX, float(0), swayZ))
+      }
+
+      return positionLocal
+    }
 
   }
 
@@ -761,41 +808,22 @@ export class HexMap {
   }
 
   /**
-   * Add water edge seeds for first grid (50% chance, 1 random edge)
+   * Add a single ocean seed at a random corner of the first grid
    * @param {Array} initialCollapses - Array to push water seeds into
    * @param {Object} center - {q,r,s} grid center cube coords
    * @param {number} radius - Grid radius
    */
   addWaterEdgeSeeds(initialCollapses, center, radius) {
-    if (random() >= 1.0) { // TODO: revert to 0.5
-      log('[Water seed] skipped (50% roll)', 'color: blue')
-      return
-    }
-    log('[Water seed] triggered', 'color: blue')
-
-    const selectedEdge = Math.floor(random() * 6)
-
-    // Get all cells at the edge of the hex radius
-    const edgeCells = cubeCoordsInRadius(center.q, center.r, center.s, radius).filter(c => {
-      return cubeDistance(c.q, c.r, c.s, center.q, center.r, center.s) === radius
-    })
-
-    for (const cell of edgeCells) {
-      // Determine which "edge sector" (0-5) this cell is in by angle from center
-      const dq = cell.q - center.q
-      const dr = cell.r - center.r
-      // Convert cube delta to approximate world angle
-      // For pointy-top hex: q axis ~ east, r axis ~ south-east
-      const wx = dq + dr * 0.5
-      const wz = dr * (Math.sqrt(3) / 2)
-      const angle = Math.atan2(wz, wx)
-      const normalizedAngle = (angle + Math.PI) / (Math.PI * 2)
-      const edgeIndex = Math.floor(normalizedAngle * 6) % 6
-
-      if (edgeIndex === selectedEdge) {
-        initialCollapses.push({ q: cell.q, r: cell.r, s: cell.s, type: TileType.OCEAN, rotation: 0, level: 0 })
-      }
-    }
+    // 6 corner directions in cube coords
+    const corners = [
+      { q: 1, r: -1, s: 0 }, { q: 1, r: 0, s: -1 }, { q: 0, r: 1, s: -1 },
+      { q: -1, r: 1, s: 0 }, { q: -1, r: 0, s: 1 }, { q: 0, r: -1, s: 1 },
+    ]
+    const dir = corners[Math.floor(random() * 6)]
+    const q = center.q + dir.q * radius
+    const r = center.r + dir.r * radius
+    const s = center.s + dir.s * radius
+    initialCollapses.push({ q, r, s, type: TileType.OCEAN, rotation: 0, level: 0 })
   }
 
   /**
@@ -1314,7 +1342,7 @@ export class HexMap {
   get _waterOpacity() { return this.water?._waterOpacity }
   get _waterSpeed() { return this.water?._waterSpeed }
   get _waterFreq() { return this.water?._waterFreq }
-  get _waterDirSpeed() { return this.water?._waterDirSpeed }
+  get _waterAngle() { return this.water?._waterAngle }
   get _waterBrightness() { return this.water?._waterBrightness }
   get _waterContrast() { return this.water?._waterContrast }
   get _waveSpeed() { return this.water?._waveSpeed }
