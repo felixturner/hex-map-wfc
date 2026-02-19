@@ -1,24 +1,24 @@
 # TODO
 
-- WATER
-  - add a new texture png with just black and white for rendering water for mask pass (so trees dont get sparkles)?  
-
-- remove code for terrian types? (lots of code / doesnt work)
-
-- use bigger world noise fields for water, mountains + forests, cities? WIP
-  - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
-  - Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
-  - use just seed some map edges with ocean/ mountains?
-
 - fix weather
   - fix rain looks like poles
   - diff speed for rain/snow
   - do weather scaling to lock min/max rain/snow sizes on zoom.
 
-- improve color maps textures for 2 levels. keep rivers/roads the same color on both
-
 - fix tree rotation with wind sway (currently rotation disabled — positionNode runs pre-batch so displacement gets rotated per-instance. need to counter-rotate using batch color channel or similar)
 - send link to KAY. ask for feedback and new tiles?
+
+
+- WATER
+  - add a new texture png with just black and white for rendering water for mask pass (so trees dont get sparkles)?  
+  - fade out water at distance
+
+- WORLD FEATURES
+  - use bigger world noise fields for water, mountains + forests, cities? WIP
+  - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
+  - Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
+  - use just seed some map edges with ocean/ mountains?
+
 
 # NEW TILES
 - Add new TILES to help WFC: (claculate tiles needed for Sub-Complete Tileset)
