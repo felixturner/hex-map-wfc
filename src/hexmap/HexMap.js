@@ -105,6 +105,7 @@ export class HexMap {
     // Helper visibility state
     this.helpersVisible = false
     this.axesHelpersVisible = false
+    this.debugPlanesVisible = true
 
     // Weather
     this.weather = null
@@ -135,9 +136,11 @@ export class HexMap {
     this.interaction.initHoverHighlight()
 
     // Pre-create all 19 grids with meshes (avoids lag on Build All)
+    // Only show center placeholder — others stay hidden until adjacent to a populated grid
     const allCoords = getAllGridCoordinates()
     for (const [gx, gz] of allCoords) {
-      const grid = await this.createGrid(gx, gz)
+      const hidden = gx !== 0 || gz !== 0
+      const grid = await this.createGrid(gx, gz, { hidden })
       await grid.initMeshes(HexTileGeometry.geoms)
     }
 
@@ -305,7 +308,7 @@ export class HexMap {
    * @param {number} gridZ - Grid Z coordinate
    * @returns {HexGrid} The created grid
    */
-  async createGrid(gridX, gridZ) {
+  async createGrid(gridX, gridZ, { hidden = false } = {}) {
     const key = getGridKey(gridX, gridZ)
     if (this.grids.has(key)) {
       console.warn(`Grid already exists at ${key}`)
@@ -322,7 +325,7 @@ export class HexMap {
     grid.globalCenterCube = globalCenterCube
     grid.onClick = () => this.onGridClick(grid)
 
-    await grid.init()  // Placeholder only — meshes init lazily or in batch
+    await grid.init(null, { hidden })  // Placeholder only — meshes init lazily or in batch
 
     // Apply current axes helper visibility
     if (grid.axesHelper) {
@@ -730,6 +733,7 @@ export class HexMap {
 
     // Apply current helper visibility state
     grid.setHelperVisible(this.helpersVisible)
+    if (grid.debugMesh) grid.debugMesh.visible = this.debugPlanesVisible
 
     // Notify listeners that tiles changed (for coast mask rebuild)
     // Pass animDuration so caller can wait for drop animation to finish
@@ -844,42 +848,18 @@ export class HexMap {
   }
 
   /**
-   * Remove placeholder grids that are outside bounds or don't have enough neighbors
-   * After first expansion, placeholders need 2+ populated neighbors
+   * Remove placeholder grids that are outside bounds or don't have a populated neighbor
    */
   pruneInvalidPlaceholders() {
-    const populatedCount = this.countPopulatedGrids()
-    const isFirstExpansion = populatedCount <= 1
-
-    const toRemove = []
     for (const [key, grid] of this.grids) {
-      if (grid.state === HexGridState.PLACEHOLDER) {
-        const { x, z } = parseGridKey(key)
+      if (grid.state !== HexGridState.PLACEHOLDER) continue
 
-        // Outside bounds
-        if (!this.isValidGridPosition(x, z)) {
-          toRemove.push(key)
-          continue
-        }
+      const { x, z } = parseGridKey(key)
+      const valid = this.isValidGridPosition(x, z) && this.countPopulatedNeighbors(key) >= 1
 
-        // After first expansion, require 2+ neighbors
-        if (!isFirstExpansion) {
-          const neighborCount = this.countPopulatedNeighbors(key)
-          if (neighborCount < 2) {
-            toRemove.push(key)
-          }
-        }
-      }
-    }
-
-    for (const key of toRemove) {
-      const grid = this.grids.get(key)
-      if (grid) {
-        grid.fadeOut()
-        setTimeout(() => {
-          this.grids.delete(key)
-          grid.dispose()
-        }, 300)
+      if (!valid) {
+        grid.placeholder?.hide()
+        if (grid.outline) grid.outline.visible = false
       }
     }
   }
@@ -887,28 +867,32 @@ export class HexMap {
   /**
    * Create placeholder grids around a populated grid
    * Only creates within valid bounds (2 rings = 19 grids max)
-   * After first expansion, only creates placeholders with 2+ populated neighbors
+   * Only creates placeholders with 1+ populated neighbors
    * @param {string} centerKey - Grid key of the populated grid
    */
   async createAdjacentPlaceholders(centerKey, fadeDelay = 0) {
-    const populatedCount = this.countPopulatedGrids()
-    const isFirstExpansion = populatedCount <= 1
-
     const createPromises = []
+    const existingToShow = []
 
     for (let dir = 0; dir < 6; dir++) {
       const adjacentKey = getAdjacentGridKey(centerKey, dir)
-      if (this.grids.has(adjacentKey)) continue  // Already exists
 
       const { x: gridX, z: gridZ } = parseGridKey(adjacentKey)
 
       // Must be within bounds
       if (!this.isValidGridPosition(gridX, gridZ)) continue
 
-      // After first expansion, require 2+ neighbors
-      if (!isFirstExpansion) {
-        const neighborCount = this.countPopulatedNeighbors(adjacentKey)
-        if (neighborCount < 2) continue
+      // Require at least 1 populated neighbor
+      const neighborCount = this.countPopulatedNeighbors(adjacentKey)
+      if (neighborCount < 1) continue
+
+      const existing = this.grids.get(adjacentKey)
+      if (existing) {
+        // Already exists (pre-created) — show if it's a hidden placeholder
+        if (existing.state === HexGridState.PLACEHOLDER) {
+          existingToShow.push(existing)
+        }
+        continue
       }
 
       createPromises.push(this.createGrid(gridX, gridZ))
@@ -916,10 +900,16 @@ export class HexMap {
 
     const newGrids = await Promise.all(createPromises)
 
-    // Fade in new placeholders + outlines after WFC animation
+    // Fade in new and existing-but-hidden placeholders after WFC animation
+    const allToShow = [...newGrids, ...existingToShow]
     if (fadeDelay > 0) {
-      for (const grid of newGrids) {
+      for (const grid of allToShow) {
         grid?.fadeIn(fadeDelay)
+      }
+    } else {
+      for (const grid of existingToShow) {
+        grid?.placeholder?.show()
+        if (grid?.outline) grid.outline.visible = true
       }
     }
   }
@@ -1352,6 +1342,7 @@ export class HexMap {
   setTileLabelsVisible(visible) { this.debug.setTileLabelsVisible(visible) }
   setHelpersVisible(visible) { this.debug.setHelpersVisible(visible) }
   setAxesHelpersVisible(visible) { this.debug.setAxesHelpersVisible(visible) }
+  setDebugPlanesVisible(visible) { this.debug.setDebugPlanesVisible(visible) }
   setOutlinesVisible(visible) { this.debug.setOutlinesVisible(visible) }
   repopulateDecorations() { this.debug.repopulateDecorations() }
   setWhiteMode(enabled) { this.debug.setWhiteMode(enabled) }

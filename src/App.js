@@ -71,7 +71,7 @@ export class App {
     this.lighting = null
     this.params = null
     this.cssRenderer = null  // CSS2DRenderer for debug labels
-    this.clickTerrainType = 'none'  // Selected terrain palette key
+    this.buildMode = false  // false = Move (camera only), true = Build (click to WFC)
 
     if (App.instance != null) {
       console.warn('App instance already exists')
@@ -112,7 +112,7 @@ export class App {
     this.initStats()
     this.initCSSRenderer()
     this.initStatusOverlay()
-    this.initTerrainPalette()
+    this.initModeButtons()
 
     this.seedElement.textContent = `seed: ${seed}`
 
@@ -421,16 +421,7 @@ export class App {
     document.body.appendChild(this.seedElement)
   }
 
-  initTerrainPalette() {
-    const terrains = [
-      { key: 'none', label: 'None' },
-      { key: 'grass', label: 'Grass' },
-      { key: 'mountain', label: 'Mountain' },
-      { key: 'ocean', label: 'Ocean' },
-      { key: 'river', label: 'River' },
-      { key: 'road', label: 'Road' },
-    ]
-
+  initModeButtons() {
     const container = document.createElement('div')
     container.style.cssText = `
       position: fixed;
@@ -443,9 +434,13 @@ export class App {
     `
     document.body.appendChild(container)
 
+    const modes = [
+      { key: 'move', label: 'Move' },
+      { key: 'build', label: 'Build' },
+    ]
     const buttons = []
 
-    for (const { key, label } of terrains) {
+    for (const { key, label } of modes) {
       const btn = document.createElement('button')
       btn.textContent = label
       btn.style.cssText = `
@@ -460,28 +455,18 @@ export class App {
         cursor: pointer;
         backdrop-filter: blur(4px);
       `
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation()
-      })
+      btn.addEventListener('pointerdown', (e) => e.stopPropagation())
       btn.addEventListener('click', (e) => {
         e.stopPropagation()
-        if (this.clickTerrainType === key) {
-          // Deselect → fall back to 'none'
-          this.clickTerrainType = 'none'
-          btn.style.borderColor = 'rgba(255,255,255,0.3)'
-          buttons[0].style.borderColor = 'white'
-        } else {
-          this.clickTerrainType = key
-          for (const b of buttons) {
-            b.style.borderColor = 'rgba(255,255,255,0.3)'
-          }
-          btn.style.borderColor = 'white'
+        this.buildMode = key === 'build'
+        for (const b of buttons) {
+          b.style.borderColor = 'rgba(255,255,255,0.3)'
         }
+        btn.style.borderColor = 'white'
       })
       container.appendChild(btn)
       buttons.push(btn)
-      // Highlight None button by default
-      if (key === 'none') btn.style.borderColor = 'white'
+      if (key === 'move') btn.style.borderColor = 'white'
     }
   }
 

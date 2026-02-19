@@ -221,7 +221,6 @@ export class WFCManager {
 
     const wfcResult = await this.solveWfcAsync(activeSolveCells, activeFixed, {
       tileTypes: ctx.tileTypes,
-      weights: ctx.options.weights ?? {},
       maxRestarts: ctx.initialFixedCount === 0 ? 10 : 1,
       initialCollapses: ctx.initialCollapses,
       gridId: ctx.gridKey,

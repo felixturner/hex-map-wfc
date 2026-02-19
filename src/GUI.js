@@ -78,6 +78,7 @@ export class GUIManager {
       originHelper: false,
       debugCam: true,
       hexGrid: false,
+      debugPlanes: true,
       tileLabels: false,
       tileLabelMode: 'coords',
       floor: true,
@@ -178,6 +179,9 @@ export class GUIManager {
       app.controls.maxPolarAngle = v ? Math.PI : 1.1
       app.controls.minDistance = v ? 0 : 25
       app.controls.maxDistance = v ? Infinity : 125
+    })
+    gui.add(allParams.debug, 'debugPlanes').name('Debug Planes').onChange((v) => {
+      app.city.setDebugPlanesVisible(v)
     })
     gui.add(allParams.debug, 'hexGrid').name('Hex Helper').onChange((v) => {
       app.city.setHelpersVisible(v)
@@ -557,6 +561,7 @@ export class GUIManager {
 
     // Hex helper visibility
     app.city.setHelpersVisible(params.debug.hexGrid)
+    app.city.setDebugPlanesVisible(params.debug.debugPlanes)
 
     // Weather
     if (app.city.weather) {

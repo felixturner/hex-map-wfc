@@ -29,10 +29,6 @@ class HexWFCSolver {
     this.options = {
       maxRestarts: options.maxRestarts ?? 10,
       tileTypes: options.tileTypes ?? null,
-      weights: options.weights ?? {},
-      levelWeights: options.levelWeights ?? null,
-      centerTypeFilter: options.centerTypeFilter ?? null,
-      centerKey: options.centerKey ?? null,
       log: options.log ?? (() => {}),
       attemptNum: options.attemptNum ?? 0,
     }
@@ -180,12 +176,7 @@ class HexWFCSolver {
     const possArray = Array.from(cell.possibilities)
     const weights = possArray.map(k => {
       const state = HexWFCCell.parseKey(k)
-      const customWeight = this.options.weights[state.type]
-      const defaultWeight = TILE_LIST[state.type]?.weight ?? 1
-      let w = customWeight ?? defaultWeight
-      const levelMult = this.options.levelWeights?.[state.level]
-      if (levelMult !== undefined) w *= levelMult
-      return w
+      return TILE_LIST[state.type]?.weight ?? 1
     })
     const totalWeight = weights.reduce((a, b) => a + b, 0)
     let r = random() * totalWeight
@@ -274,7 +265,7 @@ class HexWFCSolver {
 
     const weights = available.map(k => {
       const state = HexWFCCell.parseKey(k)
-      return this.options.weights[state.type] ?? TILE_LIST[state.type]?.weight ?? 1
+      return TILE_LIST[state.type]?.weight ?? 1
     })
     const total = weights.reduce((a, b) => a + b, 0)
     let r = random() * total
@@ -509,23 +500,6 @@ class HexWFCSolver {
       this.trail = []
       this.decisions = []
       this.backtracks = 0
-
-      // Apply center type filter — restrict center cell to only specified tile types
-      if (this.options.centerTypeFilter && this.options.centerKey) {
-        const cell = this.cells.get(this.options.centerKey)
-        if (cell && !cell.collapsed) {
-          const allowedTypes = new Set(this.options.centerTypeFilter)
-          for (const stateKey of [...cell.possibilities]) {
-            const state = HexWFCCell.parseKey(stateKey)
-            if (!allowedTypes.has(state.type)) {
-              cell.possibilities.delete(stateKey)
-            }
-          }
-          if (cell.possibilities.size > 0) {
-            this.propagationStack.push(this.options.centerKey)
-          }
-        }
-      }
 
       // Apply initial collapses (e.g. center grass, water edge for first grid)
       for (const ic of initialCollapses) {
