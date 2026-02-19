@@ -165,7 +165,7 @@ export class GUIManager {
     })
 
     // Debug view
-    const viewMap = { final: 0, color: 1, normal: 3, ao: 4, overlay: 5, effects: 6 }
+    const viewMap = { final: 0, color: 1, normal: 3, ao: 4, overlay: 5, effects: 6, mask: 7 }
     gui.add(allParams.debug, 'view', Object.keys(viewMap)).name('Debug View').onChange((v) => {
       app.debugView.value = viewMap[v]
     })

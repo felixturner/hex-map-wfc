@@ -1,6 +1,7 @@
 import {
   Object3D,
   MeshPhysicalNodeMaterial,
+  MeshBasicNodeMaterial,
   PlaneGeometry,
   Mesh,
   MeshStandardMaterial,
@@ -218,9 +219,19 @@ export class HexMap {
       })
     })
 
-    const [texA, texB] = await Promise.all([
+    // Load mask texture (linear, not sRGB — it's a data mask)
+    const loadMask = (path) => new Promise((resolve) => {
+      loader.load(path, (tex) => {
+        tex.flipY = false
+        tex.needsUpdate = true
+        resolve(tex)
+      })
+    })
+
+    const [texA, texB, texMask] = await Promise.all([
       loadTex('./assets/textures/moody.png'),
       loadTex('./assets/textures/winter.png'),
+      loadMask('./assets/textures/water-mask.png'),
     ])
 
     this._texA = texA
@@ -230,6 +241,7 @@ export class HexMap {
     const texCoord = uv()
     this._texNodeA = texture(texA, texCoord)
     this._texNodeB = texture(texB, texCoord)
+    this._texNodeMask = texture(texMask, texCoord)
     const sampleA = this._texNodeA
     const sampleB = this._texNodeB
 
@@ -267,6 +279,12 @@ export class HexMap {
     const isDebug = this._colorMode.equal(1)
     const isWhite = this._colorMode.equal(2)
     this._combinedColor = select(isWhite, vec3(1, 1, 1), select(isDebug, debugColor, blendedColor))
+
+    // Unlit water mask material (for per-frame mask RT render — no PBR overhead)
+    this.waterMaskMaterial = new MeshBasicNodeMaterial()
+    this.waterMaskMaterial.colorNode = vec3(this._texNodeMask.r)
+    // Skip batchColor multiply (R channel encodes level, not a tint)
+    this.waterMaskMaterial.setupDiffuseColor = this.roadMaterial.setupDiffuseColor
 
     this.roadMaterial.needsUpdate = true
   }

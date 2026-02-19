@@ -74,14 +74,23 @@ export class PostFX {
     this.effectsTarget = new RenderTarget(w, h, { samples: 1 })
     this.effectsTarget.texture.format = RGBAFormat
 
-    // Water render target (water planes — masked to blue areas)
+    // Water render target (water planes — masked to water areas)
     this.waterTarget = new RenderTarget(w, h, { samples: 1 })
     this.waterTarget.texture.format = RGBAFormat
+
+    // Water mask render target (tiles rendered with B&W water-mask.png texture)
+    const mw = Math.ceil(w / 4), mh = Math.ceil(h / 4)
+    this.waterMaskTarget = new RenderTarget(mw, mh, { samples: 1 })
+    this.waterMaskTarget.texture.format = RGBAFormat
 
     // Object lists (set externally each frame)
     this.overlayObjects = []
     this.effectsObjects = []
     this.waterObjects = []
+    this.waterMaskObjects = []
+
+    // Callback to enable/disable water mask mode on tile materials
+    this.onWaterMaskRender = null
 
 
     // Load default LUT texture
@@ -158,17 +167,11 @@ export class PostFX {
     const effectsTexture = texture(this.effectsTarget.texture)
     const withEffects = withAO.add(effectsTexture.rgb.mul(effectsTexture.a))
 
-    // ---- Water layer compositing (masked to blue areas) ----
-    const sceneR = scenePassColor.r
-    const sceneG = scenePassColor.g
-    const sceneB = scenePassColor.b
-    // #2d85d0 and #2ea9ee — strong saturated blues, reject grey by requiring high saturation
-    const isWaterBlue = sceneB.greaterThan(sceneR.mul(2.0))
-      .and(sceneB.greaterThan(sceneG.mul(1.15)))
-      .and(sceneB.sub(sceneR).greaterThan(0.15))
-    const waterMask = select(isWaterBlue, float(1), float(0))
+    // ---- Water layer compositing (masked to water areas via mask RT) ----
+    const waterMaskSample = texture(this.waterMaskTarget.texture)
+    const waterMask = waterMaskSample.r.greaterThan(0.1).toFloat()
 
-    // Water RT: additive blend, masked to blue areas
+    // Water RT: additive blend, masked to water areas
     const waterTexture = texture(this.waterTarget.texture)
     const waterAlpha = waterTexture.a.mul(waterMask)
     const withWater = withEffects.add(waterTexture.rgb.mul(waterAlpha))
@@ -253,6 +256,7 @@ export class PostFX {
     const aoViz = vec3(blurredAO)
     const overlayViz = overlayTexture.rgb
     const effectsViz = effectsTexture.rgb
+    const waterMaskViz = vec3(waterMaskSample.r)
 
     // Select output based on debug view
     const debugOutput = select(
@@ -270,7 +274,11 @@ export class PostFX {
             select(
               this.debugView.lessThan(4.5),
               aoViz,
-              select(this.debugView.lessThan(5.5), overlayViz, effectsViz)
+              select(
+                this.debugView.lessThan(5.5),
+                overlayViz,
+                select(this.debugView.lessThan(6.5), effectsViz, waterMaskViz)
+              )
             )
           )
         )
@@ -296,6 +304,7 @@ export class PostFX {
     this.overlayTarget.setSize(w, h)
     this.effectsTarget.setSize(w, h)
     this.waterTarget.setSize(w, h)
+    this.waterMaskTarget.setSize(Math.ceil(w / 4), Math.ceil(h / 4))
   }
 
   setOverlayObjects(objects) {
@@ -310,6 +319,10 @@ export class PostFX {
     this.waterObjects = objects
   }
 
+  setWaterMaskObjects(objects) {
+    this.waterMaskObjects = objects
+  }
+
   render() {
     const { renderer, scene, camera, overlayObjects, overlayTarget, effectsObjects, effectsTarget } = this
 
@@ -318,9 +331,40 @@ export class PostFX {
     const savedBackground = scene.background
     const savedEnvironment = scene.environment
 
-    // ---- Overlay pass ----
+    // ---- Water mask pass: render tiles with unlit B&W mask material ----
     scene.background = null
     scene.environment = null
+
+    this.onWaterMaskRender?.(true)
+
+    renderer.setRenderTarget(this.waterMaskTarget)
+    renderer.setClearColor(0x000000, 1)
+    renderer.clear()
+    const savedAutoClear = renderer.autoClear
+    renderer.autoClear = false
+
+    if (this.waterMaskObjects.length > 0) {
+      const savedMaskVis = new Map()
+      scene.traverse((child) => {
+        if (!child.isMesh && !child.isBatchedMesh && !child.isInstancedMesh &&
+            !child.isLine && !child.isLineSegments && !child.isPoints) return
+        const isMaskObj = this.waterMaskObjects.some(o => o === child || o.getObjectById?.(child.id))
+        if (!isMaskObj) {
+          savedMaskVis.set(child, child.visible)
+          child.visible = false
+        }
+      })
+
+      renderer.render(scene, camera)
+
+      for (const [child, vis] of savedMaskVis) child.visible = vis
+    }
+
+    renderer.autoClear = savedAutoClear
+
+    this.onWaterMaskRender?.(false)
+
+    // ---- Overlay pass ----
 
     renderer.setRenderTarget(overlayTarget)
     renderer.setClearColor(0x000000, 0)

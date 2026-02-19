@@ -10,6 +10,7 @@ import {
   WebGPURenderer,
   PCFSoftShadowMap,
   AxesHelper,
+  MeshBasicNodeMaterial,
 } from 'three/webgpu'
 import { OrbitControls, CSS2DRenderer } from 'three/examples/jsm/Addons.js'
 import Stats from 'three/addons/libs/stats.module.js'
@@ -22,6 +23,7 @@ import { PostFX } from './PostFX.js'
 import { WavesMask } from './hexmap/effects/WavesMask.js'
 import { setSeed } from './SeededRandom.js'
 import { LEVELS_COUNT } from './hexmap/HexTileData.js'
+import { vec3 } from 'three/tsl'
 import gsap from 'gsap'
 
 // Global status update function
@@ -132,6 +134,33 @@ export class App {
 
     await this.lighting.init()
     await this.city.init()
+
+    // Water mask: swap tile materials to unlit B&W mask material for mask RT render
+    this._whiteMat = new MeshBasicNodeMaterial()
+    this._whiteMat.colorNode = vec3(1, 1, 1)
+    this._savedMats = new Map()
+    this.postFX.onWaterMaskRender = (enabled) => {
+      if (enabled) {
+        const maskMat = this.city.waterMaskMaterial
+        for (const grid of this.city.grids.values()) {
+          if (grid.hexMesh) {
+            this._savedMats.set(grid.hexMesh, grid.hexMesh.material)
+            grid.hexMesh.material = maskMat
+          }
+          if (grid.decorations?.treeMesh) {
+            this._savedMats.set(grid.decorations.treeMesh, grid.decorations.treeMesh.material)
+            grid.decorations.treeMesh.material = maskMat
+          }
+          if (grid.decorations?.staticMesh) {
+            this._savedMats.set(grid.decorations.staticMesh, grid.decorations.staticMesh.material)
+            grid.decorations.staticMesh.material = maskMat
+          }
+        }
+      } else {
+        for (const [mesh, mat] of this._savedMats) mesh.material = mat
+        this._savedMats.clear()
+      }
+    }
 
     // Shared tween target for wave uniforms — gsap.to overwrites previous tweens automatically
     this._waveFade = { opacity: 0, gradOpacity: 0, mask: 0 }
@@ -526,6 +555,13 @@ export class App {
     this.city.update(dt)
 
     // Update render layers
+    const maskObjects = []
+    for (const grid of this.city.grids.values()) {
+      if (grid.hexMesh) maskObjects.push(grid.hexMesh)
+      if (grid.decorations?.treeMesh) maskObjects.push(grid.decorations.treeMesh)
+      if (grid.decorations?.staticMesh) maskObjects.push(grid.decorations.staticMesh)
+    }
+    postFX.setWaterMaskObjects(maskObjects)
     postFX.setOverlayObjects(this.city.getOverlayObjects())
     postFX.setEffectsObjects(this.city.getEffectsObjects())
     postFX.setWaterObjects(this.city.getWaterObjects())
