@@ -22,6 +22,7 @@ import { PostFX } from './PostFX.js'
 import { WavesMask } from './hexmap/effects/WavesMask.js'
 import { setSeed } from './SeededRandom.js'
 import { LEVELS_COUNT } from './hexmap/HexTileData.js'
+import gsap from 'gsap'
 
 // Global status update function
 export function setStatus(text) {
@@ -132,79 +133,72 @@ export class App {
     await this.lighting.init()
     await this.city.init()
 
+    // Shared tween target for wave uniforms — gsap.to overwrites previous tweens automatically
+    this._waveFade = { opacity: 0, gradOpacity: 0, mask: 0 }
+
     // Fade out waves immediately when a new grid starts building
     this.city.onBeforeTilesChanged = () => {
       const opacity = this.city._waveOpacity
-      const gradOpacity = this.city._waveGradientOpacity
-      const maskStrength = this.city._waveMaskStrength
       if (!opacity || opacity.value === 0) return
 
-      this._savedWaveOpacity = opacity.value
-      this._savedGradOpacity = gradOpacity ? gradOpacity.value : 0
+      // Sync tween target with current uniform values
+      this._waveFade.opacity = opacity.value
+      this._waveFade.gradOpacity = this.city._waveGradientOpacity?.value ?? 0
+      this._waveFade.mask = this.city._waveMaskStrength?.value ?? 1
 
-      const fadeOutMs = 500
-      const startTime = performance.now()
-      const fadeOutAnim = () => {
-        const t = Math.min((performance.now() - startTime) / fadeOutMs, 1)
-        opacity.value = this._savedWaveOpacity * (1 - t)
-        if (gradOpacity) gradOpacity.value = this._savedGradOpacity * (1 - t)
-        if (maskStrength) maskStrength.value = 1 - t
-        if (t < 1) requestAnimationFrame(fadeOutAnim)
-      }
-      requestAnimationFrame(fadeOutAnim)
+      gsap.to(this._waveFade, {
+        opacity: 0, gradOpacity: 0, mask: 0,
+        duration: 0.5, overwrite: true,
+        onUpdate: () => {
+          opacity.value = this._waveFade.opacity
+          if (this.city._waveGradientOpacity) this.city._waveGradientOpacity.value = this._waveFade.gradOpacity
+          if (this.city._waveMaskStrength) this.city._waveMaskStrength.value = this._waveFade.mask
+        },
+      })
     }
 
     // After tiles drop, re-render mask and fade waves back in
     this.city.onTilesChanged = (animDuration = 0) => {
       const opacity = this.city._waveOpacity
-      const gradOpacity = this.city._waveGradientOpacity
-      const maskStrength = this.city._waveMaskStrength
       if (!opacity) return
-
-      const savedOpacity = this._savedWaveOpacity ?? this.params.waves.opacity
-      const savedGradOpacity = this._savedGradOpacity ?? this.params.waves.gradientOpacity
 
       // Fade in sparkles on first grid build
       const sparkleOpacity = this.city._waterOpacity
       if (sparkleOpacity && sparkleOpacity.value === 0) {
-        const targetSparkle = this.params.water.opacity
-        const delay = animDuration + 1000
-        const fadeMs = 2000
-        setTimeout(() => {
-          const start = performance.now()
-          const anim = () => {
-            const t = Math.min((performance.now() - start) / fadeMs, 1)
-            sparkleOpacity.value = targetSparkle * t
-            if (t < 1) requestAnimationFrame(anim)
-          }
-          requestAnimationFrame(anim)
-        }, delay)
+        gsap.to(sparkleOpacity, {
+          value: this.params.water.opacity,
+          duration: 2, delay: (animDuration + 1000) / 1000,
+        })
       }
 
       // After drop animation, re-render mask and fade back in
-      const delay = animDuration + 500
-      const fadeInMs = 2000
-      setTimeout(() => {
+      const delay = (animDuration + 500) / 1000
+      gsap.delayedCall(delay, () => {
         opacity.value = 0
-        if (gradOpacity) gradOpacity.value = 0
-        if (maskStrength) maskStrength.value = 0
+        if (this.city._waveGradientOpacity) this.city._waveGradientOpacity.value = 0
+        if (this.city._waveMaskStrength) this.city._waveMaskStrength.value = 0
+        this._waveFade.opacity = 0
+        this._waveFade.gradOpacity = 0
+        this._waveFade.mask = 0
+
         const tileMeshes = []
         for (const grid of this.city.grids.values()) {
           if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
         }
         this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane)
 
-        // Fade back in
-        const inStart = performance.now()
-        const fadeInAnim = () => {
-          const t = Math.min((performance.now() - inStart) / fadeInMs, 1)
-          opacity.value = savedOpacity * t
-          if (gradOpacity) gradOpacity.value = savedGradOpacity * t
-          if (maskStrength) maskStrength.value = t
-          if (t < 1) requestAnimationFrame(fadeInAnim)
-        }
-        requestAnimationFrame(fadeInAnim)
-      }, delay)
+        gsap.to(this._waveFade, {
+          opacity: this.params.waves.opacity,
+          gradOpacity: this.params.waves.gradientOpacity,
+          mask: 1,
+          duration: 2, overwrite: true,
+          onUpdate: () => {
+            opacity.value = this._waveFade.opacity
+            if (this.city._waveGradientOpacity) this.city._waveGradientOpacity.value = this._waveFade.gradOpacity
+            if (this.city._waveMaskStrength) this.city._waveMaskStrength.value = this._waveFade.mask
+          },
+        })
+      })
     }
 
     // Set up hover and click detection on hex tiles and placeholders
@@ -249,6 +243,18 @@ export class App {
     this.gui = new GUIManager(this)
     this.gui.init()
     this.gui.applyParams()
+
+    // Pre-render full pipeline to compile GPU shaders while screen is still black
+    // BatchedMeshes already have a dummy instance from initMeshes()
+    const tileMeshes = []
+    for (const grid of this.city.grids.values()) {
+      if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
+    }
+    this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane)
+    this.postFX.setOverlayObjects(this.city.getOverlayObjects())
+    this.postFX.setEffectsObjects(this.city.getEffectsObjects())
+    this.postFX.setWaterObjects(this.city.getWaterObjects())
+    this.postFX.render()
 
     this.clock.start()
 
@@ -425,7 +431,7 @@ export class App {
     const terrains = [
       { key: 'none', label: 'None' },
       { key: 'grass', label: 'Grass' },
-      { key: 'mountain', label: 'Mountain' },
+      { key: 'mountain', label: 'Hills' },
       { key: 'ocean', label: 'Ocean' },
       { key: 'river', label: 'River' },
       { key: 'road', label: 'Road' },
@@ -522,6 +528,11 @@ export class App {
     // Auto-focus DOF on orbit target (center of screen on ground)
     postFX.dofFocus.value = this.camera.position.distanceTo(controls.target)
 
+    // Fade out DOF when looking straight down (polar angle near 0)
+    const polar = controls.getPolarAngle() // 0 = top-down, PI/2 = horizon
+    const dofFade = Math.min(Math.max((polar - 0.3) / 0.5, 0), 1) // ramp 0.3..0.8 rad
+    postFX.dofAperture.value = (this.params.fx.dofAperture / 1000) * dofFade
+
     // Animate grain noise — quantize to noiseFPS for film-like grain
     const noiseFPS = this.params.fx.grainFPS
     postFX.grainTime.value = Math.floor(clock.elapsedTime * noiseFPS) / noiseFPS
@@ -564,13 +575,6 @@ export class App {
   }
 
   fadeIn(duration = 1000) {
-    const start = performance.now()
-    const animate = () => {
-      const elapsed = performance.now() - start
-      const t = Math.min(elapsed / duration, 1)
-      this.postFX.fadeOpacity.value = t
-      if (t < 1) requestAnimationFrame(animate)
-    }
-    requestAnimationFrame(animate)
+    gsap.to(this.postFX.fadeOpacity, { value: 1, duration: duration / 1000 })
   }
 }

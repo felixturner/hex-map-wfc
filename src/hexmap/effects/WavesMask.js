@@ -222,7 +222,6 @@ export class WavesMask {
     // Result in rtA — this.texture already points to _rtA.texture
     renderer.setRenderTarget(null)
     renderer.setClearColor(savedClearColor, savedClearAlpha)
-    console.log('%c[WAVES] mask rendered + blurred (2048px)', 'color: green')
   }
 
   /** Render waves mask RT to a small debug viewport in bottom-left corner */

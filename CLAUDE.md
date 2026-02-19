@@ -12,3 +12,4 @@
 - Don't ask leading questions about next steps
 - Console log colors: only use black, green, red, and blue. Never use cyan or other colors.
 - Console logs: only log global cell coords, never local cell coords.
+- If user says "use this seed", hardcode the global seed in Demo.js.
