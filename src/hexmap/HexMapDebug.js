@@ -169,6 +169,15 @@ export class HexMapDebug {
     }
   }
 
+  setDebugPlanesVisible(visible) {
+    this.hexMap.debugPlanesVisible = visible
+    for (const grid of this.hexMap.grids.values()) {
+      if (grid.debugMesh) {
+        grid.debugMesh.visible = visible
+      }
+    }
+  }
+
   setOutlinesVisible(visible) {
     for (const grid of this.hexMap.grids.values()) {
       if (grid.outline) {

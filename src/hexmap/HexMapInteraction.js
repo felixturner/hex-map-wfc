@@ -9,7 +9,7 @@ import {
   LineBasicNodeMaterial,
 } from 'three/webgpu'
 import { cubeKey, cubeCoordsInRadius, offsetToCube, cubeToOffset, localToGlobalCoords } from './HexWFCCore.js'
-import { TILE_LIST, TERRAIN_CATEGORIES } from './HexTileData.js'
+import { TILE_LIST } from './HexTileData.js'
 import { HexGridState } from './HexGrid.js'
 import { log, App } from '../App.js'
 import { Sounds } from '../lib/Sounds.js'
@@ -159,7 +159,7 @@ export class HexMapInteraction {
       }
     }
 
-    if ('ontouchstart' in window || App.instance?.clickTerrainType === 'none') {
+    if ('ontouchstart' in window || !App.instance?.buildMode) {
       this.clearHoverHighlight()
       return
     }
@@ -220,7 +220,7 @@ export class HexMapInteraction {
       }
     }
 
-    if (App.instance?.clickTerrainType === 'none') return false
+    if (!App.instance?.buildMode) return false
 
     const hexMeshes = []
     const meshToGrid = new Map()
@@ -253,16 +253,9 @@ export class HexMapInteraction {
             const fixedCells = hm.getFixedCellsForRegion(solveCells)
             const tileTypes = hm.getDefaultTileTypes()
 
-            const terrainType = App.instance?.clickTerrainType ?? null
-            const category = terrainType ? TERRAIN_CATEGORIES[terrainType] : null
-            const centerKey = cubeKey(globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s)
-
             hm.solveWfcAsync(solveCells, fixedCells, {
               tileTypes,
               maxRestarts: 5,
-              centerTypeFilter: category?.types ?? null,
-              centerKey: category ? centerKey : null,
-              levelWeights: category?.levelWeights ?? null,
             }).then(result => {
               if (result.success && result.tiles) {
                 const changedTilesPerGrid = hm.applyTileResultsToGrids(result.tiles)

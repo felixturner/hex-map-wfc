@@ -148,8 +148,10 @@ export class HexGrid {
   /**
    * Initialize the grid (creates placeholder and helper, but doesn't populate tiles yet)
    * @param {Map} geometries - HexTileGeometry.geoms (optional, only needed for population)
+   * @param {Object} options
+   * @param {boolean} options.hidden - Start with placeholder hidden
    */
-  async init(geometries = null) {
+  async init(geometries = null, { hidden = false } = {}) {
     // Create axes helper (always visible)
     this.axesHelper = new AxesHelper(5)
     this.axesHelper.position.set(0, 2, 0)
@@ -175,7 +177,12 @@ export class HexGrid {
     this.group.add(this.gridHelper.group)
 
     // Set initial visibility based on state
-    this.updateVisibility()
+    if (hidden) {
+      this.placeholder?.hide()
+      if (this.outline) this.outline.visible = false
+    } else {
+      this.updateVisibility()
+    }
 
     // Only initialize meshes if geometries provided (for immediate population)
     if (geometries && geometries.size > 0) {
@@ -273,7 +280,7 @@ export class HexGrid {
 
     const debugMat = new MeshBasicNodeMaterial({
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.5,
       depthWrite: false,
       side: DoubleSide,
     })
