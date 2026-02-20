@@ -141,7 +141,6 @@ export class GUIManager {
   init() {
     const { app } = this
     const gui = new GUI()
-    gui.close()
     this.gui = gui
 
     // Store params on app for single source of truth
@@ -176,7 +175,7 @@ export class GUIManager {
       app.controls.minDistance = v ? 0 : 25
       app.controls.maxDistance = v ? Infinity : 125
     })
-    gui.add(allParams.debug, 'hexGrid').name('Hex Helper').onChange((v) => {
+    gui.add(allParams.debug, 'hexGrid').name('Hex Grid').onChange((v) => {
       app.city.setHelpersVisible(v)
     })
     gui.add(allParams.roads, 'showOutlines').name('Show Outlines').onChange((v) => {

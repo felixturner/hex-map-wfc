@@ -1,25 +1,38 @@
 # TODO
 
-- make intro screen? audio? start btn wait for audio
-- push. record video
-- make water blur bigger to fix coves?
-- fade out sparkles during build drop?
 - figure out why build all is failing more now
-- disable dof and grain?
+- make intro screen? audio? start btn wait for audio
+- figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
+- allow inifinite grow grids?
+- dont fade out other grids during grow
+- hide skybox
+- hand button on btns
+
+
+- disable dof and grain? Less DOF
 - tune AO / water color / colors /trees less black?
 - prebake AO in blender?
+
 - animate rotate tiles in like railway board?
-- fade out water effect at distance
 - rock drop sounds
+
 - houses look at roads not on hex angles
-- allow inifinite grow tiles?
 - alow more zoom out
 - more offset on trees / rand scaling?
+
+
+# TWEAKS BRANCH:
+- water is too strong?
+- fade out sparkles during build drop?
+- fade out water effect at distance
 
 - fix weather
   - fix rain looks like poles
   - diff speed for rain/snow
   - do weather scaling to lock min/max rain/snow sizes on zoom.
+
+
+- push. record video
 
 
 - WORLD FEATURES

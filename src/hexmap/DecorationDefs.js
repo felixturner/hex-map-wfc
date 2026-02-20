@@ -112,7 +112,7 @@ export const TreeMeshNames = [...TreesByType.A, ...TreesByType.B]
 
 // Building meshes
 export const BuildingDefs = [
-  { name: 'building_home_A_yellow', weight: 10 },
+  { name: 'building_home_A_yellow', weight: 15 },
   { name: 'building_home_B_yellow', weight: 6 },
   { name: 'building_church_yellow', weight: 2 },
   { name: 'building_tower_A_yellow', weight: 2 },
@@ -127,6 +127,10 @@ export const RuralBuildingDefs = [
 
 export const BuildingMeshNames = BuildingDefs.map(b => b.name)
 export const RuralBuildingMeshNames = RuralBuildingDefs.map(b => b.name)
+
+// Tower top (optional sub-mesh, placed on top of tower 50% of the time)
+export const TOWER_TOP_MESH = 'building_tower_A_top_yellow'
+export const TOWER_TOP_CHANCE = 0.5
 
 // Windmill (3-part composite building)
 export const WindmillMeshNames = [
@@ -200,9 +204,9 @@ export const MountainDefs = [
   { name: 'mountain_A_grass', weight: 3 },
   { name: 'mountain_B_grass', weight: 3 },
   { name: 'mountain_C_grass', weight: 3 },
-  { name: 'mountain_A_grass_trees', weight: 2 },
-  { name: 'mountain_B_grass_trees', weight: 2 },
-  { name: 'mountain_C_grass_trees', weight: 2 },
+  // { name: 'mountain_A_grass_trees', weight: 2 },
+  // { name: 'mountain_B_grass_trees', weight: 2 },
+  // { name: 'mountain_C_grass_trees', weight: 2 },
 ]
 
 export const HillMeshNames = HillDefs.map(h => h.name)

@@ -10,6 +10,7 @@ import {
   weightedPick, hasRoadEdge, isCoastOrOcean, getRoadDeadEndInfo,
   TreesByType, TreeMeshNames,
   BuildingDefs, RuralBuildingDefs, BuildingMeshNames, RuralBuildingMeshNames,
+  TOWER_TOP_MESH, TOWER_TOP_CHANCE,
   WindmillMeshNames, WINDMILL_TOP_OFFSET, WINDMILL_FAN_OFFSET,
   BridgeMeshNames, WaterlilyMeshNames, FlowerMeshNames, RockMeshNames,
   HillDefs, MountainDefs, HillMeshNames, MountainMeshNames, RiverEndDefs,
@@ -32,6 +33,7 @@ export class Decorations {
     const allMeshNames = [
       ...TreeMeshNames,
       ...BuildingMeshNames,
+      TOWER_TOP_MESH,
       ...RuralBuildingMeshNames,
       ...WindmillMeshNames,
       ...BridgeMeshNames,
@@ -44,6 +46,8 @@ export class Decorations {
 
     // Windmill fan needs centering
     const centeredMeshes = new Set(['building_windmill_top_fan_yellow'])
+    // Tower top keeps its original Y (sits on top of tower base)
+    const keepYMeshes = new Set([TOWER_TOP_MESH])
 
     for (const meshName of allMeshNames) {
       let geom = null
@@ -54,7 +58,7 @@ export class Decorations {
           if (centeredMeshes.has(meshName)) {
             const { min, max } = geom.boundingBox
             geom.translate(-(min.x + max.x) / 2, -(min.y + max.y) / 2, -(min.z + max.z) / 2)
-          } else {
+          } else if (!keepYMeshes.has(meshName)) {
             geom.translate(0, -geom.boundingBox.min.y, 0)
           }
           geom.computeBoundingSphere()
@@ -187,7 +191,7 @@ export class Decorations {
 
     // staticMesh: buildings + bridges + waterlilies + rocks + hills + mountains (material — no sway)
     const staticNames = [
-      ...BuildingMeshNames, ...RuralBuildingMeshNames, ...WindmillMeshNames,
+      ...BuildingMeshNames, TOWER_TOP_MESH, ...RuralBuildingMeshNames, ...WindmillMeshNames,
       ...BridgeMeshNames, ...WaterlilyMeshNames, ...RockMeshNames,
       ...HillMeshNames, ...MountainMeshNames,
     ]
@@ -388,6 +392,12 @@ export class Decorations {
       const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
       if (instanceId === -1) break
       this.buildings.push({ tile, meshName, instanceId, rotationY: roadAngle })
+
+      // Optionally place tower top
+      if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
+        const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
+        if (topId !== -1) this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: roadAngle })
+      }
     }
 
     // Place rural buildings (shrine, tent, well) on flat grass away from roads
@@ -874,6 +884,24 @@ export class Decorations {
               this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
               this.buildings.push({ tile, meshName, instanceId, rotationY: buildingAngle })
               newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY: buildingAngle })
+
+              // Optionally place tower top
+              if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
+                const topGeomId = this.staticGeomIds.get(TOWER_TOP_MESH)
+                if (topGeomId !== undefined) {
+                  const topId = this._addInstance(this.staticMesh, topGeomId)
+                  if (topId !== -1) {
+                    this.staticMesh.setColorAt(topId, levelColor(tile.level))
+                    this.dummy.position.set(localPos.x, y, localPos.z)
+                    this.dummy.rotation.y = buildingAngle
+                    this.dummy.scale.setScalar(1)
+                    this.dummy.updateMatrix()
+                    this.staticMesh.setMatrixAt(topId, this.dummy.matrix)
+                    this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: buildingAngle })
+                    newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x, y, z: localPos.z, rotationY: buildingAngle })
+                  }
+                }
+              }
             }
           }
         }
