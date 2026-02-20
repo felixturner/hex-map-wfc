@@ -1185,6 +1185,10 @@ export class HexMap {
     const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
     log(`[BUILD ALL] Complete (${totalTime}s total)`, 'color: green')
     await setStatusAsync(`[BUILD ALL] Complete (${totalTime}s)`)
+
+    // Notify listeners that tiles changed (for coast mask rebuild + wave fade-in)
+    const animDuration = animate ? allGridCoords.length * animateDelay * 10 : 0
+    this.onTilesChanged?.(animDuration)
   }
 
   /**
@@ -1352,6 +1356,11 @@ export class HexMap {
   get _waveGradientOpacity() { return this.water?._waveGradientOpacity }
   get _waveGradientColor() { return this.water?._waveGradientColor }
   get _waveMaskStrength() { return this.water?._waveMaskStrength }
+  get _waveThinRef() { return this.water?._waveThinRef }
+  get _waveLowGradCut() { return this.water?._waveLowGradCut }
+  get _waveCoveRadius() { return this.water?._waveCoveRadius }
+  get _waveCoveEnabled() { return this.water?._waveCoveEnabled }
+  get _waveCoveFadeRate() { return this.water?._waveCoveFadeRate }
 
   // === Accessors for backward compatibility ===
 
