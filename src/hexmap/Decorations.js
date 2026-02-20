@@ -12,7 +12,7 @@ import {
   BuildingDefs, RuralBuildingDefs, BuildingMeshNames, RuralBuildingMeshNames,
   WindmillMeshNames, WINDMILL_TOP_OFFSET, WINDMILL_FAN_OFFSET,
   BridgeMeshNames, WaterlilyMeshNames, FlowerMeshNames, RockMeshNames,
-  HillDefs, MountainDefs, HillMeshNames, MountainMeshNames,
+  HillDefs, MountainDefs, HillMeshNames, MountainMeshNames, RiverEndDefs,
   WHITE, levelColor,
   MAX_TREES, MAX_BUILDINGS, MAX_BRIDGES, MAX_WATERLILIES, MAX_FLOWERS, MAX_ROCKS, MAX_HILLS, MAX_MOUNTAINS,
   MAX_TREE_INSTANCES, MAX_STATIC_INSTANCES,
@@ -497,7 +497,6 @@ export class Decorations {
       const tileDef = TILE_LIST[tile.type]
       const tileName = tileDef?.name
       if (!tileName) continue
-      if (tileDef.debug !== undefined) continue  // Skip debug tiles
       const isRiver = tileName.startsWith('RIVER_') && !tileName.startsWith('RIVER_CROSSING')
       const isCoast = tileName.startsWith('COAST_')
       if (!isRiver && !isCoast) continue
@@ -589,7 +588,6 @@ export class Decorations {
     for (const tile of hexTiles) {
       const def = TILE_LIST[tile.type]
       if (!def) continue
-      if (def.debug !== undefined) continue  // Skip debug tiles
       const name = def.name
       const isCliff = name.includes('CLIFF')
       const isCoast = name.startsWith('COAST_')
@@ -641,7 +639,6 @@ export class Decorations {
     for (const tile of hexTiles) {
       const def = TILE_LIST[tile.type]
       if (!def) continue
-      if (def.debug !== undefined) continue  // Skip debug tiles
 
       const isCliff = def.levelIncrement && def.name.includes('CLIFF')
       const isRiverEnd = def.name === 'RIVER_END'
@@ -650,7 +647,7 @@ export class Decorations {
       if (!isCliff && !isRiverEnd && !isHighGrass) continue
 
       // 10% for cliffs, 30% for river ends, 15% for high grass
-      const chance = isRiverEnd ? 0.3 : isHighGrass ? 0.1 : 0.1
+      const chance = isRiverEnd ? 0.7 : isHighGrass ? 0.1 : 0.1
       if (random() > chance) continue
 
       const localPos = HexTileGeometry.getWorldPosition(
@@ -674,8 +671,8 @@ export class Decorations {
       // River ends get hills
       if (isRiverEnd && hasHills) {
         if (this.hills.length >= MAX_HILLS - 1) continue
-        const meshName = weightedPick(HillDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, rotationY, 1, tile.level)
+        const meshName = weightedPick(RiverEndDefs)
+        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY - 0.1, localPos.z, rotationY, 1, tile.level)
         if (instanceId === -1) continue
         this.hills.push({ tile, meshName, instanceId, rotationY })
         continue
@@ -791,7 +788,6 @@ export class Decorations {
       )
       const def = TILE_LIST[tile.type]
       if (!def) continue
-      if (def.debug !== undefined) continue  // Skip debug tiles
       const name = def.name
 
       // Trees (noise-based, same as populate)
@@ -923,7 +919,7 @@ export class Decorations {
       const isRiverEnd = name === 'RIVER_END'
       const isHighGrass = name === 'GRASS' && tile.level >= 2
       if ((isCliff || isRiverEnd || isHighGrass) && this.staticMesh) {
-        const chance = isRiverEnd ? 0.3 : isHighGrass ? 0.1 : 0.1
+        const chance = isRiverEnd ? 0.7 : isHighGrass ? 0.1 : 0.1
         if (random() <= chance) {
           if (isHighGrass) {
             const mtCountBefore = this.mountains.length
@@ -931,6 +927,26 @@ export class Decorations {
             if (this.mountains.length > mtCountBefore) {
               const mt = this.mountains[this.mountains.length - 1]
               newItems.push({ mesh: this.staticMesh, instanceId: mt.instanceId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: mt.rotationY })
+            }
+          } else if (isRiverEnd) {
+            if (this.hills.length < MAX_HILLS - 1) {
+              const meshName = weightedPick(RiverEndDefs)
+              const geomId = this.staticGeomIds.get(meshName)
+              if (geomId !== undefined) {
+                const instanceId = this._addInstance(this.staticMesh, geomId)
+                if (instanceId !== -1) {
+                  this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
+                  const rotationY = Math.floor(random() * 6) * Math.PI / 3
+                  const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE - 0.1
+                  this.dummy.position.set(localPos.x, y, localPos.z)
+                  this.dummy.rotation.y = rotationY
+                  this.dummy.scale.setScalar(1)
+                  this.dummy.updateMatrix()
+                  this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
+                  this.hills.push({ tile, meshName, instanceId, rotationY })
+                  newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY })
+                }
+              }
             }
           } else {
             const hillNames = HillMeshNames.filter(n => this.staticGeomIds.has(n))

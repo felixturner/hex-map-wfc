@@ -7,13 +7,9 @@ import {
   Float32BufferAttribute,
   LineSegments,
   LineBasicMaterial,
-  PlaneGeometry,
-  MeshBasicNodeMaterial,
-  DoubleSide,
   Color,
   ArrowHelper,
   Vector3,
-  Quaternion,
 } from 'three/webgpu'
 import { CSS2DObject } from 'three/examples/jsm/Addons.js'
 import gsap from 'gsap'
@@ -31,60 +27,6 @@ import {
 } from './HexGridAnimation.js'
 
 const LEVEL_HEIGHT = 0.5
-const Y_AXIS = new Vector3(0, 1, 0)
-
-/**
- * Compute debug overlay quaternion and Y offset for a tile definition + rotation
- */
-function computeDebugTransform(tileDef, rotation) {
-  const isObj = typeof tileDef.debug === 'object'
-  const stripe = isObj ? tileDef.debug.stripe : null
-
-  // Y rotation for stripe direction
-  let rotY = 0
-  if (stripe) {
-    const baseDirIdx = HexDir.indexOf(stripe)
-    const actualDirIdx = (baseDirIdx + rotation) % 6
-    const actualDir = HexDir[actualDirIdx]
-    const dirVec = HexGrid.HEX_DIR_VECTORS[actualDir]
-    rotY = Math.atan2(dirVec.x, dirVec.z)
-  }
-
-  const quat = new Quaternion().setFromAxisAngle(Y_AXIS, rotY)
-  let yOffset = 1.1
-
-  // Tilt for slope tiles
-  const isSlope = tileDef.highEdges && tileDef.highEdges.length > 0
-  if (isSlope) {
-    const increment = tileDef.levelIncrement ?? 1
-    // Slope direction: average of high edges, rotated by tile rotation
-    // For highEdges ['NE','E','SE'], center is E (index 1)
-    const slopeDir = new Vector3(0, 0, 0)
-    for (const edge of tileDef.highEdges) {
-      const edgeIdx = HexDir.indexOf(edge)
-      const rotIdx = (edgeIdx + rotation) % 6
-      const v = HexGrid.HEX_DIR_VECTORS[HexDir[rotIdx]]
-      slopeDir.x += v.x
-      slopeDir.z += v.z
-    }
-    slopeDir.normalize()
-
-    // Tilt axis = perpendicular to slope direction in XZ plane
-    const tiltAxis = new Vector3(-slopeDir.z, 0, slopeDir.x).normalize()
-    const tiltAngle = Math.atan2(increment * LEVEL_HEIGHT, 1)
-    const tiltQuat = new Quaternion().setFromAxisAngle(tiltAxis, tiltAngle)
-    quat.premultiply(tiltQuat)
-
-    // Y at slope midpoint + 0.2 extra lift
-    yOffset = 1.3 + increment * LEVEL_HEIGHT / 2
-  }
-
-  // Per-tile extra Y offset
-  const extraY = isObj ? (tileDef.debug.yOffset ?? 0) : 0
-  yOffset += extraY
-
-  return { quat, yOffset }
-}
 
 /**
  * HexGrid states
@@ -130,9 +72,6 @@ export class HexGrid {
     this.hexTiles = []
     this.hexGrid = null  // 2D array
     this.hexMesh = null
-    this.debugMesh = null     // Debug overlay BatchedMesh
-    this.debugGeomId = null   // Single geometry ID for debug plane
-    this.debugInstances = new Map()  // `gridX,gridZ` -> instanceId
     this.decorations = null
     this.gridHelper = null
     this.placeholder = null
@@ -259,55 +198,7 @@ export class HexGrid {
     this.decorations = new Decorations(this.group, this.worldOffset)
     await this.decorations.init(this.material, this.treeMaterial)
 
-    // Initialize debug overlay mesh (colored planes for debug tiles)
-    this.initDebugMesh()
-
     return true
-  }
-
-  /**
-   * Initialize debug overlay BatchedMesh (colored planes above debug tiles)
-   */
-  initDebugMesh() {
-    // Flat overlay plane (for simple color debug tiles)
-    const planeGeom = new PlaneGeometry(1.2, 1.2)
-    planeGeom.rotateX(-Math.PI / 2)  // Lay flat (XZ plane)
-
-    // Stripe plane (flat, extends from center toward +Z)
-    const stripeGeom = new PlaneGeometry(1.4, 0.9)
-    stripeGeom.rotateX(-Math.PI / 2)  // Lay flat (XZ plane)
-    stripeGeom.translate(0, 0, 0.45)  // Offset toward +Z (center to edge)
-
-    const debugMat = new MeshBasicNodeMaterial({
-      transparent: true,
-      opacity: 0.5,
-      depthWrite: false,
-      side: DoubleSide,
-    })
-
-    const maxInstances = 25 * 25 + 1  // Generous cap + dummy
-    const totalV = planeGeom.attributes.position.count + stripeGeom.attributes.position.count
-    const totalI = (planeGeom.index?.count ?? 0) + (stripeGeom.index?.count ?? 0)
-    this.debugMesh = new BatchedMesh(maxInstances, totalV * 2, totalI * 2, debugMat)
-    this.debugMesh.sortObjects = false
-    this.debugMesh.receiveShadow = false
-    this.debugMesh.castShadow = false
-    this.debugMesh.frustumCulled = false
-    this.group.add(this.debugMesh)
-
-    this.debugGeomId = this.debugMesh.addGeometry(planeGeom)
-    this.debugStripeGeomId = this.debugMesh.addGeometry(stripeGeom)
-
-    // Dummy instance (WebGPU color sync fix)
-    const WHITE = new Color(0xffffff)
-    this.debugMesh._dummyInstanceId = this.debugMesh.addInstance(this.debugGeomId)
-    this.debugMesh.setColorAt(this.debugMesh._dummyInstanceId, WHITE)
-    this.dummy.position.set(0, -1000, 0)
-    this.dummy.scale.setScalar(0)
-    this.dummy.updateMatrix()
-    this.debugMesh.setMatrixAt(this.debugMesh._dummyInstanceId, this.dummy.matrix)
-
-    this.debugInstances = new Map()
   }
 
   /**
@@ -568,26 +459,6 @@ export class HexGrid {
       this.hexMesh.setMatrixAt(tile.instanceId, this.dummy.matrix)
     }
 
-    // Add debug overlay if tile has debug property
-    const tileDef = TILE_LIST[placement.type]
-    if (tileDef?.debug !== undefined && this.debugMesh) {
-      const isObj = typeof tileDef.debug === 'object'
-      const color = isObj ? tileDef.debug.color : tileDef.debug
-      const stripe = isObj ? tileDef.debug.stripe : null
-
-      const geomId = stripe ? this.debugStripeGeomId : this.debugGeomId
-      const debugId = this.debugMesh.addInstance(geomId)
-      this.debugMesh.setColorAt(debugId, new Color(color))
-
-      const { quat, yOffset } = computeDebugTransform(tileDef, placement.rotation)
-
-      // Hide initially
-      this.dummy.scale.setScalar(0)
-      this.dummy.updateMatrix()
-      this.debugMesh.setMatrixAt(debugId, this.dummy.matrix)
-      this.debugInstances.set(`${placement.gridX},${placement.gridZ}`, { id: debugId, quat, yOffset })
-    }
-
     return tile
   }
 
@@ -631,33 +502,8 @@ export class HexGrid {
       this.dummy.updateMatrix()
       this.hexMesh.setMatrixAt(oldTile.instanceId, this.dummy.matrix)
 
-      // Update debug overlay
-      const tileKey = `${gridX},${gridZ}`
-      const existingDebug = this.debugInstances.get(tileKey)
-      if (existingDebug !== undefined && this.debugMesh) {
-        this.debugMesh.deleteInstance(existingDebug.id)
-        this.debugInstances.delete(tileKey)
-      }
-      const newDef = TILE_LIST[newType]
-      if (newDef?.debug !== undefined && this.debugMesh) {
-        const isObj = typeof newDef.debug === 'object'
-        const color = isObj ? newDef.debug.color : newDef.debug
-        const stripe = isObj ? newDef.debug.stripe : null
-        const geomId = stripe ? this.debugStripeGeomId : this.debugGeomId
-        const debugId = this.debugMesh.addInstance(geomId)
-        this.debugMesh.setColorAt(debugId, new Color(color))
-        const { quat, yOffset } = computeDebugTransform(newDef, newRotation)
-        this.dummy.position.set(pos.x, oldTile.level * LEVEL_HEIGHT + yOffset, pos.z)
-        this.dummy.quaternion.copy(quat)
-        this.dummy.scale.setScalar(1)
-        this.dummy.updateMatrix()
-        this.debugMesh.setMatrixAt(debugId, this.dummy.matrix)
-        this.dummy.rotation.set(0, 0, 0)
-        this.debugInstances.set(tileKey, { id: debugId, quat, yOffset })
-      }
-
       // Update bottom fill
-      const fillKey = tileKey
+      const fillKey = `${gridX},${gridZ}`
       const existingFillId = this.bottomFills.get(fillKey)
       if (existingFillId !== undefined) {
         this.hexMesh.deleteInstance(existingFillId)
@@ -715,17 +561,6 @@ export class HexGrid {
 
       this.hexMesh.setMatrixAt(tile.instanceId, dummy.matrix)
       this.hexMesh.setVisibleAt(tile.instanceId, true)
-
-      // Position debug overlay
-      const debugEntry = this.debugInstances.get(`${tile.gridX},${tile.gridZ}`)
-      if (debugEntry !== undefined) {
-        dummy.position.set(pos.x, tile.level * LEVEL_HEIGHT + debugEntry.yOffset, pos.z)
-        dummy.quaternion.copy(debugEntry.quat)
-        dummy.scale.setScalar(1)
-        dummy.updateMatrix()
-        this.debugMesh.setMatrixAt(debugEntry.id, dummy.matrix)
-        dummy.rotation.set(0, 0, 0)
-      }
 
       // Add bottom fill under elevated tiles (geometry hangs downward from Y=0)
       if (tile.level >= 1 && this.bottomGeomId !== null) {
@@ -836,12 +671,6 @@ export class HexGrid {
         this.hexMesh.deleteInstance(fillId)
       }
     }
-    if (this.debugMesh) {
-      for (const entry of this.debugInstances.values()) {
-        this.debugMesh.deleteInstance(entry.id)
-      }
-    }
-    this.debugInstances = new Map()
     this.bottomFills = new Map()
     this.hexTiles = []
     this.hexGrid = null
@@ -888,12 +717,6 @@ export class HexGrid {
       this.hexMesh.dispose()
       this.hexMesh = null
     }
-
-    if (this.debugMesh) {
-      this.debugMesh.dispose()
-      this.debugMesh = null
-    }
-    this.debugInstances = new Map()
 
     // Remove group from scene
     this.scene.remove(this.group)

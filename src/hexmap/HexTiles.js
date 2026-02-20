@@ -194,7 +194,8 @@ export class HexTileGeometry {
   }
 
   /**
-   * Find geometry by mesh name, scale and center it
+   * Find geometry by mesh name and scale it
+   * Assumes Blender origin is centered XZ with Y at surface (y=1)
    */
   static findAndProcessGeometry(scene, meshName) {
     let mesh = null
@@ -209,19 +210,10 @@ export class HexTileGeometry {
       return { geom: null }
     }
 
-    // Clone and scale geometry
+    // Clone and scale geometry — origin from Blender is trusted (centered XZ, Y at surface)
     const geom = mesh.geometry.clone()
     geom.scale(this.SCALE, this.SCALE, this.SCALE)
-
-    // DISABLED - checking base orientation from GLB
-    // geom.rotateY(Math.PI / 6)
-
-    // Compute bounds and center XZ, lift Y to sit on floor
-    geom.computeBoundingBox()
-    const { min, max } = geom.boundingBox
-    const centerX = (min.x + max.x) / 2
-    const centerZ = (min.z + max.z) / 2
-    geom.translate(-centerX, -min.y + 0.01, -centerZ)
+    geom.translate(0, 1 * this.SCALE, 0)
 
     geom.computeBoundingBox()
     geom.computeBoundingSphere()

@@ -3,7 +3,7 @@
 1. NEVER git revert, commit, or push without asking for explicit permission first. No exceptions.
 2. NEVER make code changes unless I specifically ask you to. If I ask a question, just answer it.
 3. NEVER write to the memories directory. Use `plans/` for TODOs and notes.
-4. ALWAYS play audio notification (`afplay /System/Library/Sounds/Glass.aiff`) after completing ANY task or before asking ANY question. Every single response.
+4. ALWAYS play audio notification on task completion (`/System/Library/Sounds/Funk.aiff`) or after asking a question (`/System/Library/Sounds/Blow.aiff`)
 5. DON'T run `npm run build` - I'll tell you if the build fails.
 
 ## Other Instructions

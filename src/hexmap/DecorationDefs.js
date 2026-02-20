@@ -1,7 +1,19 @@
 import { Color } from 'three/webgpu'
 import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, LEVELS_COUNT } from './HexTileData.js'
-import FastSimplexNoise from '@webvoxel/fast-simplex-noise'
+import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js'
 import { random } from '../SeededRandom.js'
+
+// Wrapper to match the FastSimplexNoise API (frequency scaling + [0,1] range)
+class ScaledNoise {
+  constructor(frequency, rng) {
+    this.frequency = frequency
+    this.simplex = new SimplexNoise({ random: rng })
+  }
+  scaled2D(x, y) {
+    const v = this.simplex.noise(x * this.frequency, y * this.frequency)
+    return (v + 1) * 0.5  // remap [-1,1] to [0,1]
+  }
+}
 
 export const LEVEL_HEIGHT = 0.5
 export const TILE_SURFACE = 1
@@ -20,8 +32,8 @@ export function initGlobalTreeNoise(frequency = 0.05) {
 
 export function setTreeNoiseFrequency(frequency) {
   currentTreeNoiseFreq = frequency
-  globalNoiseA = new FastSimplexNoise({ frequency, min: 0, max: 1, random })
-  globalNoiseB = new FastSimplexNoise({ frequency, min: 0, max: 1, random })
+  globalNoiseA = new ScaledNoise(frequency, random)
+  globalNoiseB = new ScaledNoise(frequency, random)
 
 }
 
@@ -152,6 +164,19 @@ export const RockMeshNames = [
   'rock_single_C',
   'rock_single_D',
   'rock_single_E',
+]
+
+// River end decoration pool
+export const RiverEndDefs = [
+  { name: 'hills_A', weight: 5 },
+  { name: 'hills_A_trees', weight: 5 },
+  { name: 'hills_B', weight: 5 },
+  { name: 'hills_B_trees', weight: 5 },
+  { name: 'hills_C', weight: 5 },
+  { name: 'hills_C_trees', weight: 5 },
+  { name: 'hill_single_A', weight: 5 },
+  { name: 'hill_single_B', weight: 5 },
+  { name: 'hill_single_C', weight: 5 },
 ]
 
 // Hill meshes (placed on 1-level cliffs)

@@ -103,7 +103,7 @@ export const TILE_LIST = [
   // { name: 'RIVER_L', mesh: 'hex_river_L',  // removed from GLB
   //   edges: { NE: 'river', E: 'river', SE: 'river', SW: 'river', W: 'river', NW: 'river' },
   //   weight: 2 },
-  { name: 'RIVER_END', mesh: 'hex_river_M',
+  { name: 'RIVER_END', mesh: 'river_end',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'river', NW: 'grass' },
     weight: 4, preventChaining: true, debug: { color: 0xff0000, stripe: 'W' } },
 
@@ -125,20 +125,20 @@ export const TILE_LIST = [
     weight: 10, preventChaining: true },
 
   // Coast slope (debug)
-  { name: 'COAST_SLOPE_A_LOW', mesh: 'hex_grass_sloped_low',
+  { name: 'COAST_SLOPE_A_LOW', mesh: 'coast_slope_low',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'ocean', NW: 'coast' },
     weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1, debug: { color: 0xff0000, stripe: 'W' } },
-  { name: 'COAST_SLOPE_A_HIGH', mesh: 'hex_grass_sloped_high',
+  { name: 'COAST_SLOPE_A_HIGH', mesh: 'coast_slope_high',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'ocean', NW: 'coast' },
     weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2, debug: { color: 0xff0000, stripe: 'W', yOffset: 0.5 } },
 
   // River slope (debug)
-  { name: 'RIVER_A_SLOPE_LOW', mesh: 'hex_road_A_sloped_low',
+  { name: 'RIVER_A_SLOPE_LOW', mesh: 'river_slope_low',
     edges: { NE: 'grass', E: 'river', SE: 'grass', SW: 'grass', W: 'river', NW: 'grass' },
     weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1, debug: { color: 0xff0000, stripe: 'W' } },
 
   // River-into-coast (debug)
-  { name: 'RIVER_INTO_COAST', mesh: 'hex_coast_C',
+  { name: 'RIVER_INTO_COAST', mesh: 'river_coast',
     edges: { NE: 'coast', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'coast', NW: 'river' },
     weight: 3, preventChaining: true, debug: { color: 0xff0000, stripe: 'NW' } },
 

@@ -106,7 +106,6 @@ export class HexMap {
     // Helper visibility state
     this.helpersVisible = false
     this.axesHelpersVisible = false
-    this.debugPlanesVisible = true
 
     // Weather
     this.weather = null
@@ -798,7 +797,6 @@ export class HexMap {
 
     // Apply current helper visibility state
     grid.setHelperVisible(this.helpersVisible)
-    if (grid.debugMesh) grid.debugMesh.visible = this.debugPlanesVisible
 
     // Notify listeners that tiles changed (for coast mask rebuild)
     // Pass animDuration so caller can wait for drop animation to finish
@@ -1388,7 +1386,6 @@ export class HexMap {
   setTileLabelsVisible(visible) { this.debug.setTileLabelsVisible(visible) }
   setHelpersVisible(visible) { this.debug.setHelpersVisible(visible) }
   setAxesHelpersVisible(visible) { this.debug.setAxesHelpersVisible(visible) }
-  setDebugPlanesVisible(visible) { this.debug.setDebugPlanesVisible(visible) }
   setOutlinesVisible(visible) { this.debug.setOutlinesVisible(visible) }
   repopulateDecorations() { this.debug.repopulateDecorations() }
   setWhiteMode(enabled) { this.debug.setWhiteMode(enabled) }

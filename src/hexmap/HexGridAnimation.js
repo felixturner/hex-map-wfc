@@ -43,11 +43,6 @@ export function hideAllInstances(grid) {
     grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
   }
 
-  if (grid.debugMesh) {
-    for (const entry of grid.debugInstances.values()) {
-      grid.debugMesh.setMatrixAt(entry.id, dummy.matrix)
-    }
-  }
 }
 
 /**
@@ -64,8 +59,6 @@ export function animateTileDrop(grid, tile) {
   const targetY = tile.level * LEVEL_HEIGHT
   const rotationY = -tile.rotation * Math.PI / 3
   const fillId = grid.bottomFills.get(`${tile.gridX},${tile.gridZ}`)
-  const debugEntry = grid.debugInstances.get(`${tile.gridX},${tile.gridZ}`)
-
   const anim = { y: targetY + DROP_HEIGHT, scale: 1 }
   tile._anim = anim
   gsap.to(anim, {
@@ -88,14 +81,6 @@ export function animateTileDrop(grid, tile) {
         grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
       }
 
-      if (debugEntry !== undefined) {
-        dummy.position.set(pos.x, anim.y + debugEntry.yOffset, pos.z)
-        dummy.quaternion.copy(debugEntry.quat)
-        dummy.scale.setScalar(anim.scale)
-        dummy.updateMatrix()
-        grid.debugMesh.setMatrixAt(debugEntry.id, dummy.matrix)
-        dummy.rotation.set(0, 0, 0)
-      }
     }
   })
 }
@@ -166,10 +151,13 @@ function buildDecorationMap(grid) {
     }
   })
 
-  addItems(decs.hills, decs.staticMesh, (h, pos) => ({
-    x: pos.x, y: h.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z,
-    rotationY: h.rotationY ?? 0
-  }))
+  addItems(decs.hills, decs.staticMesh, (h, pos) => {
+    const isRiverEnd = TILE_LIST[h.tile.type]?.name === 'RIVER_END'
+    return {
+      x: pos.x, y: h.tile.level * LEVEL_HEIGHT + TILE_SURFACE + (isRiverEnd ? -0.1 : 0), z: pos.z,
+      rotationY: h.rotationY ?? 0
+    }
+  })
 
   addItems(decs.mountains, decs.staticMesh, (m, pos) => ({
     x: pos.x, y: m.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z,
@@ -203,8 +191,6 @@ export function animatePlacements(grid, collapseOrder, delay) {
       const targetY = tile.level * LEVEL_HEIGHT
       const rotationY = -tile.rotation * Math.PI / 3
       const fillId = fillsByTile.get(`${tile.gridX},${tile.gridZ}`)
-      const debugEntry = grid.debugInstances.get(`${tile.gridX},${tile.gridZ}`)
-
       const anim = { y: targetY + DROP_HEIGHT, scale: 1 }
       tile._anim = anim
       gsap.to(anim, {
@@ -227,14 +213,6 @@ export function animatePlacements(grid, collapseOrder, delay) {
             grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
           }
 
-          if (debugEntry !== undefined) {
-            dummy.position.set(pos.x, anim.y + debugEntry.yOffset, pos.z)
-            dummy.quaternion.copy(debugEntry.quat)
-            dummy.scale.setScalar(anim.scale)
-            dummy.updateMatrix()
-            grid.debugMesh.setMatrixAt(debugEntry.id, dummy.matrix)
-            dummy.rotation.set(0, 0, 0)
-          }
         }
       })
 

@@ -1,5 +1,5 @@
 {
-  "name": "codrops-batchedmesh",
+  "name": "hex-map-wfc",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,12 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@webvoxel/fast-simplex-noise": "^0.0.1-a2",
-    "cannon-es": "^0.20.0",
     "gsap": "^3.14.2",
     "howler": "^2.2.4",
-    "three": "^0.172.0",
-    "three-bvh-csg": "^0.0.17"
+    "three": "^0.172.0"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.1.4",
