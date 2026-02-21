@@ -66,6 +66,7 @@ export function animateTileDrop(grid, tile) {
     duration: ANIM_DURATION,
     ease: 'power1.out',
     onUpdate: () => {
+      if (!grid.hexMesh) return
       dummy.position.set(pos.x, anim.y, pos.z)
       dummy.rotation.y = rotationY
       dummy.scale.setScalar(anim.scale)
@@ -178,10 +179,10 @@ export function animatePlacements(grid, collapseOrder, delay) {
 
   let i = 0
   const step = () => {
-    if (i >= collapseOrder.length) return
+    if (i >= collapseOrder.length || !grid.hexMesh) return
 
     const placement = collapseOrder[i]
-    const tile = grid.hexGrid[placement.gridX]?.[placement.gridZ]
+    const tile = grid.hexGrid?.[placement.gridX]?.[placement.gridZ]
 
     if (tile && tile.instanceId !== null) {
       const pos = HexTileGeometry.getWorldPosition(
@@ -198,6 +199,7 @@ export function animatePlacements(grid, collapseOrder, delay) {
         duration: ANIM_DURATION,
         ease: 'power1.out',
         onUpdate: () => {
+          if (!grid.hexMesh) return
           dummy.position.set(pos.x, anim.y, pos.z)
           dummy.rotation.y = rotationY
           dummy.scale.setScalar(anim.scale)

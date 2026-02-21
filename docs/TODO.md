@@ -4,12 +4,10 @@
 - make intro screen? audio? start btn wait for audio
 - figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
 - allow inifinite grow grids?
-- dont fade out other grids during grow
 - hide skybox
 - hand button on btns
 
 
-- disable dof and grain? Less DOF
 - tune AO / water color / colors /trees less black?
 - prebake AO in blender?
 
@@ -22,6 +20,7 @@
 
 
 # TWEAKS BRANCH:
+- disable dof and grain? Less DOF
 - water is too strong?
 - fade out sparkles during build drop?
 - fade out water effect at distance
@@ -32,8 +31,12 @@
   - do weather scaling to lock min/max rain/snow sizes on zoom.
 
 
+####
+
 - push. record video
 
+
+- infinite build will break water mask???
 
 - WORLD FEATURES
   - use bigger world noise fields for water, mountains + forests, cities? WIP

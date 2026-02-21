@@ -220,15 +220,14 @@ export class GUIManager {
     gui.add(allParams.roads, 'animateWFC').name('Animate WFC')
 
     // Action buttons
-    gui.add({ regen: () => {
-      app.city.regenerate({
-        animate: allParams.roads.animateWFC,
-        animateDelay: allParams.roads.animateDelay,
-      })
-      // Restore hex helper visibility from GUI state
-      app.city.setHelpersVisible(allParams.debug.hexGrid)
-    } }, 'regen').name('Regen')
     gui.add({ exportPNG: () => app.exportPNG() }, 'exportPNG').name('Export PNG')
+    gui.add({ reset: () => {
+      app.city.reset()
+      app.city.setHelpersVisible(allParams.debug.hexGrid)
+      app.perspCamera.position.set(0.903, 100.036, 59.610)
+      app.controls.target.set(0.903, 1, 1.168)
+      app.controls.update()
+    } }, 'reset').name('Reset')
     gui.add({ autoBuild: () => app.city.autoExpand([
       [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
     ]) }, 'autoBuild').name('Build Sequentially')

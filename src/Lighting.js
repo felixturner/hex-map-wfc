@@ -1,6 +1,7 @@
 import {
   Vector3,
   Box3,
+  Color,
   EquirectangularReflectionMapping,
   DirectionalLight,
   HemisphereLight,
@@ -30,7 +31,7 @@ export class Lighting {
       .loadAsync(params.lighting.hdr)
     texture.mapping = EquirectangularReflectionMapping
     texture.needsUpdate = true
-    scene.background = texture
+    scene.background = new Color(0x96a0b8)
     scene.environment = texture
 
     // Scene bounds for shadow calculation (7x7 lots, centered on middle lot, ~98x98, buildings up to ~50 height)
@@ -68,7 +69,6 @@ export class Lighting {
       .loadAsync(filename)
     texture.mapping = EquirectangularReflectionMapping
     texture.needsUpdate = true
-    this.scene.background = texture
     this.scene.environment = texture
   }
 

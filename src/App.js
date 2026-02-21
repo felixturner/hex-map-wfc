@@ -319,7 +319,7 @@ export class App {
     this.updateOrthoFrustum()
 
     // Set up perspective camera - top-down view of hex map
-    this.perspCamera.position.set(0.178, 100.036, 59.610)
+    this.perspCamera.position.set(0.903, 100.036, 59.610)
     this.perspCamera.fov = 20
     this.updatePerspFrustum()
 

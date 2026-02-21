@@ -112,6 +112,7 @@ export class HexMap {
 
     // Regeneration state (prevents overlay rendering during disposal)
     this.isRegenerating = false
+    this._buildCancelled = false
 
     // Convenience alias
     this.hexWfcRules = null
@@ -120,7 +121,6 @@ export class HexMap {
   async init() {
     await HexTileGeometry.init('./assets/models/hex-terrain.glb')
     Decorations.initGeometries(HexTileGeometry.gltfScene)
-    this.createFloor()
     this.water = new Water(this.scene, this.coastMaskTexture)
     this.water.init()
     await this.initMaterial()
@@ -135,14 +135,8 @@ export class HexMap {
     // Hover highlight for click-to-solve region
     this.interaction.initHoverHighlight()
 
-    // Pre-create all 19 grids with meshes (avoids lag on Build All)
-    // Only show center placeholder — others stay hidden until adjacent to a populated grid
-    const allCoords = getAllGridCoordinates()
-    for (const [gx, gz] of allCoords) {
-      const hidden = gx !== 0 || gz !== 0
-      const grid = await this.createGrid(gx, gz, { hidden })
-      await grid.initMeshes(HexTileGeometry.geoms)
-    }
+    // Create only the center placeholder — others created dynamically on demand
+    await this.createGrid(0, 0)
 
     this.scene.add(this.tileLabels)
   }
@@ -421,6 +415,7 @@ export class HexMap {
       return
     }
 
+    this._buildCancelled = false
     this.onBeforeTilesChanged?.()
 
     const ctx = this._setupPopulateContext(grid, options)
@@ -430,6 +425,8 @@ export class HexMap {
     grid.placeholder?.startSpinning()
     const solveResult = await this._runWfcWithRecovery(ctx)
     grid.placeholder?.stopSpinning()
+
+    if (this._buildCancelled) return
 
     return this._applyPopulateResults(grid, ctx, solveResult, options)
   }
@@ -923,9 +920,6 @@ export class HexMap {
 
       const { x: gridX, z: gridZ } = parseGridKey(adjacentKey)
 
-      // Must be within bounds
-      if (!this.isValidGridPosition(gridX, gridZ)) continue
-
       // Require at least 1 populated neighbor
       const neighborCount = this.countPopulatedNeighbors(adjacentKey)
       if (neighborCount < 1) continue
@@ -933,7 +927,7 @@ export class HexMap {
       const existing = this.grids.get(adjacentKey)
       if (existing) {
         // Already exists (pre-created) — show if it's a hidden placeholder
-        if (existing.state === HexGridState.PLACEHOLDER) {
+        if (existing.state === HexGridState.PLACEHOLDER && !existing.placeholder?.group.visible) {
           existingToShow.push(existing)
         }
         continue
@@ -995,8 +989,13 @@ export class HexMap {
    * @param {Array<[number,number]>} order - Array of [gridX, gridZ] pairs
    */
   async autoExpand(order) {
+    this._buildCancelled = false
     const startTime = performance.now()
     for (const [gx, gz] of order) {
+      if (this._buildCancelled) {
+        log('[AUTO-BUILD] Cancelled', 'color: red')
+        return
+      }
       const key = getGridKey(gx, gz)
       let grid = this.grids.get(key)
       if (!grid) {
@@ -1022,6 +1021,7 @@ export class HexMap {
    * @param {Object} options - { animate, animateDelay }
    */
   async populateAllGrids(expansionCoords = null, options = {}) {
+    this._buildCancelled = false
     if (!expansionCoords) {
       expansionCoords = getAllGridCoordinates().filter(([q, gz]) => q !== 0 || gz !== 0)
     }
@@ -1107,6 +1107,11 @@ export class HexMap {
       attemptNum: 1,
     })
 
+    if (this._buildCancelled) {
+      log('[BUILD ALL] Cancelled', 'color: red')
+      return
+    }
+
     if (!result.success) {
       log('[BUILD ALL] WFC FAILED', 'color: red')
       const { Sounds } = await import('../lib/Sounds.js')
@@ -1185,6 +1190,7 @@ export class HexMap {
     const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
     log(`[BUILD ALL] Complete (${totalTime}s total)`, 'color: green')
     await setStatusAsync(`[BUILD ALL] Complete (${totalTime}s)`)
+    Sounds.play('good')
 
     // Notify listeners that tiles changed (for coast mask rebuild + wave fade-in)
     const animDuration = animate ? allGridCoords.length * animateDelay * 10 : 0
@@ -1275,6 +1281,35 @@ export class HexMap {
   onPointerMove(pointer, camera) { this.interaction.onPointerMove(pointer, camera) }
   onPointerDown(pointer, camera) { return this.interaction.onPointerDown(pointer, camera) }
   clearHoverHighlight() { this.interaction.clearHoverHighlight() }
+
+  async reset() {
+    this._buildCancelled = true
+    this.isRegenerating = true
+
+    this.globalCells.clear()
+    this.failedCells.clear()
+    this.droppedCells.clear()
+    this.replacedCells.clear()
+    this.clearTileLabels()
+
+    const gridsToDispose = [...this.grids.values()]
+    this.grids.clear()
+
+    for (const grid of gridsToDispose) {
+      this.scene.remove(grid.group)
+    }
+    setTimeout(() => {
+      for (const grid of gridsToDispose) grid.dispose()
+    }, 500)
+
+    this.initWfcRules()
+    this.wfcManager.cancelAndRestart()
+
+    // Create center placeholder only — no WFC solve
+    await this.createGrid(0, 0)
+
+    this.isRegenerating = false
+  }
 
   async regenerate(options = {}) {
     await this.regenerateAll(options)

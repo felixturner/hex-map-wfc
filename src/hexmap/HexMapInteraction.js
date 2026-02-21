@@ -156,6 +156,9 @@ export class HexMapInteraction {
       if (newHovered) {
         newHovered.setHover(true)
         Sounds.play('roll', 1.0, 0.2, 0.5)
+        document.body.style.cursor = 'pointer'
+      } else {
+        document.body.style.cursor = ''
       }
     }
 

@@ -24,6 +24,21 @@ export class WFCManager {
     this.hexWfcRules = HexWFCAdjacencyRules.fromTileDefinitions(tileTypes)
   }
 
+  /** Terminate current worker, reject pending solves, and start a fresh worker */
+  cancelAndRestart() {
+    if (this.wfcWorker) {
+      this.wfcWorker.terminate()
+      this.wfcWorker = null
+    }
+    // Resolve all pending promises as failed
+    for (const [id, resolve] of this.wfcPendingResolvers) {
+      resolve({ success: false, tiles: null, collapseOrder: [] })
+    }
+    this.wfcPendingResolvers.clear()
+    this.wfcRequestId = 0
+    this.initWfcWorker()
+  }
+
   /** Initialize WFC Web Worker */
   initWfcWorker() {
     try {
