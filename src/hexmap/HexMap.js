@@ -1109,7 +1109,7 @@ export class HexMap {
 
     if (this._buildCancelled) {
       log('[BUILD ALL] Cancelled', 'color: red')
-      return
+      return { success: false, cancelled: true }
     }
 
     if (!result.success) {
@@ -1120,7 +1120,7 @@ export class HexMap {
       for (const grid of this.grids.values()) {
         grid.placeholder?.stopSpinning()
       }
-      return
+      return { success: false }
     }
 
     const solveTime = ((performance.now() - startTime) / 1000).toFixed(1)
@@ -1195,6 +1195,8 @@ export class HexMap {
     // Notify listeners that tiles changed (for coast mask rebuild + wave fade-in)
     const animDuration = animate ? allGridCoords.length * animateDelay * 10 : 0
     this.onTilesChanged?.(animDuration)
+
+    return { success: true, time: parseFloat(totalTime), backtracks: result.backtracks || 0, restarts: result.restarts || 0 }
   }
 
   /**
@@ -1281,6 +1283,40 @@ export class HexMap {
   onPointerMove(pointer, camera) { this.interaction.onPointerMove(pointer, camera) }
   onPointerDown(pointer, camera) { return this.interaction.onPointerDown(pointer, camera) }
   clearHoverHighlight() { this.interaction.clearHoverHighlight() }
+
+  async runBenchmark(runs = 3) {
+    const oceanWeight = TILE_LIST[TileType.OCEAN].weight
+    log(`[BENCHMARK] Starting ${runs} runs (ocean weight: ${oceanWeight})`, 'color: blue')
+    const results = []
+
+    for (let i = 0; i < runs; i++) {
+      if (this._buildCancelled) {
+        log('[BENCHMARK] Cancelled', 'color: red')
+        break
+      }
+      log(`[BENCHMARK] Run ${i + 1}/${runs}`, 'color: blue')
+      const result = await this.populateAllGrids(null, { animate: false })
+      results.push(result || { success: false })
+    }
+
+    const successes = results.filter(r => r.success).length
+    const failures = results.filter(r => !r.success && !r.cancelled).length
+    const times = results.filter(r => r.success).map(r => r.time)
+    const avgTime = times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : '-'
+
+    log(`[BENCHMARK] === RESULTS (ocean weight: ${oceanWeight}) ===`, 'color: green')
+    log(`[BENCHMARK] ${successes}/${results.length} succeeded, ${failures} failed, avg time: ${avgTime}s`, 'color: green')
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]
+      if (r.success) {
+        log(`[BENCHMARK]   Run ${i + 1}: SUCCESS (${r.time}s, ${r.backtracks} backtracks, ${r.restarts} restarts)`, 'color: green')
+      } else {
+        log(`[BENCHMARK]   Run ${i + 1}: FAIL`, 'color: red')
+      }
+    }
+
+    Sounds.play('intro')
+  }
 
   async reset() {
     this._buildCancelled = true

@@ -235,6 +235,7 @@ export class GUIManager {
       import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0, 0.3))
       app.city.populateAllGrids()
     } }, 'buildAll').name('Build All')
+    gui.add({ benchmark: () => app.city.runBenchmark(3) }, 'benchmark').name('Benchmark (3 runs)')
 
     gui.add({
       copyState: () => {
