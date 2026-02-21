@@ -61,16 +61,16 @@ export class GUIManager {
       dots: true,
       debris: true,
       dof: true,
-      dofAperture: 0.41,
-      dofMaxblur: 0.009,
+      dofAperture: 0.21,
+      dofMaxblur: 0.005,
       bleach: false,
       bleachAmount: 0.3,
       lut: true,
       lutStyle: 'etikate',
       lutAmount: 0.1,
       grain: true,
-      grainStrength: 0.04,
-      grainFPS: 16,
+      grainStrength: 0.03,
+      grainFPS: 0,
     },
     debug: {
       view: 'final',
@@ -109,7 +109,7 @@ export class GUIManager {
     },
     water: {
       y: 0.88,
-      opacity: 0.15,
+      opacity: 0.1,
       speed: 1.3,
       freq: 1.5,
       angle: 0,
@@ -119,11 +119,11 @@ export class GUIManager {
     waves: {
       speed: 2,
       count: 4,
-      opacity: 0.4,
+      opacity: 0.2,
       break: 0.135,
-      width: 0.39,
+      width: 0.27,
       offset: 0.3,
-      gradientOpacity: 0.1,
+      gradientOpacity: 0,
       gradientColor: '#ccb233',
       showMask: false,
     },
@@ -487,7 +487,7 @@ export class GUIManager {
     fxFolder.add(allParams.fx, 'grainStrength', 0, 0.2, 0.005).name('Grain Strength').onChange((v) => {
       app.grainStrength.value = v
     })
-    fxFolder.add(allParams.fx, 'grainFPS', 1, 60, 1).name('Grain FPS')
+    fxFolder.add(allParams.fx, 'grainFPS', 0, 60, 1).name('Grain FPS')
 
     return allParams
   }

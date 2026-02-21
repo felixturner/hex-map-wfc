@@ -167,6 +167,7 @@ export class App {
 
     // Fade out waves immediately when a new grid starts building
     this.city.onBeforeTilesChanged = () => {
+      if (this.city._autoExpanding) return
       const opacity = this.city._waveOpacity
       if (!opacity || opacity.value === 0) return
 
@@ -188,6 +189,7 @@ export class App {
 
     // After tiles drop, re-render mask and fade waves back in
     this.city.onTilesChanged = (animDuration = 0) => {
+      if (this.city._autoExpanding) return
       const opacity = this.city._waveOpacity
       if (!opacity) return
 
@@ -527,9 +529,11 @@ export class App {
     const dofFade = Math.min(Math.max((polar - 0.3) / 0.5, 0), 1) // ramp 0.3..0.8 rad
     postFX.dofAperture.value = (this.params.fx.dofAperture / 1000) * dofFade
 
-    // Animate grain noise — quantize to noiseFPS for film-like grain
+    // Animate grain noise — quantize to noiseFPS for film-like grain (0 = static)
     const noiseFPS = this.params.fx.grainFPS
-    postFX.grainTime.value = Math.floor(clock.elapsedTime * noiseFPS) / noiseFPS
+    if (noiseFPS > 0) {
+      postFX.grainTime.value = Math.floor(clock.elapsedTime * noiseFPS) / noiseFPS
+    }
 
     // Update debris physics
     this.city.update(dt)

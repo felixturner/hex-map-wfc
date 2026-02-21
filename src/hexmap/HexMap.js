@@ -994,11 +994,15 @@ export class HexMap {
   async autoExpand(order) {
     this._buildCancelled = false
     const startTime = performance.now()
-    for (const [gx, gz] of order) {
+    this._autoExpanding = true
+    for (let i = 0; i < order.length; i++) {
+      const [gx, gz] = order[i]
       if (this._buildCancelled) {
+        this._autoExpanding = false
         log('[AUTO-BUILD] Cancelled', 'color: red')
         return
       }
+      if (i === order.length - 1) this._autoExpanding = false
       const key = getGridKey(gx, gz)
       let grid = this.grids.get(key)
       if (!grid) {
