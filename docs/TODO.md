@@ -1,12 +1,9 @@
 # TODO
 
 - figure out why build all is failing more now
+
 - make intro screen? audio? start btn wait for audio
 - figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
-- allow inifinite grow grids?
-- hide skybox
-- hand button on btns
-
 
 - tune AO / water color / colors /trees less black?
 - prebake AO in blender?
@@ -20,10 +17,6 @@
 
 
 # TWEAKS BRANCH:
-- disable dof and grain? Less DOF
-- water is too strong?
-- fade out sparkles during build drop?
-- fade out water effect at distance
 
 - fix weather
   - fix rain looks like poles
@@ -35,8 +28,6 @@
 
 - push. record video
 
-
-- infinite build will break water mask???
 
 - WORLD FEATURES
   - use bigger world noise fields for water, mountains + forests, cities? WIP
@@ -66,6 +57,7 @@
 - add wind trails like zelda
 - add dungeon mouth buildings
 - Update to latest threejs
+- allow inifinite grow grids - will break water mask???
 
 
 

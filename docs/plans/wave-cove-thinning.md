@@ -70,3 +70,8 @@ Key points from bgolus article (https://gist.github.com/bgolus/a18c1a3fc9af2d73c
 
 ### Integration
 The JFA output texture replaces `this.texture` in WavesMask. The wave shader in Water.js would use true distance instead of the blurred gradient for `outwardDist`. Everything else (sine bands, breaks, fades) stays the same but with uniform spacing.
+
+## REFS:
+https://github.com/bzztbomb/three_js_outline
+https://bgolus.medium.com/the-quest-for-very-wide-outlines-ba82ed442cd9
+

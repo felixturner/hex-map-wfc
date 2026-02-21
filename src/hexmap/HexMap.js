@@ -920,6 +920,9 @@ export class HexMap {
 
       const { x: gridX, z: gridZ } = parseGridKey(adjacentKey)
 
+      // Must be within bounds
+      if (!this.isValidGridPosition(gridX, gridZ)) continue
+
       // Require at least 1 populated neighbor
       const neighborCount = this.countPopulatedNeighbors(adjacentKey)
       if (neighborCount < 1) continue
