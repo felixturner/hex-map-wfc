@@ -280,6 +280,10 @@ export class HexMapInteraction {
                 }
 
                 hm.addToGlobalCells('click-resolve', result.tiles)
+                const animDuration = changedTilesPerGrid.size > 0
+                  ? Math.max(...[...changedTilesPerGrid.values()].map(t => t.length)) * TILE_STAGGER
+                  : 0
+                hm.onTilesChanged?.(animDuration)
 
                 log(`[TILE RESOLVE] (${global.col},${global.row}) solved ${result.tiles.length} tiles`, 'color: green')
                 import('../lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0.15))

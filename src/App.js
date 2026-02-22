@@ -131,6 +131,7 @@ export class App {
     this.city = new HexMap(this.scene, this.params)
     // Pass coast mask RT texture so water shader can sample it directly
     this.city.coastMaskTexture = this.wavesMask.texture
+    this.city.coveMaskTexture = this.wavesMask.coveTexture
 
     await this.lighting.init()
     await this.city.init()
@@ -188,6 +189,7 @@ export class App {
     }
 
     // After tiles drop, re-render mask and fade waves back in
+    this._pendingMaskRender = null
     this.city.onTilesChanged = (animDuration = 0) => {
       if (this.city._autoExpanding) return
       const opacity = this.city._waveOpacity
@@ -202,9 +204,12 @@ export class App {
         })
       }
 
+      // Kill previous pending mask render (e.g. during rapid sequential builds)
+      if (this._pendingMaskRender) this._pendingMaskRender.kill()
+
       // After drop animation, re-render mask and fade back in
       const delay = (animDuration + 500) / 1000
-      gsap.delayedCall(delay, () => {
+      this._pendingMaskRender = gsap.delayedCall(delay, () => {
         opacity.value = 0
         if (this.city._waveGradientOpacity) this.city._waveGradientOpacity.value = 0
         if (this.city._waveMaskStrength) this.city._waveMaskStrength.value = 0
@@ -216,7 +221,7 @@ export class App {
         for (const grid of this.city.grids.values()) {
           if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
         }
-        this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane)
+        this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane, this.city.globalCells)
 
         gsap.to(this._waveFade, {
           opacity: this.params.waves.opacity,
@@ -281,7 +286,7 @@ export class App {
     for (const grid of this.city.grids.values()) {
       if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
     }
-    this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane)
+    this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane, this.city.globalCells)
     this.postFX.setOverlayObjects(this.city.getOverlayObjects())
     this.postFX.setEffectsObjects(this.city.getEffectsObjects())
     this.postFX.setWaterObjects(this.city.getWaterObjects())
