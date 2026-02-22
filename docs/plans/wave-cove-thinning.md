@@ -70,3 +70,29 @@ Key points from bgolus article (https://gist.github.com/bgolus/a18c1a3fc9af2d73c
 
 ### Integration
 The JFA output texture replaces `this.texture` in WavesMask. The wave shader in Water.js would use true distance instead of the blurred gradient for `outwardDist`. Everything else (sine bands, breaks, fades) stays the same but with uniform spacing.
+
+
+### JFA Status
+- Seed pass confirmed working (thin white coastline edges, correct shape)
+- Propagation step produces garbage — same result regardless of:
+  - `select` chains vs `Fn`/`If`/`toVar`/`assign`
+  - UV-space vs pixel-space coordinates
+  - Single material with `.value` swap vs two materials
+  - `fragmentNode` vs `colorNode`
+- Suspected: TSL texture sampling from FloatType RTs may not return raw float values, or `.value` swap doesn't work with `fragmentNode`
+- Next test: verify R,G values (pixel coords) read back correctly from seed output, then try single JFA iteration
+
+### JFA Refs
+- https://github.com/bzztbomb/three_js_outline
+- https://bgolus.medium.com/the-quest-for-very-wide-outlines-ba82ed442cd9
+
+## Fallback: Hex Directional Land Probe
+
+If JFA can't be made to work in TSL, a simpler CPU-side approach:
+
+For each water cell, probe outward along the 6 hex directions up to N cells. Count how many directions hit land within that radius. Cells with 3+ directions blocked are "in a cove."
+
+- **Pros**: simple JS, no GPU passes, ~20 lines of code, works at cell granularity
+- **Cons**: discrete per-cell (not smooth pixel gradient), binary cove/not-cove rather than continuous thinning, need to feather edges
+- **Integration**: store cove strength as a per-cell value, write to a data texture, sample in Water.js wave shader to suppress or thin wave bands in coves
+- **Resolution**: one value per hex (~2 WU), coarser than JFA but may be sufficient since wave bands are already ~2 WU wide

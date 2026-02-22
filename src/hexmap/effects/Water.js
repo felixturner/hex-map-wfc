@@ -14,9 +14,10 @@ import { uniform, vec3, vec2, texture, positionWorld, mx_noise_float, float, cla
  * Rendered to a separate RT in PostFX and masked to blue water areas.
  */
 export class Water {
-  constructor(scene, coastMaskTexture) {
+  constructor(scene, coastMaskTexture, coveMaskTexture) {
     this.scene = scene
     this.coastMaskTexture = coastMaskTexture
+    this.coveMaskTexture = coveMaskTexture
     this.mesh = null
   }
 
@@ -42,9 +43,15 @@ export class Water {
     this._waveGradientOpacity = uniform(0.1)
     this._waveGradientColor = uniform(new Color(0.8, 0.7, 0.2))
     this._waveMaskStrength = uniform(1)
+    this._coveStrength = uniform(1)
+    this._coveFade = uniform(0)    // 1 = use cove mask as alpha fade
+    this._coveThin = uniform(0)    // 1 = use cove mask to thin waves
+    this._coveShow = uniform(0)    // 1 = show cove mask as red overlay
 
     // Coast gradient texture — pre-blurred RT from WavesMask (set before init)
     this._coastGradNode = texture(this.coastMaskTexture || new DataTexture(new Uint8Array(4), 1, 1))
+    // Cove mask texture — separate blurred RT from WavesMask
+    this._coveMaskNode = texture(this.coveMaskTexture || new DataTexture(new Uint8Array(4), 1, 1))
 
     // Caustic texture — tileable grayscale, replaces expensive Worley noise
     const causticLoader = new TextureLoader()
@@ -79,7 +86,7 @@ export class Water {
       positionWorld.z.div(180).add(0.5)
     )
     const cs = this._coastGradNode.sample(coastUV)
-    const gradSample = cs.r.mul(0.2126).add(cs.g.mul(0.7152)).add(cs.b.mul(0.0722))
+    const gradSample = cs.r  // R channel = blur gradient (G has cove overlay)
 
     // outwardDist: 0 at coastline, 1 at far open water
     const outwardDist = clamp(float(1).sub(gradSample), 0, 1)
@@ -91,10 +98,15 @@ export class Water {
     const inRange = clamp(outwardDist.sub(waveStart).mul(20.0), 0, 1)
       .mul(clamp(waveEnd.sub(outwardDist).mul(20.0), 0, 1))
 
+    // Cove mask: separate blurred texture from WavesMask
+    const coveSample = clamp(this._coveMaskNode.sample(coastUV).r.mul(this._coveStrength), 0, 1)
+
     // Sine bands emanating outward
     const wavePhase = sin(localDist.mul(this._waveCount).mul(PI2).sub(tslTime.mul(this._waveSpeed)))
       .mul(0.5).add(0.5)
-    const waveThreshold = mix(this._waveWidth, float(0.99), localDist)
+    const baseThreshold = mix(this._waveWidth, float(0.99), localDist)
+    // Cove thinning: push threshold toward 1.0 in cove areas (waves vanish at threshold=1)
+    const waveThreshold = mix(baseThreshold, float(1.0), coveSample.mul(this._coveThin))
     const waveBand = clamp(wavePhase.sub(waveThreshold).mul(40.0), 0, 1)
 
     // Multi-scale animated breaks along the wave lines
@@ -120,22 +132,25 @@ export class Water {
     const fadeIn = clamp(localDist.mul(8.0), 0, 1)
     const fadeOut = clamp(float(1).sub(localDist).mul(5.0), 0, 1)
     const nearCoast = clamp(gradSample.mul(3.0), 0, 1)
-    const waveAlpha = broken.mul(fadeIn).mul(fadeOut).mul(inRange).mul(nearCoast).mul(this._waveOpacity)
 
-    // Alt: deep water only — sparkles fade in where outwardDist > 0.75
-    // const deepWaterFade = clamp(outwardDist.sub(0.75).mul(4.0), 0, 1)
-    // const sparkleWithBreaks = waterColor.mul(totalAlpha).mul(deepWaterFade).mul(breakMask)
+    // Cove fade: reduce wave opacity in cove areas
+    const coveFadeMask = mix(float(1), float(1).sub(coveSample), this._coveFade)
+    const waveAlpha = broken.mul(fadeIn).mul(fadeOut).mul(inRange).mul(nearCoast).mul(this._waveOpacity).mul(coveFadeMask)
 
     // U-shaped mask — sparkles near coast (rivers) + deep water, suppressed in wave zone
+    // Where cove thins/removes waves, let sparkles back in
     const uMask = clamp(outwardDist.sub(0.5).abs().sub(0.3).mul(10.0), 0, 1)
-    const sparkleMask = mix(float(1), uMask, this._waveMaskStrength)
+    const sparkleMask = mix(float(1), uMask, this._waveMaskStrength.mul(float(1).sub(coveSample)))
     const sparkleWithBreaks = waterColor.mul(totalAlpha).mul(sparkleMask).mul(breakMask)
+
+    // Cove debug: red overlay where cove mask is active
+    const coveDebug = vec3(coveSample, 0, 0).mul(this._coveShow)
 
     // Additive compositing in PostFX — caustic water + coast waves + gradient tint
     const gradientColor = vec3(this._waveGradientColor)
     const waveWhite = vec3(waveAlpha, waveAlpha, waveAlpha)
     material.colorNode = vec3(0, 0, 0)
-    material.emissiveNode = sparkleWithBreaks.add(waveWhite).add(gradientColor.mul(gradSample).mul(this._waveGradientOpacity))
+    material.emissiveNode = sparkleWithBreaks.add(waveWhite).add(gradientColor.mul(gradSample).mul(this._waveGradientOpacity)).add(coveDebug)
     material.opacityNode = float(1)
 
     this.mesh = new Mesh(geometry, material)

@@ -121,7 +121,7 @@ export class HexMap {
     await HexTileGeometry.init('./assets/models/hex-terrain.glb')
     Decorations.initGeometries(HexTileGeometry.gltfScene)
     this.createFloor()
-    this.water = new Water(this.scene, this.coastMaskTexture)
+    this.water = new Water(this.scene, this.coastMaskTexture, this.coveMaskTexture)
     this.water.init()
     await this.initMaterial()
     this.initWfcRules()
@@ -1361,6 +1361,10 @@ export class HexMap {
   get _waveCoveRadius() { return this.water?._waveCoveRadius }
   get _waveCoveEnabled() { return this.water?._waveCoveEnabled }
   get _waveCoveFadeRate() { return this.water?._waveCoveFadeRate }
+  get _coveStrength() { return this.water?._coveStrength }
+  get _coveFade() { return this.water?._coveFade }
+  get _coveThin() { return this.water?._coveThin }
+  get _coveShow() { return this.water?._coveShow }
 
   // === Accessors for backward compatibility ===
 

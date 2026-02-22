@@ -125,7 +125,14 @@ export class GUIManager {
       offset: 0.3,
       gradientOpacity: 0.1,
       gradientColor: '#ccb233',
-      showMask: false,
+      showMask: true,
+      coveCutoff: 0.978,
+      coveRadius: 2.041,
+      coveBlur: 2.624,
+      coveStrength: 2.274,
+      coveFade: true,
+      coveThin: true,
+      coveShow: false,
     },
     weather: {
       mode: 'none',
@@ -326,6 +333,27 @@ export class GUIManager {
     })
     wavesFolder.add(allParams.waves, 'showMask', false).name('Show Mask').onChange((v) => {
       if (app.wavesMask) app.wavesMask.showDebug = v
+    })
+    wavesFolder.add(allParams.waves, 'coveCutoff', 0, 3).name('Cove Cutoff').onChange((v) => {
+      if (app.wavesMask) { app.wavesMask._coveCutoff = v; app.wavesMask.renderCoveOverlay() }
+    })
+    wavesFolder.add(allParams.waves, 'coveRadius', 0.5, 4).name('Cove Radius').onChange((v) => {
+      if (app.wavesMask) { app.wavesMask._coveRadius = v; app.wavesMask.renderCoveOverlay() }
+    })
+    wavesFolder.add(allParams.waves, 'coveBlur', 0, 4).name('Cove Blur').onChange((v) => {
+      if (app.wavesMask) { app.wavesMask._coveBlur = Math.round(v); app.wavesMask.renderCoveOverlay() }
+    })
+    wavesFolder.add(allParams.waves, 'coveStrength', 0, 3).name('Cove Strength').onChange((v) => {
+      if (app.city._coveStrength) app.city._coveStrength.value = v
+    })
+    wavesFolder.add(allParams.waves, 'coveShow').name('Show Cove Mask').onChange((v) => {
+      if (app.city._coveShow) app.city._coveShow.value = v ? 1 : 0
+    })
+    wavesFolder.add(allParams.waves, 'coveFade').name('Cove Fade').onChange((v) => {
+      if (app.city._coveFade) app.city._coveFade.value = v ? 1 : 0
+    })
+    wavesFolder.add(allParams.waves, 'coveThin').name('Cove Thin').onChange((v) => {
+      if (app.city._coveThin) app.city._coveThin.value = v ? 1 : 0
     })
 
     // Weather folder
@@ -582,6 +610,10 @@ export class GUIManager {
     if (app.city._waveWidth) app.city._waveWidth.value = 1 - params.waves.width
     if (app.city._waveOffset) app.city._waveOffset.value = params.waves.offset
     if (app.city._waveGradientColor) app.city._waveGradientColor.value.set(params.waves.gradientColor)
+    if (app.city._coveStrength) app.city._coveStrength.value = params.waves.coveStrength
+    if (app.city._coveFade) app.city._coveFade.value = params.waves.coveFade ? 1 : 0
+    if (app.city._coveThin) app.city._coveThin.value = params.waves.coveThin ? 1 : 0
+    if (app.city._coveShow) app.city._coveShow.value = params.waves.coveShow ? 1 : 0
 
     // Renderer
     app.renderer.setPixelRatio(params.renderer.dpr)
