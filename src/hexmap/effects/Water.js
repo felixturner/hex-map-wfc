@@ -86,7 +86,7 @@ export class Water {
       positionWorld.z.div(180).add(0.5)
     )
     const cs = this._coastGradNode.sample(coastUV)
-    const gradSample = cs.r  // R channel = blur gradient (G has cove overlay)
+    const gradSample = cs.r
 
     // outwardDist: 0 at coastline, 1 at far open water
     const outwardDist = clamp(float(1).sub(gradSample), 0, 1)

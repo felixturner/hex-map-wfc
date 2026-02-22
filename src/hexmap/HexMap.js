@@ -1356,11 +1356,6 @@ export class HexMap {
   get _waveGradientOpacity() { return this.water?._waveGradientOpacity }
   get _waveGradientColor() { return this.water?._waveGradientColor }
   get _waveMaskStrength() { return this.water?._waveMaskStrength }
-  get _waveThinRef() { return this.water?._waveThinRef }
-  get _waveLowGradCut() { return this.water?._waveLowGradCut }
-  get _waveCoveRadius() { return this.water?._waveCoveRadius }
-  get _waveCoveEnabled() { return this.water?._waveCoveEnabled }
-  get _waveCoveFadeRate() { return this.water?._waveCoveFadeRate }
   get _coveStrength() { return this.water?._coveStrength }
   get _coveFade() { return this.water?._coveFade }
   get _coveThin() { return this.water?._coveThin }

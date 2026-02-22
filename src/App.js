@@ -89,7 +89,7 @@ export class App {
       return
     }
 
-    const seed = 23654
+    const seed = Math.floor(Math.random() * 100000)
     setSeed(seed)
     console.log(`%c[SEED] ${seed}`, 'color: black')
     console.log(`%c[LEVELS] ${LEVELS_COUNT}`, 'color: black')

@@ -18,10 +18,10 @@ import { HexTileGeometry } from '../HexTiles.js'
  *   2 hex tiles (target wave reach) ≈ 45px
  *
  * Pipeline (runs once after grid build):
- *   1. Render ONLY tile BatchedMeshes top-down (hide everything else)
- *   2. Dilation: blue pixels → black (water), non-blue bright → white (land), max-filter expand
+ *   1. Render tile BatchedMeshes top-down (hide everything else)
+ *   2. Dilation: blue → black (water), non-blue bright → white (land), max-filter expand → _rtA
  *   3. Blur: smooth into coast distance gradient → _rtA
- *   4. Cove hex overlay → separate _rtCove, blurred independently
+ *   4. Cove: white hexes at concave cells → dilate → blur → _rtCove
  */
 export class WavesMask {
   constructor(renderer) {
@@ -36,19 +36,13 @@ export class WavesMask {
       return rt
     }
 
-    // Two RTs for ping-pong (gradient pipeline)
     this._rtA = makeRT()
     this._rtB = makeRT()
-
-    // Saved dilated state (pre-blur) for lightweight cove re-renders
-    this._rtDilated = makeRT()
-
-    // Separate cove mask RT (blurred independently)
     this._rtCove = makeRT()
 
     /** Coast gradient texture — sample in water shader */
     this.texture = this._rtA.texture
-    /** Cove mask texture — separate from gradient, no channel mixing */
+    /** Cove mask texture — separate from gradient */
     this.coveTexture = this._rtCove.texture
     this.showDebug = true
 
@@ -58,30 +52,31 @@ export class WavesMask {
     this._sceneCam.up.set(0, 0, -1)
     this._sceneCam.lookAt(0, 0, 0)
 
-    // Shared fullscreen camera for post passes
-    this._blurCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    // Shared fullscreen quad + camera for all post passes
+    this._postCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    this._quad = new Mesh(new PlaneGeometry(2, 2))
+    this._quadScene = new Scene()
+    this._quadScene.add(this._quad)
 
     const texelSize = float(1.0 / size)
 
+    // Shared direction uniform for both dilation materials
+    this._dilateDir = uniform(new Vector2(1, 0))
+
     // ---- Dilation material (max-filter with blue detection) ----
     // Radius 14 → ~14px expansion ≈ 1.2 WU
-    // 1 H+V pair closes gaps up to ~2 tiles wide
-    this._dilateDir = uniform(new Vector2(1, 0))
     const dilateTexNode = texture(this._rtA.texture)
     this._dilateTexNode = dilateTexNode
 
     const dilateUV = uv()
     const dilateRadius = 14
 
-    // Sample + classify: blue → 0 (water), non-blue bright → 1 (land), dark → 0 (empty)
     function sampleMask(uvCoord) {
       const s = dilateTexNode.sample(uvCoord)
       const lum = s.r.mul(0.2126).add(s.g.mul(0.7152)).add(s.b.mul(0.0722))
-      // Blue detection (same as PostFX water masking)
       const isBlue = s.b.greaterThan(s.r.mul(2.0))
         .and(s.b.greaterThan(s.g.mul(1.15)))
         .and(s.b.sub(s.r).greaterThan(0.15))
-      // Blue → black (water), non-blue with any brightness → white (land)
       return select(isBlue, float(0), select(lum.greaterThan(0.03), float(1), float(0)))
     }
 
@@ -92,32 +87,25 @@ export class WavesMask {
       maxVal = maxVal.max(sampleMask(dilateUV.sub(off)))
     }
 
-    const dilateMat = new MeshBasicNodeMaterial()
-    dilateMat.colorNode = vec3(maxVal, maxVal, maxVal)
-
-    this._dilateScene = new Scene()
-    this._dilateScene.add(new Mesh(new PlaneGeometry(2, 2), dilateMat))
+    this._dilateMat = new MeshBasicNodeMaterial()
+    this._dilateMat.colorNode = vec3(maxVal, maxVal, maxVal)
 
     // ---- Simple max-filter dilation (for cove mask — no color classification) ----
-    this._simpleDilateDir = uniform(new Vector2(1, 0))
     const sDilateTexNode = texture(this._rtCove.texture)
     this._simpleDilateTexNode = sDilateTexNode
     const sDilateUV = uv()
     const sDilateRadius = 14
     let sMaxVal = sDilateTexNode.sample(sDilateUV).r
     for (let i = 1; i <= sDilateRadius; i++) {
-      const off = vec2(this._simpleDilateDir.x, this._simpleDilateDir.y).mul(texelSize.mul(i))
+      const off = vec2(this._dilateDir.x, this._dilateDir.y).mul(texelSize.mul(i))
       sMaxVal = sMaxVal.max(sDilateTexNode.sample(sDilateUV.add(off)).r)
       sMaxVal = sMaxVal.max(sDilateTexNode.sample(sDilateUV.sub(off)).r)
     }
-    const sDilateMat = new MeshBasicNodeMaterial()
-    sDilateMat.colorNode = vec3(sMaxVal, sMaxVal, sMaxVal)
-    this._simpleDilateScene = new Scene()
-    this._simpleDilateScene.add(new Mesh(new PlaneGeometry(2, 2), sDilateMat))
+    this._simpleDilateMat = new MeshBasicNodeMaterial()
+    this._simpleDilateMat.colorNode = vec3(sMaxVal, sMaxVal, sMaxVal)
 
     // ---- Blur material (separable box blur) ----
     // Radius 12 → 25-tap kernel, each pass spreads ~12px ≈ 1.05 WU
-    // 2 H+V pairs → 2×12 = 24px reach ≈ 2.1 WU ≈ ~1 tile
     this._blurDir = uniform(new Vector2(1, 0))
     const blurTexNode = texture(this._rtA.texture)
     this._blurTexNode = blurTexNode
@@ -132,58 +120,47 @@ export class WavesMask {
     }
     sum = sum.div(blurRadius * 2 + 1)
 
-    const blurMat = new MeshBasicNodeMaterial()
-    blurMat.colorNode = vec3(sum.r, sum.g, sum.b)
-
-    this._blurScene = new Scene()
-    this._blurScene.add(new Mesh(new PlaneGeometry(2, 2), blurMat))
-
-    // ---- Copy material (passthrough) ----
-    const copyTexNode = texture(this._rtB.texture)
-    this._copyTexNode = copyTexNode
-    const copyMat = new MeshBasicNodeMaterial()
-    copyMat.colorNode = copyTexNode.sample(uv())
-
-    this._copyScene = new Scene()
-    this._copyScene.add(new Mesh(new PlaneGeometry(2, 2), copyMat))
+    this._blurMat = new MeshBasicNodeMaterial()
+    this._blurMat.colorNode = vec3(sum.r, sum.g, sum.b)
 
     // ---- Debug materials (gradient from _rtA, cove from _rtCove) ----
     const dbgFlipUV = vec2(uv().x, float(1).sub(uv().y))
 
-    const dbgTexNode = texture(this._rtA.texture)
-    const dbgMat = new MeshBasicNodeMaterial()
-    dbgMat.colorNode = dbgTexNode.sample(dbgFlipUV)
-    dbgMat.depthTest = false
-    dbgMat.depthWrite = false
-    this._debugScene = new Scene()
-    this._debugScene.add(new Mesh(new PlaneGeometry(2, 2), dbgMat))
+    this._dbgMat = new MeshBasicNodeMaterial()
+    this._dbgMat.colorNode = texture(this._rtA.texture).sample(dbgFlipUV)
+    this._dbgMat.depthTest = false
+    this._dbgMat.depthWrite = false
 
-    const dbgCoveTexNode = texture(this._rtCove.texture)
-    const dbgCoveMat = new MeshBasicNodeMaterial()
-    dbgCoveMat.colorNode = dbgCoveTexNode.sample(dbgFlipUV)
-    dbgCoveMat.depthTest = false
-    dbgCoveMat.depthWrite = false
-    this._debugCoveScene = new Scene()
-    this._debugCoveScene.add(new Mesh(new PlaneGeometry(2, 2), dbgCoveMat))
+    this._dbgCoveMat = new MeshBasicNodeMaterial()
+    this._dbgCoveMat.colorNode = texture(this._rtCove.texture).sample(dbgFlipUV)
+    this._dbgCoveMat.depthTest = false
+    this._dbgCoveMat.depthWrite = false
 
-    // ---- Cove overlay (white hexes at cove cells, rendered to separate RT) ----
-    this._coveCutoff = 0.978  // min covyness to highlight (0–3 range)
-    this._coveRadius = 2.041  // probe distance in hex steps
-    this._coveBlur = 3       // blur iterations for cove mask
+    // ---- Cove overlay (white hexes at concave cells, rendered to separate RT) ----
+    this._coveCutoff = 0.978
+    this._coveRadius = 2.041
+    this._coveBlur = 3
     this._lastGlobalCells = null
     this._coveMat = new MeshBasicNodeMaterial()
     this._coveMat.colorNode = vec3(float(1), float(1), float(1))
     this._coveMat.depthTest = false
     this._coveMat.depthWrite = false
-    // Pointy-top hex: radius = HEX_WIDTH / √3, thetaStart = π/6 for pointy-top orientation
     const hexRadius = 2 / Math.sqrt(3)
     this._coveGeom = new CircleGeometry(hexRadius, 6, Math.PI / 6)
     this._coveGeom.rotateX(-Math.PI / 2)
+    this._covePool = []
     this._coveScene = new Scene()
 
     // ---- Solid blue material (for water plane in mask render) ----
     this._blueMat = new MeshBasicNodeMaterial()
     this._blueMat.colorNode = vec3(0, 0, float(1))
+  }
+
+  /** Swap material on shared quad and render to target */
+  _renderPass(material, target) {
+    this._quad.material = material
+    this.renderer.setRenderTarget(target)
+    this.renderer.render(this._quadScene, this._postCam)
   }
 
   /**
@@ -196,23 +173,21 @@ export class WavesMask {
    */
   render(mainScene, showMeshes = [], waterPlane = null, globalCells = null) {
     console.log('%c[waves]%c render', 'color:blue', 'color:black')
-    const { renderer, _sceneCam, _rtA, _rtB, _blurCam } = this
+    const { renderer, _sceneCam, _rtA, _rtB } = this
 
-    // ---- Step 1: render tiles + blue water plane top-down to rtA ----
+    // ---- Step 1: render tiles + blue water plane top-down to _rtA ----
     const savedBackground = mainScene.background
     const savedClearColor = renderer.getClearColor(new Color())
     const savedClearAlpha = renderer.getClearAlpha()
 
     mainScene.background = null
 
-    // Temporarily swap water plane material to solid blue
     let savedWaterMat = null
     if (waterPlane) {
       savedWaterMat = waterPlane.material
       waterPlane.material = this._blueMat
     }
 
-    // Hide everything, then show only tile meshes + water plane
     const showSet = new Set(showMeshes)
     if (waterPlane) showSet.add(waterPlane)
     const savedVis = new Map()
@@ -228,27 +203,20 @@ export class WavesMask {
     renderer.clear()
     renderer.render(mainScene, _sceneCam)
 
-    // Restore scene state
     mainScene.background = savedBackground
     for (const [obj, vis] of savedVis) obj.visible = vis
     if (waterPlane && savedWaterMat) waterPlane.material = savedWaterMat
 
-    // ---- Step 2: Dilation ----
+    // ---- Step 2: Dilation (H+V) ----
     this._dilateTexNode.value = _rtA.texture
     this._dilateDir.value.set(1, 0)
-    renderer.setRenderTarget(_rtB)
-    renderer.render(this._dilateScene, _blurCam)
+    this._renderPass(this._dilateMat, _rtB)
 
     this._dilateTexNode.value = _rtB.texture
     this._dilateDir.value.set(0, 1)
-    renderer.setRenderTarget(_rtA)
-    renderer.render(this._dilateScene, _blurCam)
+    this._renderPass(this._dilateMat, _rtA)
 
-    // ---- Step 3: Save dilated state, blur gradient ----
-    this._copyTexNode.value = _rtA.texture
-    renderer.setRenderTarget(this._rtDilated)
-    renderer.render(this._copyScene, _blurCam)
-
+    // ---- Step 3: Blur gradient ----
     this._blurPingPong(_rtA)
 
     // ---- Step 4: Cove mask (separate RT) ----
@@ -261,7 +229,7 @@ export class WavesMask {
 
   /** Render debug viewports: gradient (left) and cove mask (right) */
   renderDebug() {
-    const { renderer, _blurCam, _debugScene, _debugCoveScene } = this
+    const { renderer, _postCam } = this
     const vp = new Vector4()
     renderer.getViewport(vp)
     const savedAutoClear = renderer.autoClear
@@ -276,12 +244,14 @@ export class WavesMask {
     renderer.setViewport(0, y, dbgSize, dbgSize)
     renderer.setScissor(0, y, dbgSize, dbgSize)
     renderer.setScissorTest(true)
-    renderer.render(_debugScene, _blurCam)
+    this._quad.material = this._dbgMat
+    renderer.render(this._quadScene, _postCam)
 
     // Right: cove mask (_rtCove)
     renderer.setViewport(dbgSize, y, dbgSize, dbgSize)
     renderer.setScissor(dbgSize, y, dbgSize, dbgSize)
-    renderer.render(_debugCoveScene, _blurCam)
+    this._quad.material = this._dbgCoveMat
+    renderer.render(this._quadScene, _postCam)
 
     renderer.setScissorTest(false)
     renderer.autoClear = savedAutoClear
@@ -301,45 +271,43 @@ export class WavesMask {
   /**
    * Run separable box blur on the given RT (ping-pong with _rtB).
    * Result ends up back in the source RT.
-   * @param {RenderTarget} srcRT
-   * @param {number} [iterations=2]
    */
   _blurPingPong(srcRT, iterations = 2) {
-    const { renderer, _rtB, _blurCam } = this
-
     for (let i = 0; i < iterations; i++) {
-      // Horizontal: src → _rtB
       this._blurTexNode.value = srcRT.texture
       this._blurDir.value.set(1, 0)
-      renderer.setRenderTarget(_rtB)
-      renderer.render(this._blurScene, _blurCam)
+      this._renderPass(this._blurMat, this._rtB)
 
-      // Vertical: _rtB → src
-      this._blurTexNode.value = _rtB.texture
+      this._blurTexNode.value = this._rtB.texture
       this._blurDir.value.set(0, 1)
-      renderer.setRenderTarget(srcRT)
-      renderer.render(this._blurScene, _blurCam)
+      this._renderPass(this._blurMat, srcRT)
     }
   }
 
-  /**
-   * Render white cove hexes to _rtCove, then blur it independently.
-   */
+  /** Render white cove hexes to _rtCove, then dilate and blur independently. */
   _renderCoveAndBlur(globalCells) {
     if (!globalCells || globalCells.size === 0) return
-    const { renderer, _rtCove, _sceneCam, _blurCam } = this
-
-    // Clear previous cove meshes
-    while (this._coveScene.children.length) this._coveScene.remove(this._coveScene.children[0])
+    const { renderer, _rtCove, _sceneCam } = this
 
     const coveCells = this._computeCoveCells(globalCells)
-    for (const { worldX, worldZ } of coveCells) {
+
+    // Grow pool if needed
+    while (this._covePool.length < coveCells.length) {
       const mesh = new Mesh(this._coveGeom, this._coveMat)
-      mesh.position.set(worldX, 50, worldZ)
+      mesh.visible = false
+      this._covePool.push(mesh)
       this._coveScene.add(mesh)
     }
 
-    // Render white hexes to _rtCove (cleared to black)
+    // Update positions and visibility
+    for (let i = 0; i < coveCells.length; i++) {
+      this._covePool[i].position.set(coveCells[i].worldX, 50, coveCells[i].worldZ)
+      this._covePool[i].visible = true
+    }
+    for (let i = coveCells.length; i < this._covePool.length; i++) {
+      this._covePool[i].visible = false
+    }
+
     renderer.setRenderTarget(_rtCove)
     renderer.setClearColor(0x000000, 1)
     renderer.clear()
@@ -347,18 +315,16 @@ export class WavesMask {
       renderer.render(this._coveScene, _sceneCam)
     }
 
-    // Dilate outward first (expand white into surrounding black), then blur to smooth
+    // Dilate outward (expand white into surrounding black)
     this._simpleDilateTexNode.value = _rtCove.texture
-    this._simpleDilateDir.value.set(1, 0)
-    renderer.setRenderTarget(this._rtB)
-    renderer.render(this._simpleDilateScene, _blurCam)
+    this._dilateDir.value.set(1, 0)
+    this._renderPass(this._simpleDilateMat, this._rtB)
 
     this._simpleDilateTexNode.value = this._rtB.texture
-    this._simpleDilateDir.value.set(0, 1)
-    renderer.setRenderTarget(_rtCove)
-    renderer.render(this._simpleDilateScene, _blurCam)
+    this._dilateDir.value.set(0, 1)
+    this._renderPass(this._simpleDilateMat, _rtCove)
 
-    // Blur _rtCove independently (ping-pong with _rtB)
+    // Blur to smooth edges
     if (this._coveBlur > 0) this._blurPingPong(_rtCove, this._coveBlur)
 
     console.log(`%c[cove]%c ${coveCells.length} cove cells (cutoff=${this._coveCutoff}, radius=${this._coveRadius})`, 'color:green', 'color:black')
@@ -367,24 +333,18 @@ export class WavesMask {
   /**
    * Compute which water cells are "covy" — enclosed by land on opposing sides.
    * Probes 6 axial directions, then scores 3 opposing pairs (NE↔SW, E↔W, SE↔NW).
-   * Pair score = min(dirA_weight, dirB_weight), so a pair only scores high when
-   * both sides have nearby land. Straight coasts score ~0. Range: 0.0–3.0.
-   * @param {Map} globalCells - cube coord key → {q, r, s, type, ...}
-   * @returns {{worldX: number, worldZ: number, covyness: number}[]}
+   * Pair score = min(dirA_weight, dirB_weight). Range: 0.0–3.0.
    */
   _computeCoveCells(globalCells) {
     const cutoff = this._coveCutoff
     const radius = this._coveRadius
     const maxSteps = Math.ceil(radius)
-    // CUBE_DIRS: 0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW
-    // Opposing pairs: 0↔3, 1↔4, 2↔5
     const pairs = [[0, 3], [1, 4], [2, 5]]
     const results = []
 
     for (const cell of globalCells.values()) {
       if (cell.type !== TileType.OCEAN) continue
 
-      // Probe all 6 directions, store proximity weight per direction
       const weights = new Float32Array(6)
       for (let d = 0; d < 6; d++) {
         const dir = CUBE_DIRS[d]
@@ -394,14 +354,14 @@ export class WavesMask {
           const ns = cell.s + dir.ds * step
           const neighbor = globalCells.get(cubeKey(nq, nr, ns))
 
-          if (!neighbor || neighbor.type !== TileType.OCEAN) {
+          if (!neighbor) continue  // off map edge = open water
+          if (neighbor.type !== TileType.OCEAN) {
             weights[d] = Math.max(0, 1 - (step - 1) / radius)
             break
           }
         }
       }
 
-      // Score opposing pairs: min of both sides
       let covyness = 0
       for (const [a, b] of pairs) {
         covyness += Math.min(weights[a], weights[b])
