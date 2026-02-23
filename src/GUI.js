@@ -614,6 +614,7 @@ export class GUIManager {
     if (app.city._coveFade) app.city._coveFade.value = params.waves.coveFade ? 1 : 0
     if (app.city._coveThin) app.city._coveThin.value = params.waves.coveThin ? 1 : 0
     if (app.city._coveShow) app.city._coveShow.value = params.waves.coveShow ? 1 : 0
+    if (app.wavesMask) app.wavesMask.showDebug = params.waves.showMask
 
     // Renderer
     app.renderer.setPixelRatio(params.renderer.dpr)
