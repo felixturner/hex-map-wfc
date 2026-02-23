@@ -1,5 +1,5 @@
 import { Object3D, BatchedMesh } from 'three/webgpu'
-import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, LEVELS_COUNT } from './HexTileData.js'
+import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, rotateHexEdges, LEVELS_COUNT } from './HexTileData.js'
 import { HexTileGeometry } from './HexTiles.js'
 import { random, shuffle } from '../SeededRandom.js'
 import gsap from 'gsap'
@@ -9,7 +9,7 @@ import {
   getCurrentTreeThreshold,
   weightedPick, hasRoadEdge, isCoastOrOcean, getRoadDeadEndInfo,
   TreesByType, TreeMeshNames,
-  BuildingDefs, RuralBuildingDefs, BuildingMeshNames, RuralBuildingMeshNames,
+  BuildingDefs, RuralBuildingDefs, CoastBuildingDefs, BuildingMeshNames, RuralBuildingMeshNames, CoastBuildingMeshNames,
   TOWER_TOP_MESH, TOWER_TOP_CHANCE,
   WindmillMeshNames, WINDMILL_TOP_OFFSET, WINDMILL_FAN_OFFSET,
   BridgeMeshNames, WaterlilyMeshNames, FlowerMeshNames, RockMeshNames,
@@ -35,6 +35,7 @@ export class Decorations {
       ...BuildingMeshNames,
       TOWER_TOP_MESH,
       ...RuralBuildingMeshNames,
+      ...CoastBuildingMeshNames,
       ...WindmillMeshNames,
       ...BridgeMeshNames,
       ...WaterlilyMeshNames,
@@ -47,7 +48,7 @@ export class Decorations {
     // Windmill fan needs centering
     const centeredMeshes = new Set(['building_windmill_top_fan_yellow'])
     // Tower top keeps its original Y (sits on top of tower base)
-    const keepYMeshes = new Set([TOWER_TOP_MESH])
+    const keepYMeshes = new Set([TOWER_TOP_MESH, ...BuildingMeshNames, ...CoastBuildingMeshNames, ...WindmillMeshNames])
 
     for (const meshName of allMeshNames) {
       let geom = null
@@ -191,7 +192,7 @@ export class Decorations {
 
     // staticMesh: buildings + bridges + waterlilies + rocks + hills + mountains (material — no sway)
     const staticNames = [
-      ...BuildingMeshNames, TOWER_TOP_MESH, ...RuralBuildingMeshNames, ...WindmillMeshNames,
+      ...BuildingMeshNames, TOWER_TOP_MESH, ...RuralBuildingMeshNames, ...CoastBuildingMeshNames, ...WindmillMeshNames,
       ...BridgeMeshNames, ...WaterlilyMeshNames, ...RockMeshNames,
       ...HillMeshNames, ...MountainMeshNames,
     ]
@@ -479,6 +480,36 @@ export class Decorations {
         this.windmillFans.push(fan)
       }
     }
+
+    // Place shipyard on coast tiles, stepped to hex direction, max 1 per grid
+    const coastBuildingNames = [...CoastBuildingMeshNames].filter(n => this.staticGeomIds.has(n))
+    if (coastBuildingNames.length > 0) {
+      const shipyardCandidates = []
+      for (const tile of hexTiles) {
+        const def = TILE_LIST[tile.type]
+        if (!def || !def.name.startsWith('COAST_')) continue
+        const edges = rotateHexEdges(def.edges, tile.rotation)
+        // Find first ocean-facing hex direction for stepped angle
+        for (const dir of HexDir) {
+          if (edges[dir] === 'ocean') {
+            shipyardCandidates.push({ tile, waterAngle: dirToAngle[dir] })
+            break
+          }
+        }
+      }
+      shuffle(shipyardCandidates)
+      if (shipyardCandidates.length > 0) {
+        const { tile, waterAngle } = shipyardCandidates[0]
+        const localPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
+        const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
+        const meshName = weightedPick(CoastBuildingDefs)
+        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, waterAngle, 1, tile.level)
+        if (instanceId !== -1) {
+          this.buildings.push({ tile, meshName, instanceId, rotationY: waterAngle })
+        }
+      }
+    }
+
   }
 
   populateBridges(hexTiles, gridRadius) {

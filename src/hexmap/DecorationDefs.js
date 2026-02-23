@@ -118,6 +118,8 @@ export const BuildingDefs = [
   { name: 'building_tower_A_yellow', weight: 2 },
   { name: 'building_townhall_yellow', weight: 1 },
   { name: 'building_well_yellow', weight: 3 },
+  { name: 'building_market_yellow', weight: 5 },
+  { name: 'building_blacksmith_yellow', weight: 5 },
 ]
 
 // Rural buildings — placed away from roads on flat grass
@@ -125,8 +127,14 @@ export const RuralBuildingDefs = [
   // { name: 'building_shrine_yellow', weight: 1 },
 ]
 
+// Coast buildings — placed on coast-adjacent grass, facing water (like windmills)
+export const CoastBuildingDefs = [
+  { name: 'building_shipyard_yellow', weight: 1 },
+]
+
 export const BuildingMeshNames = BuildingDefs.map(b => b.name)
 export const RuralBuildingMeshNames = RuralBuildingDefs.map(b => b.name)
+export const CoastBuildingMeshNames = CoastBuildingDefs.map(b => b.name)
 
 // Tower top (optional sub-mesh, placed on top of tower 50% of the time)
 export const TOWER_TOP_MESH = 'building_tower_A_top_yellow'
