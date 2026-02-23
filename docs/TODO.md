@@ -1,5 +1,7 @@
 # TODO
 
+- check seed #88956 has 2x level 3 road dead-ends into ocean?
+
 - figure out why build all is failing more now who knows? not related to ocean tiles. run more tests
 
 - make intro screen? audio? start btn wait for audio
@@ -14,9 +16,7 @@
   - do weather scaling to lock min/max rain/snow sizes on zoom.
 
 
-####
 
-- push. record video. make blog post: shadow map, waves + coveyness. sparkles - img is chepaer and better. wfc recovery.
 
 
 - WORLD FEATURES
@@ -24,6 +24,10 @@
   - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
   - Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
   - use just seed some map edges with ocean/ mountains?
+
+- push. record video. make blog post: shadow map, waves + coveyness. sparkles - img is chepaer and better. wfc recovery.
+
+####
 
 # MORE DEC
 - boats and ports

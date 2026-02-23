@@ -113,6 +113,13 @@ export class HexMap {
     // Regeneration state (prevents overlay rendering during disposal)
     this.isRegenerating = false
     this._buildCancelled = false
+    this._buildEpoch = 0
+
+    // WFC solve queue (prevents concurrent solves)
+    this._wfcBusy = false
+    this._wfcQueue = []
+    this._wfcIdleResolve = null
+    this._autoExpanding = false
 
     // Convenience alias
     this.hexWfcRules = null
@@ -382,7 +389,13 @@ export class HexMap {
     const grid = new HexGrid(this.scene, this.roadMaterial, this.hexGridRadius, worldOffset, this.treeMaterial)
     grid.gridCoords = { x: gridX, z: gridZ }
     grid.globalCenterCube = globalCenterCube
-    grid.onClick = () => this.onGridClick(grid)
+    grid.onClick = () => {
+      if (this._autoExpanding) return
+      if (grid._clickQueued) return  // already queued, ignore duplicate clicks
+      grid._clickQueued = true
+      grid.placeholder?.startSpinning()
+      this._enqueueWfc(() => this.onGridClick(grid))
+    }
 
     await grid.init(null, { hidden })  // Placeholder only — meshes init lazily or in batch
 
@@ -993,17 +1006,22 @@ export class HexMap {
    * @param {Array<[number,number]>} order - Array of [gridX, gridZ] pairs
    */
   async autoExpand(order) {
+    const myEpoch = ++this._buildEpoch
     this._buildCancelled = false
-    const startTime = performance.now()
     this._autoExpanding = true
+    this._wfcQueue.length = 0  // clear any pending clicks
+    await this._waitForWfcIdle()
+    this._wfcBusy = true  // hold the lock for the entire build
+
+    const startTime = performance.now()
     for (let i = 0; i < order.length; i++) {
       const [gx, gz] = order[i]
-      if (this._buildCancelled) {
+      if (this._buildCancelled || this._buildEpoch !== myEpoch) {
         this._autoExpanding = false
+        this._releaseWfcLock()
         log('[AUTO-BUILD] Cancelled', 'color: red')
         return
       }
-      if (i === order.length - 1) this._autoExpanding = false
       const key = getGridKey(gx, gz)
       let grid = this.grids.get(key)
       if (!grid) {
@@ -1014,6 +1032,8 @@ export class HexMap {
         await this.onGridClick(grid, { skipPrune: true })
       }
     }
+    this._autoExpanding = false
+    this._releaseWfcLock()
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1)
     const stats = [
       `${elapsed}s`,
@@ -1031,7 +1051,12 @@ export class HexMap {
    * @param {Object} options - { animate, animateDelay }
    */
   async populateAllGrids(expansionCoords = null, options = {}) {
+    ++this._buildEpoch
     this._buildCancelled = false
+    this._autoExpanding = true
+    this._wfcQueue.length = 0
+    await this._waitForWfcIdle()
+    this._wfcBusy = true
     if (!expansionCoords) {
       expansionCoords = getAllGridCoordinates().filter(([q, gz]) => q !== 0 || gz !== 0)
     }
@@ -1118,11 +1143,15 @@ export class HexMap {
     })
 
     if (this._buildCancelled) {
+      this._autoExpanding = false
+      this._releaseWfcLock()
       log('[BUILD ALL] Cancelled', 'color: red')
       return { success: false, cancelled: true }
     }
 
     if (!result.success) {
+      this._autoExpanding = false
+      this._releaseWfcLock()
       log('[BUILD ALL] WFC FAILED', 'color: red')
       const { Sounds } = await import('../lib/Sounds.js')
       Sounds.play('incorrect')
@@ -1197,6 +1226,8 @@ export class HexMap {
       this.createTileLabels()
     }
 
+    this._autoExpanding = false
+    this._releaseWfcLock()
     const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
     log(`[BUILD ALL] Complete (${totalTime}s total)`, 'color: green')
     await setStatusAsync(`[BUILD ALL] Complete (${totalTime}s)`)
@@ -1289,6 +1320,102 @@ export class HexMap {
     return { x: totalX, z: totalZ }
   }
 
+  // ---- WFC solve queue (serializes all WFC operations) ----
+
+  /**
+   * Enqueue an async WFC operation. Only one runs at a time.
+   * Rejects silently during build seq (_autoExpanding).
+   */
+  _enqueueWfc(fn) {
+    if (this._autoExpanding) return
+    if (this._wfcBusy) {
+      this._wfcQueue.push(fn)
+      return
+    }
+    this._drainWfcQueue(fn)
+  }
+
+  async _drainWfcQueue(fn) {
+    this._wfcBusy = true
+    try { await fn() } catch (e) { console.error('[WFC Queue]', e) }
+    while (this._wfcQueue.length > 0) {
+      if (this._autoExpanding) { this._wfcQueue.length = 0; break }
+      const next = this._wfcQueue.shift()
+      try { await next() } catch (e) { console.error('[WFC Queue]', e) }
+    }
+    this._releaseWfcLock()
+  }
+
+  /** Returns a promise that resolves when the queue is idle */
+  _waitForWfcIdle() {
+    if (!this._wfcBusy) return Promise.resolve()
+    return new Promise(resolve => { this._wfcIdleResolve = resolve })
+  }
+
+  /** Release the WFC lock and notify anyone waiting */
+  _releaseWfcLock() {
+    this._wfcBusy = false
+    if (this._wfcIdleResolve) {
+      this._wfcIdleResolve()
+      this._wfcIdleResolve = null
+    }
+  }
+
+  // ---- Click-solve (mini WFC on tile click in build mode) ----
+
+  queueClickSolve(globalCubeCoords, global, def) {
+    if (this._autoExpanding) return
+    this._enqueueWfc(() => this._runClickSolve({ globalCubeCoords, global, def }))
+  }
+
+  async _runClickSolve({ globalCubeCoords, global, def }) {
+    log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} — mini WFC solve`, 'color: blue')
+
+    const solveCells = cubeCoordsInRadius(
+      globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s, 2
+    ).filter(c => this.globalCells.has(cubeKey(c.q, c.r, c.s)))
+
+    const fixedCells = this.getFixedCellsForRegion(solveCells)
+    const tileTypes = this.getDefaultTileTypes()
+
+    const result = await this.solveWfcAsync(solveCells, fixedCells, {
+      tileTypes,
+      maxRestarts: 5,
+    })
+
+    if (result.success && result.tiles) {
+      const changedTilesPerGrid = this.applyTileResultsToGrids(result.tiles)
+
+      const TILE_STAGGER = 60
+      const DEC_DELAY = 400
+      const DEC_STAGGER = 40
+      for (const [g, tiles] of changedTilesPerGrid) {
+        tiles.forEach((t, i) => {
+          setTimeout(() => g.animateTileDrop(t), i * TILE_STAGGER)
+        })
+        const newDecs = g.decorations?.repopulateTilesAt(tiles, g.gridRadius, g.hexGrid)
+        if (newDecs && newDecs.length > 0) {
+          const decStart = tiles.length * TILE_STAGGER + DEC_DELAY
+          newDecs.forEach((dec, j) => {
+            setTimeout(() => g.animateDecoration(dec), decStart + j * DEC_STAGGER)
+          })
+        }
+      }
+
+      this.addToGlobalCells('click-resolve', result.tiles)
+      const animDuration = changedTilesPerGrid.size > 0
+        ? Math.max(...[...changedTilesPerGrid.values()].map(t => t.length)) * TILE_STAGGER
+        : 0
+      this.onTilesChanged?.(animDuration)
+
+      log(`[TILE RESOLVE] (${global.col},${global.row}) solved ${result.tiles.length} tiles`, 'color: green')
+      Sounds.play('pop', 1.0, 0.15)
+    } else {
+      log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} — mini WFC failed`, 'color: red')
+      Sounds.play('incorrect')
+    }
+  }
+
   // ---- HexMapInteraction delegators ----
   onPointerMove(pointer, camera) { this.interaction.onPointerMove(pointer, camera) }
   onPointerDown(pointer, camera) { return this.interaction.onPointerDown(pointer, camera) }
@@ -1329,7 +1456,11 @@ export class HexMap {
   }
 
   async reset() {
+    ++this._buildEpoch
     this._buildCancelled = true
+    this._autoExpanding = false
+    this._wfcQueue.length = 0
+    await this._waitForWfcIdle()
     this.isRegenerating = true
 
     this.globalCells.clear()
@@ -1362,6 +1493,11 @@ export class HexMap {
   }
 
   async regenerateAll(options = {}) {
+    this._autoExpanding = false
+    this._wfcQueue.length = 0
+    await this._waitForWfcIdle()
+    this._wfcBusy = true
+
     // Set flag to prevent overlay rendering during disposal
     this.isRegenerating = true
 
@@ -1409,6 +1545,7 @@ export class HexMap {
 
     // Clear regeneration flag
     this.isRegenerating = false
+    this._releaseWfcLock()
   }
 
   update(dt) {

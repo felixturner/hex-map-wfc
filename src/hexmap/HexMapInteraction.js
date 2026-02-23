@@ -143,7 +143,8 @@ export class HexMapInteraction {
       if (intersects.length > 0) {
         const clickable = intersects[0].object
         if (clickable.userData.isPlaceholder) {
-          newHovered = clickable.userData.owner?.group?.userData?.hexGrid ?? null
+          const candidate = clickable.userData.owner?.group?.userData?.hexGrid ?? null
+          newHovered = candidate?._clickQueued ? null : candidate
         }
       }
     }
@@ -214,7 +215,7 @@ export class HexMapInteraction {
         const clickable = intersects[0].object
         if (clickable.userData.isPlaceholder) {
           const ownerGrid = clickable.userData.owner?.group?.userData?.hexGrid
-          if (ownerGrid && ownerGrid.onClick) {
+          if (ownerGrid && ownerGrid.onClick && !ownerGrid._clickQueued) {
             Sounds.play('pop', 1.0, 0.2, 0.7)
             ownerGrid.onClick()
             return true
@@ -223,7 +224,35 @@ export class HexMapInteraction {
       }
     }
 
-    if (!App.instance?.buildMode) return false
+    // In move mode, log tile info on click
+    if (!App.instance?.buildMode) {
+      const hexMeshes = []
+      const meshToGrid = new Map()
+      for (const grid of hm.grids.values()) {
+        if (grid.state === HexGridState.POPULATED && grid.hexMesh) {
+          hexMeshes.push(grid.hexMesh)
+          meshToGrid.set(grid.hexMesh, grid)
+        }
+      }
+      if (hexMeshes.length > 0) {
+        const intersects = this.raycaster.intersectObjects(hexMeshes)
+        if (intersects.length > 0) {
+          const hit = intersects[0]
+          const grid = meshToGrid.get(hit.object)
+          const batchId = hit.batchId ?? hit.instanceId
+          if (grid && batchId !== undefined) {
+            const tile = grid.hexTiles.find(t => t.instanceId === batchId)
+            if (tile) {
+              const def = TILE_LIST[tile.type]
+              const globalCube = grid.globalCenterCube ?? { q: 0, r: 0, s: 0 }
+              const global = localToGlobalCoords(tile.gridX, tile.gridZ, grid.gridRadius, globalCube)
+              log(`[TILE INFO] (${global.col},${global.row}) ${def?.name || '?'} type=${tile.type} rot=${tile.rotation} level=${tile.level}`, 'color: blue')
+            }
+          }
+        }
+      }
+      return false
+    }
 
     const hexMeshes = []
     const meshToGrid = new Map()
@@ -247,51 +276,7 @@ export class HexMapInteraction {
             const global = localToGlobalCoords(tile.gridX, tile.gridZ, grid.gridRadius, globalCube)
             const globalCubeCoords = offsetToCube(global.col, global.row)
 
-            log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} type=${tile.type} rot=${tile.rotation} — mini WFC solve`, 'color: blue')
-
-            const solveCells = cubeCoordsInRadius(
-              globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s, 2
-            ).filter(c => hm.globalCells.has(cubeKey(c.q, c.r, c.s)))
-
-            const fixedCells = hm.getFixedCellsForRegion(solveCells)
-            const tileTypes = hm.getDefaultTileTypes()
-
-            hm.solveWfcAsync(solveCells, fixedCells, {
-              tileTypes,
-              maxRestarts: 5,
-            }).then(result => {
-              if (result.success && result.tiles) {
-                const changedTilesPerGrid = hm.applyTileResultsToGrids(result.tiles)
-
-                const TILE_STAGGER = 60
-                const DEC_DELAY = 400
-                const DEC_STAGGER = 40
-                for (const [g, tiles] of changedTilesPerGrid) {
-                  tiles.forEach((t, i) => {
-                    setTimeout(() => g.animateTileDrop(t), i * TILE_STAGGER)
-                  })
-                  const newDecs = g.decorations?.repopulateTilesAt(tiles, g.gridRadius, g.hexGrid)
-                  if (newDecs && newDecs.length > 0) {
-                    const decStart = tiles.length * TILE_STAGGER + DEC_DELAY
-                    newDecs.forEach((dec, j) => {
-                      setTimeout(() => g.animateDecoration(dec), decStart + j * DEC_STAGGER)
-                    })
-                  }
-                }
-
-                hm.addToGlobalCells('click-resolve', result.tiles)
-                const animDuration = changedTilesPerGrid.size > 0
-                  ? Math.max(...[...changedTilesPerGrid.values()].map(t => t.length)) * TILE_STAGGER
-                  : 0
-                hm.onTilesChanged?.(animDuration)
-
-                log(`[TILE RESOLVE] (${global.col},${global.row}) solved ${result.tiles.length} tiles`, 'color: green')
-                import('../lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0.15))
-              } else {
-                log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} — mini WFC failed`, 'color: red')
-                import('../lib/Sounds.js').then(({ Sounds }) => Sounds.play('incorrect'))
-              }
-            })
+            hm.queueClickSolve(globalCubeCoords, global, def)
           }
         }
       }

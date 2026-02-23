@@ -391,6 +391,7 @@ export class Decorations {
     const candidates = [...deadEndCandidates, ...roadAdjacentCandidates]
 
     // Place road buildings (no windmills — those are coast-only)
+    let hasChurch = false
     for (let i = 0; i < Math.min(maxBuildings, candidates.length); i++) {
       const { tile, roadAngle } = candidates[i]
 
@@ -400,9 +401,11 @@ export class Decorations {
       )
       const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
 
-      const meshName = weightedPick(BuildingDefs)
+      let meshName = weightedPick(BuildingDefs)
+      if (meshName === 'building_church_yellow' && hasChurch) meshName = weightedPick(BuildingDefs)
       const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
       if (instanceId === -1) break
+      if (meshName === 'building_church_yellow') hasChurch = true
       this.buildings.push({ tile, meshName, instanceId, rotationY: roadAngle })
 
       // Optionally place tower top
@@ -429,8 +432,8 @@ export class Decorations {
       }
     }
 
-    // Place windmills on coast-adjacent grass tiles, facing the water
-    if (hasWindmill && coastWindmillCandidates.length > 0) {
+    // Place windmills on coast-adjacent grass tiles, facing the water (25% chance)
+    if (hasWindmill && coastWindmillCandidates.length > 0 && random() < 0.35) {
       const maxCoastWindmills = Math.min(1, coastWindmillCandidates.length)
       for (let i = 0; i < maxCoastWindmills; i++) {
         const { tile, roadAngle: waterAngle } = coastWindmillCandidates[i]
@@ -481,21 +484,36 @@ export class Decorations {
       }
     }
 
-    // Place shipyard on coast tiles, stepped to hex direction, max 1 per grid
+    // Place shipyard on COAST_A/COAST_C tiles, facing rotated SE direction, max 1 per grid (10% chance)
     const coastBuildingNames = [...CoastBuildingMeshNames].filter(n => this.staticGeomIds.has(n))
-    if (coastBuildingNames.length > 0) {
+    if (coastBuildingNames.length > 0 && random() < 0.20) {
       const shipyardCandidates = []
       for (const tile of hexTiles) {
         const def = TILE_LIST[tile.type]
-        if (!def || !def.name.startsWith('COAST_')) continue
-        const edges = rotateHexEdges(def.edges, tile.rotation)
-        // Find first ocean-facing hex direction for stepped angle
-        for (const dir of HexDir) {
-          if (edges[dir] === 'ocean') {
-            shipyardCandidates.push({ tile, waterAngle: dirToAngle[dir] })
-            break
-          }
+        if (!def || (def.name !== 'COAST_A' && def.name !== 'COAST_B')) continue
+        let waterAngle
+        if (def.name === 'COAST_A') {
+          // Face rotated SE direction
+          const rotatedSE = HexDir[(2 + tile.rotation) % 6]
+          waterAngle = dirToAngle[rotatedSE]
+        } else {
+          // COAST_B: face straight S relative to tile (midpoint between SE and SW)
+          const aSE = dirToAngle[HexDir[(2 + tile.rotation) % 6]]
+          const aSW = dirToAngle[HexDir[(3 + tile.rotation) % 6]]
+          waterAngle = Math.atan2(Math.sin(aSE) + Math.sin(aSW), Math.cos(aSE) + Math.cos(aSW))
         }
+        // Probe 2 tiles out in the jetty direction — reject if land (cove)
+        const probeDir = HexDir[(2 + tile.rotation) % 6]  // rotated SE
+        let blocked = false
+        let px = tile.gridX, pz = tile.gridZ
+        for (let step = 0; step < 3; step++) {
+          const { dx, dz } = getHexNeighborOffset(px, pz, probeDir)
+          px += dx; pz += dz
+          if (px < 0 || px >= size || pz < 0 || pz >= size) break
+          const probeCell = hexGrid[px]?.[pz]
+          if (!probeCell || TILE_LIST[probeCell.type]?.name !== 'OCEAN') { blocked = true; break }
+        }
+        if (!blocked) shipyardCandidates.push({ tile, waterAngle })
       }
       shuffle(shipyardCandidates)
       if (shipyardCandidates.length > 0) {
