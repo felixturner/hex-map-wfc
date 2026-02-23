@@ -327,7 +327,6 @@ export class WavesMask {
     // Blur to smooth edges
     if (this._coveBlur > 0) this._blurPingPong(_rtCove, this._coveBlur)
 
-    console.log(`%c[cove]%c ${coveCells.length} cove cells (cutoff=${this._coveCutoff}, radius=${this._coveRadius})`, 'color:green', 'color:black')
   }
 
   /**

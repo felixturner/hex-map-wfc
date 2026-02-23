@@ -264,8 +264,8 @@ export class Decorations {
 
       // Position at tile center with random offset (local coords since mesh is in group)
       const rotationY = random() * Math.PI * 2
-      const ox = (random() - 0.5) * 0.2
-      const oz = (random() - 0.5) * 0.2
+      const ox = (random() - 0.5) * 0.4
+      const oz = (random() - 0.5) * 0.4
       const c = levelColor(tile.level)
       c.b = rotationY / (Math.PI * 2)
       this.treeMesh.setColorAt(instanceId, c)
@@ -275,7 +275,7 @@ export class Decorations {
         localPos.z + oz
       )
       this.dummy.rotation.y = rotationY
-      this.dummy.scale.setScalar(1)
+      this.dummy.scale.setScalar(1 + random() * 0.2)
       this.dummy.updateMatrix()
 
       this.treeMesh.setMatrixAt(instanceId, this.dummy.matrix)
@@ -328,8 +328,10 @@ export class Decorations {
       // Only consider grass tiles for road-adjacent placement
       if (tile.type !== TileType.GRASS) continue
 
-      // Check if any hex neighbor has a road, track direction to road
+      // Check if any hex neighbors have roads, average direction to all of them
       let roadAngle = null
+      let rdx = 0, rdz = 0
+      const tilePos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
       for (const dir of HexDir) {
         const { dx, dz } = getHexNeighborOffset(tile.gridX, tile.gridZ, dir)
         const nx = tile.gridX + dx
@@ -337,14 +339,19 @@ export class Decorations {
         if (nx >= 0 && nx < size && nz >= 0 && nz < size) {
           const neighbor = hexGrid[nx]?.[nz]
           if (neighbor && hasRoadEdge(neighbor.type)) {
-            roadAngle = dirToAngle[dir]
-            break
+            const neighborPos = HexTileGeometry.getWorldPosition(nx - gridRadius, nz - gridRadius)
+            rdx += neighborPos.x - tilePos.x
+            rdz += neighborPos.z - tilePos.z
           }
         }
       }
+      if (rdx !== 0 || rdz !== 0) {
+        roadAngle = Math.atan2(rdx, rdz)
+      }
 
-      // Check if any hex neighbor is coast/ocean — windmill candidate facing the water
+      // Check if any hex neighbors are coast/ocean — average direction to all water neighbors
       let waterAngle = null
+      let wdx = 0, wdz = 0
       for (const dir of HexDir) {
         const { dx, dz } = getHexNeighborOffset(tile.gridX, tile.gridZ, dir)
         const nx = tile.gridX + dx
@@ -352,10 +359,14 @@ export class Decorations {
         if (nx >= 0 && nx < size && nz >= 0 && nz < size) {
           const neighbor = hexGrid[nx]?.[nz]
           if (neighbor && isCoastOrOcean(neighbor.type)) {
-            waterAngle = dirToAngle[dir]
-            break
+            const neighborPos = HexTileGeometry.getWorldPosition(nx - gridRadius, nz - gridRadius)
+            wdx += neighborPos.x - tilePos.x
+            wdz += neighborPos.z - tilePos.z
           }
         }
+      }
+      if (wdx !== 0 || wdz !== 0) {
+        waterAngle = Math.atan2(wdx, wdz)
       }
 
       if (waterAngle !== null && tile.level === 0) {

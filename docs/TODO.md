@@ -1,22 +1,12 @@
 # TODO
 
-- figure out why build all is failing more now
+- figure out why build all is failing more now who knows? not related to ocean tiles. run more tests
 
 - make intro screen? audio? start btn wait for audio
 - figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
 
 - tune AO / water color / colors /trees less black?
 - prebake AO in blender?
-
-- animate rotate tiles in like railway board?
-- rock drop sounds
-
-- houses look at roads not on hex angles
-- alow more zoom out
-- more offset on trees / rand scaling?
-
-
-# TWEAKS BRANCH:
 
 - fix weather
   - fix rain looks like poles
@@ -26,7 +16,7 @@
 
 ####
 
-- push. record video
+- push. record video. make blog post: shadow map, waves + coveyness. sparkles - img is chepaer and better. wfc recovery.
 
 
 - WORLD FEATURES

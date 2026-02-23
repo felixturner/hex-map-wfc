@@ -119,13 +119,13 @@ export class GUIManager {
     waves: {
       speed: 2,
       count: 4,
-      opacity: 0.2,
+      opacity: 0.35,
       break: 0.135,
       width: 0.27,
       offset: 0.3,
       gradientOpacity: 0,
       gradientColor: '#ccb233',
-      showMask: true,
+      showMask: false,
       coveCutoff: 0.978,
       coveRadius: 2.041,
       coveBlur: 2.624,
@@ -180,7 +180,7 @@ export class GUIManager {
     gui.add(allParams.debug, 'debugCam').name('Debug Cam').onChange((v) => {
       app.controls.maxPolarAngle = v ? Math.PI : 1.1
       app.controls.minDistance = v ? 0 : 25
-      app.controls.maxDistance = v ? Infinity : 125
+      app.controls.maxDistance = v ? Infinity : 410
     })
     gui.add(allParams.debug, 'hexGrid').name('Hex Grid').onChange((v) => {
       app.city.setHelpersVisible(v)
@@ -572,7 +572,7 @@ export class GUIManager {
     app.perspCamera.updateProjectionMatrix()
     app.controls.maxPolarAngle = params.debug.debugCam ? Math.PI : 1.1
     app.controls.minDistance = params.debug.debugCam ? 0 : 25
-    app.controls.maxDistance = params.debug.debugCam ? Infinity : 125
+    app.controls.maxDistance = params.debug.debugCam ? Infinity : 410
     if (app.axesHelper) app.axesHelper.visible = params.debug.originHelper
     app.city.setAxesHelpersVisible(params.debug.originHelper)
 

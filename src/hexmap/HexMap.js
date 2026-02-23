@@ -1010,6 +1010,7 @@ export class HexMap {
         grid = await this.createGrid(gx, gz)
       }
       if (grid.state === HexGridState.PLACEHOLDER) {
+        Sounds.play('pop', 1.0, 0.2, 0.7)
         await this.onGridClick(grid, { skipPrune: true })
       }
     }
@@ -1021,6 +1022,7 @@ export class HexMap {
       `${this.failedCells.size} conflicts`,
     ]
     log(`[AUTO-BUILD] Done (${stats.join(', ')})`, 'color: green')
+    Sounds.play('intro')
   }
 
   /**

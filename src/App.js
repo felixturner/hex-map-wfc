@@ -348,7 +348,7 @@ export class App {
     }
     // Zoom/rotation limits - defaults allow unlimited (debugCam: true)
     this.controls.minDistance = 25
-    this.controls.maxDistance = 125
+    this.controls.maxDistance = 410
     this.controls.maxPolarAngle = 1.1
     // Pan parallel to ground plane instead of screen
     this.controls.screenSpacePanning = false
