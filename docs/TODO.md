@@ -1,30 +1,27 @@
 # TODO
 
-- kill tree sway + weather
+- rather than do drop on wfc fail try a exta wfc
+- check port coveyness
 - add flyhtrough button
-- figure out why build all is failing more now? 
-- noise for buildings?
+- less churches?
 
 - make intro screen? audio? start btn wait for audio
 - figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
 
-- dial in AO / water color / colors /trees less black?
-
-- fix weather
-  - fix rain looks like poles
-  - diff speed for rain/snow
-  - do weather scaling to lock min/max rain/snow sizes on zoom.
+- dial in AO / 
+- water darker + readd coast glow?
 
 
-- WORLD FEATURES
-  - use bigger world noise fields for water, mountains + forests, cities? WIP
-  - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
-  - Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
-  - use just seed some map edges with ocean/ mountains?
-  - biome noise for texture colors?
+- figure out why build all is failing more now? 
+
+
 
 - push. record video. 
-- make blog post: shadow map, waves + coveyness. sparkles - img is chepaer and better. wfc recovery.
+  - make blog post: 
+  - shadow map, 
+  - waves + coveyness. sparkles - img is chepaer and better. 
+  - wfc recovery.
+  - tree + building noise
 - send link to codrops
 
 ####
@@ -53,7 +50,17 @@
 - Update to latest threejs
 - allow inifinite grow grids - will break water mask???
 
+- WORLD FEATURES
+  - use bigger world noise fields for water, mountains + forests, cities? WIP
+  - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
+  - Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
+  - use just seed some map edges with ocean/ mountains?
+  - biome noise for texture colors?
 
+- WEATHER
+  - fix rain looks like poles
+  - diff speed for rain/snow
+  - do weather scaling to lock min/max rain/snow sizes on zoom.
 
 - fix build order UI to dissallow surrounding a tile (harder for WFC)
 - fix lillies can get cropped by coast

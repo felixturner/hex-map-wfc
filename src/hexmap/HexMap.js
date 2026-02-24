@@ -743,9 +743,14 @@ export class HexMap {
     // Apply current helper visibility state
     grid.setHelperVisible(this.helpersVisible)
 
+    // Apply current outline visibility (populated grids respect the toggle)
+    if (grid.outline && this.debug._outlinesVisible !== undefined) {
+      grid.outline.visible = this.debug._outlinesVisible
+    }
+
     // Notify listeners that tiles changed (for coast mask rebuild)
-    // Pass animDuration so caller can wait for drop animation to finish
-    this.onTilesChanged?.(animDuration)
+    // Pass animationDone promise so caller can wait for drop animation to finish
+    this.onTilesChanged?.(grid.animationDone)
 
     return animDuration
   }
@@ -1028,7 +1033,7 @@ export class HexMap {
     // Wait for all drop animations to finish, then rebuild waves mask
     await Promise.all(animPromises)
     Sounds.play('intro')
-    this.onTilesChanged?.(0)
+    this.onTilesChanged?.(Promise.resolve())
   }
 
   /**
@@ -1206,6 +1211,9 @@ export class HexMap {
       })
 
       grid.setHelperVisible(this.helpersVisible)
+      if (grid.outline && this.debug._outlinesVisible !== undefined) {
+        grid.outline.visible = this.debug._outlinesVisible
+      }
     }
 
     // ---- Create placeholders for further expansion ----
@@ -1229,8 +1237,12 @@ export class HexMap {
     Sounds.play('good')
 
     // Notify listeners that tiles changed (for coast mask rebuild + wave fade-in)
-    const animDuration = animate ? allGridCoords.length * animateDelay * 10 : 0
-    this.onTilesChanged?.(animDuration)
+    // Collect all grid animation promises
+    const animPromises = []
+    for (const grid of this.grids.values()) {
+      if (grid.animationDone) animPromises.push(grid.animationDone)
+    }
+    this.onTilesChanged?.(Promise.all(animPromises))
 
     return { success: true, time: parseFloat(totalTime), backtracks: result.backtracks || 0, restarts: result.restarts || 0 }
   }
@@ -1398,10 +1410,7 @@ export class HexMap {
       }
 
       this.addToGlobalCells('click-resolve', result.tiles)
-      const animDuration = changedTilesPerGrid.size > 0
-        ? Math.max(...[...changedTilesPerGrid.values()].map(t => t.length)) * TILE_STAGGER
-        : 0
-      this.onTilesChanged?.(animDuration)
+      this.onTilesChanged?.(Promise.resolve())
 
       log(`[TILE RESOLVE] (${global.col},${global.row}) solved ${result.tiles.length} tiles`, 'color: green')
       Sounds.play('pop', 1.0, 0.15)
@@ -1485,7 +1494,7 @@ export class HexMap {
     this.isRegenerating = false
 
     // Clear waves mask (no tiles to render)
-    this.onTilesChanged?.(0)
+    this.onTilesChanged?.(Promise.resolve())
   }
 
   async regenerate(options = {}) {

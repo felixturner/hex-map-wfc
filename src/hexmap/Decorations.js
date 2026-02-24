@@ -5,11 +5,11 @@ import { random, shuffle } from '../SeededRandom.js'
 import gsap from 'gsap'
 import {
   LEVEL_HEIGHT, TILE_SURFACE,
-  globalNoiseA, globalNoiseB,
-  getCurrentTreeThreshold,
-  weightedPick, hasRoadEdge, isCoastOrOcean, getRoadDeadEndInfo,
+  globalNoiseA, globalNoiseB, globalNoiseC,
+  getCurrentTreeThreshold, getBuildingThreshold,
+  weightedPick, isCoastOrOcean, getRoadDeadEndInfo,
   TreesByType, TreeMeshNames,
-  BuildingDefs, RuralBuildingDefs, CoastBuildingDefs, BuildingMeshNames, RuralBuildingMeshNames, CoastBuildingMeshNames,
+  BuildingDefs, CoastBuildingDefs, BuildingMeshNames, CoastBuildingMeshNames,
   TOWER_TOP_MESH, TOWER_TOP_CHANCE,
   WindmillMeshNames, WINDMILL_TOP_OFFSET, WINDMILL_FAN_OFFSET,
   BridgeMeshNames, WaterlilyMeshNames, FlowerMeshNames, RockMeshNames,
@@ -20,7 +20,7 @@ import {
 } from './DecorationDefs.js'
 
 // Re-export noise functions so existing imports from Decorations.js still work
-export { initGlobalTreeNoise, setTreeNoiseFrequency, getTreeNoiseFrequency, setTreeThreshold, getTreeThreshold } from './DecorationDefs.js'
+export { initGlobalTreeNoise, setTreeNoiseFrequency, getTreeNoiseFrequency, setTreeThreshold, getTreeThreshold, setBuildingNoiseFrequency, getBuildingNoiseFrequency, setBuildingThreshold, getBuildingThreshold } from './DecorationDefs.js'
 
 export class Decorations {
   // Static geometry cache — extracted once from GLB, shared by all instances
@@ -34,7 +34,6 @@ export class Decorations {
       ...TreeMeshNames,
       ...BuildingMeshNames,
       TOWER_TOP_MESH,
-      ...RuralBuildingMeshNames,
       ...CoastBuildingMeshNames,
       ...WindmillMeshNames,
       ...BridgeMeshNames,
@@ -192,7 +191,7 @@ export class Decorations {
 
     // staticMesh: buildings + bridges + waterlilies + rocks + hills + mountains (material — no sway)
     const staticNames = [
-      ...BuildingMeshNames, TOWER_TOP_MESH, ...RuralBuildingMeshNames, ...CoastBuildingMeshNames, ...WindmillMeshNames,
+      ...BuildingMeshNames, TOWER_TOP_MESH, ...CoastBuildingMeshNames, ...WindmillMeshNames,
       ...BridgeMeshNames, ...WaterlilyMeshNames, ...RockMeshNames,
       ...HillMeshNames, ...MountainMeshNames,
     ]
@@ -214,9 +213,15 @@ export class Decorations {
     const threshold = getCurrentTreeThreshold()  // noise > threshold = tree
     const { x: offsetX, z: offsetZ } = this.worldOffset
 
+    // Skip tiles that already have buildings (buildings placed first)
+    const buildingTileIds = new Set(this.buildings.map(b => b.tile.id))
+
     for (const tile of hexTiles) {
       // Only flat grass tiles (not slopes)
       if (tile.type !== TileType.GRASS) continue
+
+      // Skip tiles claimed by buildings
+      if (buildingTileIds.has(tile.id)) continue
 
       // Get local position (relative to grid group)
       const localPos = HexTileGeometry.getWorldPosition(
@@ -289,10 +294,6 @@ export class Decorations {
 
     if (!this.staticMesh || this.staticGeomIds.size === 0) return
 
-    const maxBuildings = options.maxBuildings ?? Math.floor(random() * 11)
-    const maxRuralBuildings = Math.floor(random() * 4)  // 0-3
-    const buildingNames = [...BuildingMeshNames].filter(n => this.staticGeomIds.has(n))
-    const ruralNames = [...RuralBuildingMeshNames].filter(n => this.staticGeomIds.has(n))
     const hasWindmill = WindmillMeshNames.every(n => this.staticGeomIds.has(n))
 
     // Direction to Y-rotation mapping (building front is +Z, atan2(worldX, worldZ) for each hex dir)
@@ -306,53 +307,31 @@ export class Decorations {
     }
 
     const deadEndCandidates = []
-    const roadAdjacentCandidates = []
     const coastWindmillCandidates = []
-    const flatGrassCandidates = []
+    const noiseCandidates = []
     const size = gridRadius * 2 + 1
+    const { x: offsetX, z: offsetZ } = this.worldOffset
+    const buildingThreshold = getBuildingThreshold()
 
-    // Get tiles that already have trees
-    const treeTileIds = new Set(this.trees.map(t => t.tile.id))
+    const deadEndTileIds = new Set()
 
     for (const tile of hexTiles) {
-      // Skip tiles that already have trees
-      if (treeTileIds.has(tile.id)) continue
-
       // Check for road dead-ends - place building facing the road exit
       const deadEndInfo = getRoadDeadEndInfo(tile.type, tile.rotation)
       if (deadEndInfo.isDeadEnd) {
         const roadAngle = dirToAngle[deadEndInfo.exitDir] ?? 0
         deadEndCandidates.push({ tile, roadAngle })
+        deadEndTileIds.add(tile.id)
         continue
       }
 
-      // Only consider grass tiles for road-adjacent placement
+      // Only consider grass tiles for noise-based and windmill placement
       if (tile.type !== TileType.GRASS) continue
-
-      // Check if any hex neighbors have roads, average direction to all of them
-      let roadAngle = null
-      let rdx = 0, rdz = 0
-      const tilePos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
-      for (const dir of HexDir) {
-        const { dx, dz } = getHexNeighborOffset(tile.gridX, tile.gridZ, dir)
-        const nx = tile.gridX + dx
-        const nz = tile.gridZ + dz
-        if (nx >= 0 && nx < size && nz >= 0 && nz < size) {
-          const neighbor = hexGrid[nx]?.[nz]
-          if (neighbor && hasRoadEdge(neighbor.type)) {
-            const neighborPos = HexTileGeometry.getWorldPosition(nx - gridRadius, nz - gridRadius)
-            rdx += neighborPos.x - tilePos.x
-            rdz += neighborPos.z - tilePos.z
-          }
-        }
-      }
-      if (rdx !== 0 || rdz !== 0) {
-        roadAngle = Math.atan2(rdx, rdz)
-      }
 
       // Check if any hex neighbors are coast/ocean — average direction to all water neighbors
       let waterAngle = null
       let wdx = 0, wdz = 0
+      const tilePos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
       for (const dir of HexDir) {
         const { dx, dz } = getHexNeighborOffset(tile.gridX, tile.gridZ, dir)
         const nx = tile.gridX + dx
@@ -372,46 +351,81 @@ export class Decorations {
 
       if (waterAngle !== null && tile.level === 0) {
         coastWindmillCandidates.push({ tile, roadAngle: waterAngle })
-      } else if (roadAngle !== null) {
-        roadAdjacentCandidates.push({ tile, roadAngle })
-      } else if (tile.level === 0) {
-        // Flat grass with no road neighbor — lowest priority
-        const randomAngle = random() * Math.PI * 2
-        flatGrassCandidates.push({ tile, roadAngle: randomAngle })
+      }
+
+      // Noise-based village candidate
+      if (globalNoiseC) {
+        const localPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
+        const worldX = localPos.x + offsetX
+        const worldZ = localPos.z + offsetZ
+        const noise = globalNoiseC.scaled2D(worldX, worldZ)
+        if (noise >= buildingThreshold) {
+          noiseCandidates.push({ tile })
+        }
       }
     }
 
     // Shuffle each group separately
     shuffle(deadEndCandidates)
-    shuffle(roadAdjacentCandidates)
-    shuffle(flatGrassCandidates)
+    shuffle(noiseCandidates)
     shuffle(coastWindmillCandidates)
 
-    // Dead-ends first, then road-adjacent (no flat grass for road buildings)
-    const candidates = [
-      ...deadEndCandidates.map(c => ({ ...c, isDeadEnd: true })),
-      ...roadAdjacentCandidates,
-    ]
+    // Place dead-end buildings first
+    let hasChurch = false, hasMarket = false, hasBlacksmith = false
+    const rerollIfUnique = (name) => {
+      if (name === 'building_church_yellow' && hasChurch) return true
+      if (name === 'building_market_yellow' && hasMarket) return true
+      if (name === 'building_blacksmith_yellow' && hasBlacksmith) return true
+      return false
+    }
+    const trackUnique = (name) => {
+      if (name === 'building_church_yellow') hasChurch = true
+      if (name === 'building_market_yellow') hasMarket = true
+      if (name === 'building_blacksmith_yellow') hasBlacksmith = true
+    }
 
-    // Place road buildings (no windmills — those are coast-only)
-    let hasChurch = false
-    for (let i = 0; i < Math.min(maxBuildings, candidates.length); i++) {
-      const { tile, roadAngle, isDeadEnd } = candidates[i]
+    for (const { tile, roadAngle } of deadEndCandidates) {
+      if (this.buildings.length >= MAX_BUILDINGS - 1) break
 
       const localPos = HexTileGeometry.getWorldPosition(
         tile.gridX - gridRadius,
         tile.gridZ - gridRadius
       )
       const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
-      const jitterAngle = isDeadEnd ? roadAngle : roadAngle + (random() - 0.5) * 0.7
-      const jitterOx = isDeadEnd ? 0 : (random() - 0.5) * 0.6
-      const jitterOz = isDeadEnd ? 0 : (random() - 0.5) * 0.6
 
       let meshName = weightedPick(BuildingDefs)
-      if (meshName === 'building_church_yellow' && hasChurch) meshName = weightedPick(BuildingDefs)
+      if (rerollIfUnique(meshName)) meshName = weightedPick(BuildingDefs)
+      const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
+      if (instanceId === -1) break
+      trackUnique(meshName)
+      this.buildings.push({ tile, meshName, instanceId, rotationY: roadAngle })
+
+      // Optionally place tower top
+      if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
+        const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
+        if (topId !== -1) this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: roadAngle })
+      }
+    }
+
+    // Place noise-based village buildings (skip tiles already claimed by dead-end)
+    for (const { tile } of noiseCandidates) {
+      if (this.buildings.length >= MAX_BUILDINGS - 1) break
+      if (deadEndTileIds.has(tile.id)) continue
+
+      const localPos = HexTileGeometry.getWorldPosition(
+        tile.gridX - gridRadius,
+        tile.gridZ - gridRadius
+      )
+      const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
+      const jitterAngle = random() * Math.PI * 2
+      const jitterOx = (random() - 0.5) * 0.6
+      const jitterOz = (random() - 0.5) * 0.6
+
+      let meshName = weightedPick(BuildingDefs)
+      if (rerollIfUnique(meshName)) meshName = weightedPick(BuildingDefs)
       const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
       if (instanceId === -1) break
-      if (meshName === 'building_church_yellow') hasChurch = true
+      trackUnique(meshName)
       this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
 
       // Optionally place tower top (same jitter as base)
@@ -421,27 +435,7 @@ export class Decorations {
       }
     }
 
-    // Place rural buildings (shrine, tent, well) on flat grass away from roads
-    if (ruralNames.length > 0) {
-      for (let i = 0; i < Math.min(maxRuralBuildings, flatGrassCandidates.length); i++) {
-        const { tile, roadAngle } = flatGrassCandidates[i]
-        const localPos = HexTileGeometry.getWorldPosition(
-          tile.gridX - gridRadius,
-          tile.gridZ - gridRadius
-        )
-        const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
-        const jitterAngle = roadAngle + (random() - 0.5) * 0.7
-        const jitterOx = (random() - 0.5) * 0.6
-        const jitterOz = (random() - 0.5) * 0.6
-
-        const meshName = weightedPick(RuralBuildingDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
-        if (instanceId === -1) break
-        this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
-      }
-    }
-
-    // Place windmills on coast-adjacent grass tiles, facing the water (25% chance)
+    // Place windmills on coast-adjacent grass tiles, facing the water (35% chance)
     if (hasWindmill && coastWindmillCandidates.length > 0 && random() < 0.35) {
       const maxCoastWindmills = Math.min(1, coastWindmillCandidates.length)
       for (let i = 0; i < maxCoastWindmills; i++) {
@@ -493,24 +487,15 @@ export class Decorations {
       }
     }
 
-    // Place shipyard on COAST_A/COAST_C tiles, facing rotated SE direction, max 1 per grid (10% chance)
+    // Place shipyard on COAST_A/COAST_B tiles, facing rotated SE direction, max 1 per grid (20% chance)
     const coastBuildingNames = [...CoastBuildingMeshNames].filter(n => this.staticGeomIds.has(n))
-    if (coastBuildingNames.length > 0 && random() < 0.20) {
+    if (coastBuildingNames.length > 0) {
       const shipyardCandidates = []
       for (const tile of hexTiles) {
         const def = TILE_LIST[tile.type]
-        if (!def || (def.name !== 'COAST_A' && def.name !== 'COAST_B')) continue
-        let waterAngle
-        if (def.name === 'COAST_A') {
-          // Face rotated SE direction
-          const rotatedSE = HexDir[(2 + tile.rotation) % 6]
-          waterAngle = dirToAngle[rotatedSE]
-        } else {
-          // COAST_B: face straight S relative to tile (midpoint between SE and SW)
-          const aSE = dirToAngle[HexDir[(2 + tile.rotation) % 6]]
-          const aSW = dirToAngle[HexDir[(3 + tile.rotation) % 6]]
-          waterAngle = Math.atan2(Math.sin(aSE) + Math.sin(aSW), Math.cos(aSE) + Math.cos(aSW))
-        }
+        if (!def || def.name !== 'COAST_A') continue
+        const rotatedSE = HexDir[(2 + tile.rotation) % 6]
+        const waterAngle = dirToAngle[rotatedSE]
         // Probe 2 tiles out in the jetty direction — reject if land (cove)
         const probeDir = HexDir[(2 + tile.rotation) % 6]  // rotated SE
         let blocked = false
@@ -518,7 +503,7 @@ export class Decorations {
         for (let step = 0; step < 3; step++) {
           const { dx, dz } = getHexNeighborOffset(px, pz, probeDir)
           px += dx; pz += dz
-          if (px < 0 || px >= size || pz < 0 || pz >= size) break
+          if (px < 0 || px >= size || pz < 0 || pz >= size) { blocked = true; break }
           const probeCell = hexGrid[px]?.[pz]
           if (!probeCell || TILE_LIST[probeCell.type]?.name !== 'OCEAN') { blocked = true; break }
         }
@@ -529,13 +514,10 @@ export class Decorations {
         const { tile, waterAngle } = shipyardCandidates[0]
         const localPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
         const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
-        const jitterAngle = waterAngle + (random() - 0.5) * 0.7
-        const jitterOx = (random() - 0.5) * 0.6
-        const jitterOz = (random() - 0.5) * 0.6
         const meshName = weightedPick(CoastBuildingDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
+        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, waterAngle, 1, tile.level)
         if (instanceId !== -1) {
-          this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
+          this.buildings.push({ tile, meshName, instanceId, rotationY: waterAngle })
         }
       }
     }
@@ -861,7 +843,8 @@ export class Decorations {
 
     const { x: offsetX, z: offsetZ } = this.worldOffset
     const newItems = []
-    const treeTileIds = new Set()
+    const buildingTileIds = new Set()
+    const buildingThreshold = getBuildingThreshold()
 
     for (const tile of tiles) {
       const localPos = HexTileGeometry.getWorldPosition(
@@ -872,8 +855,58 @@ export class Decorations {
       if (!def) continue
       const name = def.name
 
-      // Trees (noise-based, same as populate)
-      if (tile.type === TileType.GRASS && this.treeMesh && globalNoiseA && globalNoiseB) {
+      // Buildings first (dead-ends + noise-based villages)
+      if (this.staticMesh && this.buildings.length < MAX_BUILDINGS - 1) {
+        const dirToAngle = { NE: 5*Math.PI/6, E: Math.PI/2, SE: Math.PI/6, SW: -Math.PI/6, W: -Math.PI/2, NW: -5*Math.PI/6 }
+
+        const deadEndInfo = getRoadDeadEndInfo(tile.type, tile.rotation)
+        if (deadEndInfo.isDeadEnd) {
+          const buildingAngle = dirToAngle[deadEndInfo.exitDir] ?? 0
+          const meshName = weightedPick(BuildingDefs)
+          const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z, buildingAngle, 1, tile.level)
+          if (instanceId !== -1) {
+            this.buildings.push({ tile, meshName, instanceId, rotationY: buildingAngle })
+            newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: buildingAngle })
+            buildingTileIds.add(tile.id)
+
+            if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
+              const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z, buildingAngle, 1, tile.level)
+              if (topId !== -1) {
+                this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: buildingAngle })
+                newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: buildingAngle })
+              }
+            }
+          }
+        } else if (tile.type === TileType.GRASS && globalNoiseC) {
+          const worldX = localPos.x + offsetX
+          const worldZ = localPos.z + offsetZ
+          const noise = globalNoiseC.scaled2D(worldX, worldZ)
+          if (noise >= buildingThreshold) {
+            const jitterAngle = random() * Math.PI * 2
+            const jOx = (random() - 0.5) * 0.6
+            const jOz = (random() - 0.5) * 0.6
+            const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
+            const meshName = weightedPick(BuildingDefs)
+            const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jOx, y, localPos.z + jOz, jitterAngle, 1, tile.level)
+            if (instanceId !== -1) {
+              this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
+              newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jitterAngle })
+              buildingTileIds.add(tile.id)
+
+              if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
+                const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x + jOx, y, localPos.z + jOz, jitterAngle, 1, tile.level)
+                if (topId !== -1) {
+                  this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: jitterAngle })
+                  newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jitterAngle })
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Trees (noise-based, skip tiles with buildings)
+      if (tile.type === TileType.GRASS && !buildingTileIds.has(tile.id) && this.treeMesh && globalNoiseA && globalNoiseB) {
         const worldX = localPos.x + offsetX
         const worldZ = localPos.z + offsetZ
         const noiseA = globalNoiseA.scaled2D(worldX, worldZ)
@@ -911,74 +944,6 @@ export class Decorations {
               this.treeMesh.setMatrixAt(instanceId, this.dummy.matrix)
               this.trees.push({ tile, meshName, instanceId, rotationY: rotY, ox, oz })
               newItems.push({ mesh: this.treeMesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY: rotY })
-              treeTileIds.add(tile.id)
-            }
-          }
-        }
-      }
-
-      // Buildings (road dead-ends and road-adjacent grass, skip tiles with trees)
-      if (this.staticMesh && this.buildings.length < MAX_BUILDINGS - 1 && !treeTileIds.has(tile.id)) {
-        const dirToAngle = { NE: 5*Math.PI/6, E: Math.PI/2, SE: Math.PI/6, SW: -Math.PI/6, W: -Math.PI/2, NW: -5*Math.PI/6 }
-        const size = gridRadius * 2 + 1
-        let buildingAngle = null
-        let isDeadEnd = false
-
-        const deadEndInfo = getRoadDeadEndInfo(tile.type, tile.rotation)
-        if (deadEndInfo.isDeadEnd) {
-          buildingAngle = dirToAngle[deadEndInfo.exitDir] ?? 0
-          isDeadEnd = true
-        } else if (tile.type === TileType.GRASS && hexGrid) {
-          for (const dir of HexDir) {
-            const { dx, dz } = getHexNeighborOffset(tile.gridX, tile.gridZ, dir)
-            const nx = tile.gridX + dx
-            const nz = tile.gridZ + dz
-            if (nx >= 0 && nx < size && nz >= 0 && nz < size) {
-              const neighbor = hexGrid[nx]?.[nz]
-              if (neighbor && hasRoadEdge(neighbor.type)) {
-                buildingAngle = dirToAngle[dir]
-                break
-              }
-            }
-          }
-        }
-
-        if (buildingAngle !== null && random() <= 0.4) {
-          const meshName = weightedPick(BuildingDefs)
-          const geomId = this.staticGeomIds.get(meshName)
-          if (geomId !== undefined) {
-            const instanceId = this._addInstance(this.staticMesh, geomId)
-            if (instanceId !== -1) {
-              const jAngle = isDeadEnd ? buildingAngle : buildingAngle + (random() - 0.5) * 0.7
-              const jOx = isDeadEnd ? 0 : (random() - 0.5) * 0.6
-              const jOz = isDeadEnd ? 0 : (random() - 0.5) * 0.6
-              this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
-              const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
-              this.dummy.position.set(localPos.x + jOx, y, localPos.z + jOz)
-              this.dummy.rotation.y = jAngle
-              this.dummy.scale.setScalar(1)
-              this.dummy.updateMatrix()
-              this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
-              this.buildings.push({ tile, meshName, instanceId, rotationY: jAngle })
-              newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jAngle })
-
-              // Optionally place tower top (same jitter as base)
-              if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
-                const topGeomId = this.staticGeomIds.get(TOWER_TOP_MESH)
-                if (topGeomId !== undefined) {
-                  const topId = this._addInstance(this.staticMesh, topGeomId)
-                  if (topId !== -1) {
-                    this.staticMesh.setColorAt(topId, levelColor(tile.level))
-                    this.dummy.position.set(localPos.x + jOx, y, localPos.z + jOz)
-                    this.dummy.rotation.y = jAngle
-                    this.dummy.scale.setScalar(1)
-                    this.dummy.updateMatrix()
-                    this.staticMesh.setMatrixAt(topId, this.dummy.matrix)
-                    this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: jAngle })
-                    newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jAngle })
-                  }
-                }
-              }
             }
           }
         }

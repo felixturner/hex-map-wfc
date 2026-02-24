@@ -14,6 +14,7 @@ const TILE_SURFACE = 1
 export class HexMapDebug {
   constructor(hexMap) {
     this.hexMap = hexMap
+    this._outlinesVisible = false
   }
 
   clearTileLabels() {
@@ -174,9 +175,10 @@ export class HexMapDebug {
   }
 
   setOutlinesVisible(visible) {
+    this._outlinesVisible = visible
     for (const grid of this.hexMap.grids.values()) {
       if (grid.outline) {
-        grid.outline.visible = visible
+        grid.outline.visible = grid.state === HexGridState.POPULATED ? visible : true
       }
     }
   }

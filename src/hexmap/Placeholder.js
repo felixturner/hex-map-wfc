@@ -3,6 +3,8 @@ import {
   MeshBasicMaterial,
   BufferGeometry,
   Float32BufferAttribute,
+  PlaneGeometry,
+  TextureLoader,
   DoubleSide,
   Group,
 } from 'three/webgpu'
@@ -55,7 +57,7 @@ export class Placeholder {
     const material = new MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.4,
       side: DoubleSide,
       depthTest: false,
       depthWrite: false,
@@ -67,6 +69,23 @@ export class Placeholder {
     this.button.userData.isPlaceholder = true
     this.button.userData.owner = this
     this.group.add(this.button)
+
+    // Build icon centered on button
+    const iconSize = buttonRadius * 0.7
+    const iconGeom = new PlaneGeometry(iconSize, iconSize)
+    iconGeom.rotateX(-Math.PI / 2)
+    const iconTex = new TextureLoader().load('./assets/textures/build.png')
+    const iconMat = new MeshBasicMaterial({
+      map: iconTex,
+      color: 0x000000,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    })
+    this.icon = new Mesh(iconGeom, iconMat)
+    this.icon.position.y = 1.01
+    this.icon.renderOrder = 101
+    this.group.add(this.icon)
   }
 
   /**
@@ -142,7 +161,7 @@ export class Placeholder {
    */
   setHover(isHovered) {
     if (this.button?.material) {
-      this.button.material.opacity = isHovered ? 0.9 : 0.5
+      this.button.material.opacity = isHovered ? 0.9 : 0.6
     }
   }
 
@@ -178,17 +197,15 @@ export class Placeholder {
    */
   fadeIn(delay = 0) {
     clearTimeout(this._fadeTimer)
-    gsap.killTweensOf(this._anim)
+    gsap.killTweensOf(this.button.material)
     this.group.visible = false
-    this._anim = { opacity: 0 }
     this._fadeTimer = setTimeout(() => {
       this.group.visible = true
       this.button.material.opacity = 0
-      gsap.to(this._anim, {
-        opacity: 0.5,
+      gsap.to(this.button.material, {
+        opacity: 0.6,
         duration: 0.3,
         ease: 'power2.out',
-        onUpdate: () => { this.button.material.opacity = this._anim.opacity },
       })
     }, delay)
   }
@@ -198,14 +215,12 @@ export class Placeholder {
    */
   fadeOut() {
     clearTimeout(this._fadeTimer)
-    gsap.killTweensOf(this._anim)
+    gsap.killTweensOf(this.button.material)
     this.group.visible = true
-    this._anim = { opacity: this.button.material.opacity }
-    gsap.to(this._anim, {
+    gsap.to(this.button.material, {
       opacity: 0,
       duration: 0.2,
       ease: 'power2.in',
-      onUpdate: () => { this.button.material.opacity = this._anim.opacity },
       onComplete: () => { this.group.visible = false },
     })
   }
@@ -250,6 +265,13 @@ export class Placeholder {
       tri.geometry?.dispose()
     }
     this.triangles = []
+
+    // Dispose icon
+    if (this.icon) {
+      this.icon.geometry?.dispose()
+      this.icon.material?.map?.dispose()
+      this.icon.material?.dispose()
+    }
 
     // Dispose button
     if (this.button) {

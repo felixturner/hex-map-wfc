@@ -22,9 +22,12 @@ export const TILE_SURFACE = 1
 // Created lazily on first use, seeded from global RNG
 export let globalNoiseA = null
 export let globalNoiseB = null
+export let globalNoiseC = null
 
 let currentTreeNoiseFreq = 0.05
 let currentTreeThreshold = 0.5
+let currentBuildingNoiseFreq = 0.02
+let currentBuildingThreshold = 0.77
 
 export function initGlobalTreeNoise(frequency = 0.05) {
   setTreeNoiseFrequency(frequency)
@@ -34,7 +37,7 @@ export function setTreeNoiseFrequency(frequency) {
   currentTreeNoiseFreq = frequency
   globalNoiseA = new ScaledNoise(frequency, random)
   globalNoiseB = new ScaledNoise(frequency, random)
-
+  globalNoiseC = new ScaledNoise(currentBuildingNoiseFreq, random)
 }
 
 export function getTreeNoiseFrequency() {
@@ -51,6 +54,23 @@ export function getTreeThreshold() {
 
 export function getCurrentTreeThreshold() {
   return currentTreeThreshold
+}
+
+export function setBuildingNoiseFrequency(frequency) {
+  currentBuildingNoiseFreq = frequency
+  globalNoiseC = new ScaledNoise(frequency, random)
+}
+
+export function getBuildingNoiseFrequency() {
+  return currentBuildingNoiseFreq
+}
+
+export function setBuildingThreshold(threshold) {
+  currentBuildingThreshold = threshold
+}
+
+export function getBuildingThreshold() {
+  return currentBuildingThreshold
 }
 
 // Pick a random item from a weighted defs array [{ name, weight }]
@@ -231,7 +251,7 @@ export function levelColor(level) {
 
 // Instance limits for BatchedMesh (per-type caps)
 export const MAX_TREES = 100
-export const MAX_BUILDINGS = 20
+export const MAX_BUILDINGS = 15
 export const MAX_BRIDGES = 30
 export const MAX_WATERLILIES = 10
 export const MAX_FLOWERS = 40

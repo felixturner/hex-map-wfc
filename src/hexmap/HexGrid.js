@@ -334,17 +334,15 @@ export class HexGrid {
     }
     if (this.outline) {
       clearTimeout(this._outlineFadeTimer)
-      gsap.killTweensOf(this._outlineAnim)
+      gsap.killTweensOf(this.outline.material)
       this.outline.visible = false
-      this._outlineAnim = { opacity: 0 }
       this._outlineFadeTimer = setTimeout(() => {
         this.outline.visible = true
         this.outline.material.opacity = 0
-        gsap.to(this._outlineAnim, {
+        gsap.to(this.outline.material, {
           opacity: 1,
           duration: 0.3,
           ease: 'power2.out',
-          onUpdate: () => { this.outline.material.opacity = this._outlineAnim.opacity },
         })
       }, delay)
     }
@@ -585,8 +583,8 @@ export class HexGrid {
    */
   populateDecorations() {
     if (!this.decorations) return
-    this.decorations.populate(this.hexTiles, this.gridRadius)
     this.decorations.populateBuildings(this.hexTiles, this.hexGrid, this.gridRadius)
+    this.decorations.populate(this.hexTiles, this.gridRadius)
     this.decorations.populateFlowers(this.hexTiles, this.gridRadius)
     this.decorations.populateRocks(this.hexTiles, this.gridRadius)
     this.decorations.populateHillsAndMountains(this.hexTiles, this.gridRadius)

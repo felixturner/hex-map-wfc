@@ -4,7 +4,7 @@ import {
   CineonToneMapping, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping,
 } from 'three/webgpu'
 import { Sounds } from './lib/Sounds.js'
-import { setTreeNoiseFrequency, setTreeThreshold } from './hexmap/Decorations.js'
+import { setTreeNoiseFrequency, setTreeThreshold, setBuildingNoiseFrequency, setBuildingThreshold } from './hexmap/Decorations.js'
 import { HexTile } from './hexmap/HexTiles.js'
 
 export class GUIManager {
@@ -98,11 +98,13 @@ export class GUIManager {
       animateWFC: true,
       animateDelay: 6,
       useLevels: true,
-      showOutlines: true,
+      showOutlines: false,
     },
     decoration: {
       treeNoiseFreq: 0.05,
       treeThreshold: 0.5,
+      buildingNoiseFreq: 0.02,
+      buildingThreshold: 0.77,
     },
     water: {
       y: 0.88,
@@ -120,8 +122,8 @@ export class GUIManager {
       break: 0.135,
       width: 0.27,
       offset: 0.3,
-      gradientOpacity: 0,
-      gradientColor: '#ccb233',
+      gradientOpacity: 0.31,
+      gradientColor: '#4770a1',
       showMask: false,
       coveCutoff: 0.978,
       coveRadius: 2.041,
@@ -269,7 +271,14 @@ export class GUIManager {
       setTreeThreshold(v)
       app.city.repopulateDecorations()
     })
-
+    decorationFolder.add(allParams.decoration, 'buildingNoiseFreq', 0.01, 0.2, 0.01).name('Building Noise Freq').onChange((v) => {
+      setBuildingNoiseFrequency(v)
+      app.city.repopulateDecorations()
+    })
+    decorationFolder.add(allParams.decoration, 'buildingThreshold', 0, 1, 0.01).name('Building Threshold').onChange((v) => {
+      setBuildingThreshold(v)
+      app.city.repopulateDecorations()
+    })
     // Water folder
     const waterFolder = gui.addFolder('Water').close()
     waterFolder.add(allParams.water, 'y', 0.7, 1.0, 0.01).name('Y Height').onChange((v) => {

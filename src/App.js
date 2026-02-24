@@ -172,9 +172,9 @@ export class App {
       const opacity = this.city._waveOpacity
       if (!opacity || opacity.value === 0) return
 
-      // Kill any pending mask render from a previous build
+      // Cancel any pending mask render from a previous build
       if (this._pendingMaskRender) {
-        this._pendingMaskRender.kill()
+        this._pendingMaskRender.cancelled = true
         this._pendingMaskRender = null
       }
 
@@ -196,26 +196,32 @@ export class App {
 
     // After tiles drop, re-render mask and fade waves back in
     this._pendingMaskRender = null
-    this.city.onTilesChanged = (animDuration = 0) => {
+    this.city.onTilesChanged = (animDonePromise) => {
       if (this.city._autoExpanding) return
       const opacity = this.city._waveOpacity
       if (!opacity) return
 
-      // Fade in sparkles on first grid build
-      const sparkleOpacity = this.city._waterOpacity
-      if (sparkleOpacity && sparkleOpacity.value === 0) {
-        gsap.to(sparkleOpacity, {
-          value: this.params.water.opacity,
-          duration: 2, delay: (animDuration + 1000) / 1000,
-        })
+      // Kill previous pending mask render (e.g. during rapid sequential builds)
+      if (this._pendingMaskRender) {
+        this._pendingMaskRender.cancelled = true
+        this._pendingMaskRender = null
       }
 
-      // Kill previous pending mask render (e.g. during rapid sequential builds)
-      if (this._pendingMaskRender) this._pendingMaskRender.kill()
+      const token = { cancelled: false }
+      this._pendingMaskRender = token
 
-      // After drop animation, re-render mask and fade back in
-      const delay = (animDuration + 500) / 1000
-      this._pendingMaskRender = gsap.delayedCall(delay, () => {
+      const renderMask = () => {
+        if (token.cancelled) return
+
+        // Fade in sparkles on first grid build
+        const sparkleOpacity = this.city._waterOpacity
+        if (sparkleOpacity && sparkleOpacity.value === 0) {
+          gsap.to(sparkleOpacity, {
+            value: this.params.water.opacity,
+            duration: 2, delay: 1,
+          })
+        }
+
         opacity.value = 0
         if (this.city._waveGradientOpacity) this.city._waveGradientOpacity.value = 0
         if (this.city._waveMaskStrength) this.city._waveMaskStrength.value = 0
@@ -233,14 +239,18 @@ export class App {
           opacity: this.params.waves.opacity,
           gradOpacity: this.params.waves.gradientOpacity,
           mask: 1,
-          duration: 2, overwrite: true,
+          duration: 2, delay: 1, overwrite: true,
           onUpdate: () => {
             opacity.value = this._waveFade.opacity
             if (this.city._waveGradientOpacity) this.city._waveGradientOpacity.value = this._waveFade.gradOpacity
             if (this.city._waveMaskStrength) this.city._waveMaskStrength.value = this._waveFade.mask
           },
         })
-      })
+      }
+
+      // Wait for drop animation to finish, then render mask
+      const promise = animDonePromise || Promise.resolve()
+      promise.then(renderMask)
     }
 
     // Set up hover and click detection on hex tiles and placeholders

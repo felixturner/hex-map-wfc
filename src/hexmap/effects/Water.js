@@ -55,7 +55,7 @@ export class Water {
 
     // Caustic texture — tileable grayscale, replaces expensive Worley noise
     const causticLoader = new TextureLoader()
-    const causticTex = causticLoader.load('./assets/caustic.jpg')
+    const causticTex = causticLoader.load('./assets/textures/caustic.jpg')
     causticTex.wrapS = causticTex.wrapT = 1000 // RepeatWrapping
     causticTex.minFilter = LinearFilter
     causticTex.magFilter = LinearFilter
