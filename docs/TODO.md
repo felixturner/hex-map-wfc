@@ -1,6 +1,9 @@
 # TODO
 
-- figure out why build all is failing more now who knows? not related to ocean tiles. run more tests
+- kill tree sway + weather
+- add flyhtrough button
+- figure out why build all is failing more now? 
+- noise for buildings?
 
 - make intro screen? audio? start btn wait for audio
 - figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
@@ -20,7 +23,8 @@
   - use just seed some map edges with ocean/ mountains?
   - biome noise for texture colors?
 
-- push. record video. make blog post: shadow map, waves + coveyness. sparkles - img is chepaer and better. wfc recovery.
+- push. record video. 
+- make blog post: shadow map, waves + coveyness. sparkles - img is chepaer and better. wfc recovery.
 - send link to codrops
 
 ####

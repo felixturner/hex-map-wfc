@@ -172,15 +172,22 @@ function buildDecorationMap(grid) {
  * Animate tile placements with GSAP drop-in (tiles already placed but hidden)
  * Each decoration drops after its tile
  */
-export function animatePlacements(grid, collapseOrder, delay) {
+export function animatePlacements(grid, collapseOrder, delay, onComplete) {
+  if (collapseOrder.length === 0) {
+    onComplete?.()
+    return
+  }
+
   const dummy = grid.dummy
   const decsByTile = buildDecorationMap(grid)
   const fillsByTile = grid.bottomFills
+  const lastIndex = collapseOrder.length - 1
 
   let i = 0
   const step = () => {
     if (i >= collapseOrder.length || !grid.hexMesh) return
 
+    const isLast = i === lastIndex
     const placement = collapseOrder[i]
     const tile = grid.hexGrid?.[placement.gridX]?.[placement.gridZ]
 
@@ -194,6 +201,9 @@ export function animatePlacements(grid, collapseOrder, delay) {
       const fillId = fillsByTile.get(`${tile.gridX},${tile.gridZ}`)
       const anim = { y: targetY + DROP_HEIGHT, scale: 1 }
       tile._anim = anim
+      const tileKey = `${tile.gridX},${tile.gridZ}`
+      const decs = decsByTile.get(tileKey)
+
       gsap.to(anim, {
         y: targetY,
         duration: ANIM_DURATION,
@@ -215,14 +225,16 @@ export function animatePlacements(grid, collapseOrder, delay) {
             grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
           }
 
-        }
+        },
+        onComplete: (isLast && !decs) ? onComplete : undefined
       })
 
-      const tileKey = `${tile.gridX},${tile.gridZ}`
-      const decs = decsByTile.get(tileKey)
       if (decs) {
-        setTimeout(() => animateDecoration(grid, decs), DEC_DELAY)
+        const decComplete = isLast ? onComplete : null
+        setTimeout(() => animateDecoration(grid, decs, decComplete), DEC_DELAY)
       }
+    } else if (isLast) {
+      onComplete?.()
     }
 
     i++
@@ -234,11 +246,13 @@ export function animatePlacements(grid, collapseOrder, delay) {
 /**
  * Animate a single decoration or array of decorations dropping in
  */
-export function animateDecoration(grid, items) {
+export function animateDecoration(grid, items, onAllComplete) {
   const dummy = grid.dummy
   const list = Array.isArray(items) ? items : [items]
+  const lastIdx = list.length - 1
 
-  for (const item of list) {
+  for (let j = 0; j < list.length; j++) {
+    const item = list[j]
     const targetScale = item.scale ?? 1
     const anim = { y: item.y + DEC_DROP_HEIGHT, scale: targetScale * 0.5 }
     gsap.to(anim, {
@@ -259,6 +273,7 @@ export function animateDecoration(grid, items) {
       },
       onComplete: () => {
         if (item.fan) item.fan.tween?.resume()
+        if (j === lastIdx) onAllComplete?.()
       }
     })
   }

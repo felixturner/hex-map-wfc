@@ -1076,7 +1076,7 @@ export class HexMap {
     this._wfcBusy = true  // hold the lock for the entire build
 
     const startTime = performance.now()
-    let lastAnimDuration = 0
+    const animPromises = []
     for (let i = 0; i < order.length; i++) {
       const [gx, gz] = order[i]
       if (this._buildCancelled || this._buildEpoch !== myEpoch) {
@@ -1092,7 +1092,8 @@ export class HexMap {
       }
       if (grid.state === HexGridState.PLACEHOLDER) {
         Sounds.play('pop', 1.0, 0.2, 0.7)
-        lastAnimDuration = await this.onGridClick(grid, { skipPrune: true }) || 0
+        await this.onGridClick(grid, { skipPrune: true })
+        if (grid.animationDone) animPromises.push(grid.animationDone)
       }
     }
     this._autoExpanding = false
@@ -1105,10 +1106,11 @@ export class HexMap {
       `${this.failedCells.size} conflicts`,
     ]
     log(`[AUTO-BUILD] Done (${stats.join(', ')})`, 'color: green')
-    Sounds.play('intro')
 
-    // Rebuild waves mask after last tile has fully dropped
-    this.onTilesChanged?.(lastAnimDuration)
+    // Wait for all drop animations to finish, then rebuild waves mask
+    await Promise.all(animPromises)
+    Sounds.play('intro')
+    this.onTilesChanged?.(0)
   }
 
   /**

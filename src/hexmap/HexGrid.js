@@ -426,7 +426,11 @@ export class HexGrid {
         }
       }
       this.hideAllInstances()
-      this.animatePlacements(localCollapseOrder, animateDelay)
+      this.animationDone = new Promise(resolve => {
+        this.animatePlacements(localCollapseOrder, animateDelay, resolve)
+      })
+    } else {
+      this.animationDone = Promise.resolve()
     }
 
     // Return estimated animation duration so callers can time follow-up actions
@@ -527,8 +531,8 @@ export class HexGrid {
 
   hideAllInstances() { _hideAllInstances(this) }
   animateTileDrop(tile) { _animateTileDrop(this, tile) }
-  animatePlacements(collapseOrder, delay) { _animatePlacements(this, collapseOrder, delay) }
-  animateDecoration(items) { _animateDecoration(this, items) }
+  animatePlacements(collapseOrder, delay, onComplete) { _animatePlacements(this, collapseOrder, delay, onComplete) }
+  animateDecoration(items, onAllComplete) { _animateDecoration(this, items, onAllComplete) }
 
   /**
    * Update all tile matrices

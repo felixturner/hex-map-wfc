@@ -388,30 +388,36 @@ export class Decorations {
     shuffle(coastWindmillCandidates)
 
     // Dead-ends first, then road-adjacent (no flat grass for road buildings)
-    const candidates = [...deadEndCandidates, ...roadAdjacentCandidates]
+    const candidates = [
+      ...deadEndCandidates.map(c => ({ ...c, isDeadEnd: true })),
+      ...roadAdjacentCandidates,
+    ]
 
     // Place road buildings (no windmills — those are coast-only)
     let hasChurch = false
     for (let i = 0; i < Math.min(maxBuildings, candidates.length); i++) {
-      const { tile, roadAngle } = candidates[i]
+      const { tile, roadAngle, isDeadEnd } = candidates[i]
 
       const localPos = HexTileGeometry.getWorldPosition(
         tile.gridX - gridRadius,
         tile.gridZ - gridRadius
       )
       const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
+      const jitterAngle = isDeadEnd ? roadAngle : roadAngle + (random() - 0.5) * 0.7
+      const jitterOx = isDeadEnd ? 0 : (random() - 0.5) * 0.6
+      const jitterOz = isDeadEnd ? 0 : (random() - 0.5) * 0.6
 
       let meshName = weightedPick(BuildingDefs)
       if (meshName === 'building_church_yellow' && hasChurch) meshName = weightedPick(BuildingDefs)
-      const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
+      const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
       if (instanceId === -1) break
       if (meshName === 'building_church_yellow') hasChurch = true
-      this.buildings.push({ tile, meshName, instanceId, rotationY: roadAngle })
+      this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
 
-      // Optionally place tower top
+      // Optionally place tower top (same jitter as base)
       if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
-        const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
-        if (topId !== -1) this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: roadAngle })
+        const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
+        if (topId !== -1) this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: jitterAngle })
       }
     }
 
@@ -424,11 +430,14 @@ export class Decorations {
           tile.gridZ - gridRadius
         )
         const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
+        const jitterAngle = roadAngle + (random() - 0.5) * 0.7
+        const jitterOx = (random() - 0.5) * 0.6
+        const jitterOz = (random() - 0.5) * 0.6
 
         const meshName = weightedPick(RuralBuildingDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
+        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
         if (instanceId === -1) break
-        this.buildings.push({ tile, meshName, instanceId, rotationY: roadAngle })
+        this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
       }
     }
 
@@ -520,10 +529,13 @@ export class Decorations {
         const { tile, waterAngle } = shipyardCandidates[0]
         const localPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
         const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
+        const jitterAngle = waterAngle + (random() - 0.5) * 0.7
+        const jitterOx = (random() - 0.5) * 0.6
+        const jitterOz = (random() - 0.5) * 0.6
         const meshName = weightedPick(CoastBuildingDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, waterAngle, 1, tile.level)
+        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
         if (instanceId !== -1) {
-          this.buildings.push({ tile, meshName, instanceId, rotationY: waterAngle })
+          this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
         }
       }
     }
@@ -910,10 +922,12 @@ export class Decorations {
         const dirToAngle = { NE: 5*Math.PI/6, E: Math.PI/2, SE: Math.PI/6, SW: -Math.PI/6, W: -Math.PI/2, NW: -5*Math.PI/6 }
         const size = gridRadius * 2 + 1
         let buildingAngle = null
+        let isDeadEnd = false
 
         const deadEndInfo = getRoadDeadEndInfo(tile.type, tile.rotation)
         if (deadEndInfo.isDeadEnd) {
           buildingAngle = dirToAngle[deadEndInfo.exitDir] ?? 0
+          isDeadEnd = true
         } else if (tile.type === TileType.GRASS && hexGrid) {
           for (const dir of HexDir) {
             const { dx, dz } = getHexNeighborOffset(tile.gridX, tile.gridZ, dir)
@@ -935,30 +949,33 @@ export class Decorations {
           if (geomId !== undefined) {
             const instanceId = this._addInstance(this.staticMesh, geomId)
             if (instanceId !== -1) {
+              const jAngle = isDeadEnd ? buildingAngle : buildingAngle + (random() - 0.5) * 0.7
+              const jOx = isDeadEnd ? 0 : (random() - 0.5) * 0.6
+              const jOz = isDeadEnd ? 0 : (random() - 0.5) * 0.6
               this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
               const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
-              this.dummy.position.set(localPos.x, y, localPos.z)
-              this.dummy.rotation.y = buildingAngle
+              this.dummy.position.set(localPos.x + jOx, y, localPos.z + jOz)
+              this.dummy.rotation.y = jAngle
               this.dummy.scale.setScalar(1)
               this.dummy.updateMatrix()
               this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
-              this.buildings.push({ tile, meshName, instanceId, rotationY: buildingAngle })
-              newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY: buildingAngle })
+              this.buildings.push({ tile, meshName, instanceId, rotationY: jAngle })
+              newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jAngle })
 
-              // Optionally place tower top
+              // Optionally place tower top (same jitter as base)
               if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
                 const topGeomId = this.staticGeomIds.get(TOWER_TOP_MESH)
                 if (topGeomId !== undefined) {
                   const topId = this._addInstance(this.staticMesh, topGeomId)
                   if (topId !== -1) {
                     this.staticMesh.setColorAt(topId, levelColor(tile.level))
-                    this.dummy.position.set(localPos.x, y, localPos.z)
-                    this.dummy.rotation.y = buildingAngle
+                    this.dummy.position.set(localPos.x + jOx, y, localPos.z + jOz)
+                    this.dummy.rotation.y = jAngle
                     this.dummy.scale.setScalar(1)
                     this.dummy.updateMatrix()
                     this.staticMesh.setMatrixAt(topId, this.dummy.matrix)
-                    this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: buildingAngle })
-                    newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x, y, z: localPos.z, rotationY: buildingAngle })
+                    this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: jAngle })
+                    newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jAngle })
                   }
                 }
               }
