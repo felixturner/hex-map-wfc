@@ -20,7 +20,7 @@ export const TILE_LIST = [
     weight: 500 },
   { name: 'OCEAN', mesh: 'hex_water',
     edges: { NE: 'ocean', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'ocean', NW: 'ocean' },
-    weight: 300 },
+    weight: 500 },
 
   // Roads
   { name: 'ROAD_A', mesh: 'hex_road_A',

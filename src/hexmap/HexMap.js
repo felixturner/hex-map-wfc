@@ -93,6 +93,7 @@ export class HexMap {
     this.failedCells = new Set()   // Track global coords of cells that caused WFC failures (purple labels)
     this.droppedCells = new Set() // Track global coords of dropped fixed cells (red labels)
     this.replacedCells = new Set() // Track global coords of replaced fixed cells (orange labels)
+    this.seededCells = new Set()  // Track global coords of ocean-seeded cells (cyan labels)
 
     // Conflict resolution (replacement/validation of fixed cells)
     this.conflictResolver = new ConflictResolver(this.globalCells, this.grids, this.replacedCells)
@@ -120,6 +121,7 @@ export class HexMap {
     this._wfcQueue = []
     this._wfcIdleResolve = null
     this._autoExpanding = false
+    this._waterSideIndex = null
 
     // Convenience alias
     this.hexWfcRules = null
@@ -458,9 +460,23 @@ export class HexMap {
       this.addWaterEdgeSeeds(initialCollapses, center, this.hexGridRadius)
     }
 
-    const tileTypes = this.getDefaultTileTypes()
+    // Seed ocean at map corners that fall within this grid
     const solveSet = new Set(solveCells.map(c => cubeKey(c.q, c.r, c.s)))
     const fixedSet = new Set(fixedCells.map(fc => cubeKey(fc.q, fc.r, fc.s)))
+    for (const seed of this.getMapCornerOceanSeeds()) {
+      const key = cubeKey(seed.q, seed.r, seed.s)
+      if (solveSet.has(key) && !fixedSet.has(key)) {
+        initialCollapses.push(seed)
+      }
+    }
+
+    // Track seeded cells for debug labels
+    for (const ic of initialCollapses) {
+      const co = cubeToOffset(ic.q, ic.r, ic.s)
+      this.seededCells.add(`${co.col},${co.row}`)
+    }
+
+    const tileTypes = this.getDefaultTileTypes()
     const anchorMap = new Map()
     for (const fc of fixedCells) {
       anchorMap.set(cubeKey(fc.q, fc.r, fc.s), this.getAnchorsForCell(fc, solveSet, fixedSet))
@@ -823,16 +839,59 @@ export class HexMap {
    * @param {number} radius - Grid radius
    */
   addWaterEdgeSeeds(initialCollapses, center, radius) {
-    // 6 corner directions in cube coords
-    const corners = [
+    // 6 cube directions
+    const dirs = [
       { q: 1, r: -1, s: 0 }, { q: 1, r: 0, s: -1 }, { q: 0, r: 1, s: -1 },
       { q: -1, r: 1, s: 0 }, { q: -1, r: 0, s: 1 }, { q: 0, r: -1, s: 1 },
     ]
-    const dir = corners[Math.floor(random() * 6)]
-    const q = center.q + dir.q * radius
-    const r = center.r + dir.r * radius
-    const s = center.s + dir.s * radius
+    this._waterSideIndex = Math.floor(random() * 6)
+    // Midpoint of hex edge between vertex d and vertex (d+1)%6
+    const d = dirs[this._waterSideIndex]
+    const d2 = dirs[(this._waterSideIndex + 1) % 6]
+    const half = Math.floor(radius / 2)
+    const q = center.q + d.q * (radius - half) + d2.q * half
+    const r = center.r + d.r * (radius - half) + d2.r * half
+    const s = center.s + d.s * (radius - half) + d2.s * half
     initialCollapses.push({ q, r, s, type: TileType.OCEAN, rotation: 0, level: 0 })
+  }
+
+  /**
+   * Get ocean seeds at the center of 3 contiguous ring-2 grids on one side of the map.
+   * Uses the same side direction as the first grid's water edge seed.
+   */
+  getMapCornerOceanSeeds() {
+    const cubeDirs = [
+      { q: 1, r: -1, s: 0 },  { q: 1, r: 0, s: -1 },
+      { q: 0, r: 1, s: -1 },  { q: -1, r: 1, s: 0 },
+      { q: -1, r: 0, s: 1 },  { q: 0, r: -1, s: 1 },
+    ]
+    // Grid-cube to grid-offset conversion
+    const gridCubeToOffset = (q, r) => [q, r + Math.floor((q - (q & 1)) / 2)]
+
+    // Use same side as first grid's water seed (or pick one for Build All)
+    const d = this._waterSideIndex ?? Math.floor(random() * 6)
+    this._waterSideIndex = d
+
+    // Vertex grid (ring-2) in direction d, plus its two ring neighbors
+    const dir = cubeDirs[d]
+    const prevStep = cubeDirs[(d + 4) % 6]
+    const nextStep = cubeDirs[(d + 2) % 6]
+    const sideGrids = [
+      gridCubeToOffset(dir.q * 2 + prevStep.q, dir.r * 2 + prevStep.r),
+      gridCubeToOffset(dir.q * 2, dir.r * 2),
+      gridCubeToOffset(dir.q * 2 + nextStep.q, dir.r * 2 + nextStep.r),
+    ]
+
+    // Also seed the ring-1 grid in the same direction
+    const innerGrid = gridCubeToOffset(dir.q, dir.r)
+
+    const seeds = []
+    for (const [gx, gz] of [...sideGrids, innerGrid]) {
+      const worldOffset = this.calculateWorldOffset(gx, gz)
+      const c = worldOffsetToGlobalCube(worldOffset)
+      seeds.push({ q: c.q, r: c.r, s: c.s, type: TileType.OCEAN, rotation: 0, level: 0 })
+    }
+    return seeds
   }
 
   /**
@@ -974,7 +1033,7 @@ export class HexMap {
    * @param {HexGrid} grid - Grid that was clicked
    */
   async onGridClick(grid, { skipPrune = false } = {}) {
-    if (grid.state !== HexGridState.PLACEHOLDER) return
+    if (grid.state !== HexGridState.PLACEHOLDER) return 0
 
     const gridKey = getGridKey(grid.gridCoords.x, grid.gridCoords.z)
     const params = App.instance?.params
@@ -999,6 +1058,8 @@ export class HexMap {
     if (this.tileLabels.visible) {
       this.createTileLabels()
     }
+
+    return animDuration
   }
 
   /**
@@ -1008,12 +1069,14 @@ export class HexMap {
   async autoExpand(order) {
     const myEpoch = ++this._buildEpoch
     this._buildCancelled = false
+    this.onBeforeTilesChanged?.()
     this._autoExpanding = true
     this._wfcQueue.length = 0  // clear any pending clicks
     await this._waitForWfcIdle()
     this._wfcBusy = true  // hold the lock for the entire build
 
     const startTime = performance.now()
+    let lastAnimDuration = 0
     for (let i = 0; i < order.length; i++) {
       const [gx, gz] = order[i]
       if (this._buildCancelled || this._buildEpoch !== myEpoch) {
@@ -1029,7 +1092,7 @@ export class HexMap {
       }
       if (grid.state === HexGridState.PLACEHOLDER) {
         Sounds.play('pop', 1.0, 0.2, 0.7)
-        await this.onGridClick(grid, { skipPrune: true })
+        lastAnimDuration = await this.onGridClick(grid, { skipPrune: true }) || 0
       }
     }
     this._autoExpanding = false
@@ -1043,6 +1106,9 @@ export class HexMap {
     ]
     log(`[AUTO-BUILD] Done (${stats.join(', ')})`, 'color: green')
     Sounds.play('intro')
+
+    // Rebuild waves mask after last tile has fully dropped
+    this.onTilesChanged?.(lastAnimDuration)
   }
 
   /**
@@ -1070,6 +1136,8 @@ export class HexMap {
     this.failedCells.clear()
     this.replacedCells.clear()
     this.droppedCells.clear()
+    this.seededCells.clear()
+    this._waterSideIndex = null
     this.clearTileLabels()
 
     const gridsToDispose = [...this.grids.values()]
@@ -1128,8 +1196,15 @@ export class HexMap {
     const centerGrid = this.grids.get('0,0')
     const centerCube = centerGrid.globalCenterCube
     const initialCollapses = [
-      { q: centerCube.q, r: centerCube.r, s: centerCube.s, type: TileType.GRASS, rotation: 0, level: 0 }
+      { q: centerCube.q, r: centerCube.r, s: centerCube.s, type: TileType.GRASS, rotation: 0, level: 0 },
+      ...this.getMapCornerOceanSeeds(),
     ]
+
+    // Track seeded cells for debug labels
+    for (const ic of initialCollapses) {
+      const co = cubeToOffset(ic.q, ic.r, ic.s)
+      this.seededCells.add(`${co.col},${co.row}`)
+    }
 
     // ---- Single WFC solve (no fixed cells) ----
     const tileTypes = this.getDefaultTileTypes()
@@ -1467,6 +1542,8 @@ export class HexMap {
     this.failedCells.clear()
     this.droppedCells.clear()
     this.replacedCells.clear()
+    this.seededCells.clear()
+    this._waterSideIndex = null
     this.clearTileLabels()
 
     const gridsToDispose = [...this.grids.values()]
@@ -1486,6 +1563,9 @@ export class HexMap {
     await this.createGrid(0, 0)
 
     this.isRegenerating = false
+
+    // Clear waves mask (no tiles to render)
+    this.onTilesChanged?.(0)
   }
 
   async regenerate(options = {}) {
@@ -1506,6 +1586,8 @@ export class HexMap {
     this.failedCells.clear()
     this.droppedCells.clear()
     this.replacedCells.clear()
+    this.seededCells.clear()
+    this._waterSideIndex = null
 
     // Clear labels first (they reference grid data)
     this.clearTileLabels()

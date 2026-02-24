@@ -89,7 +89,7 @@ export class App {
       return
     }
 
-    const seed = 88956
+    const seed = Math.floor(Math.random() * 100000)
     setSeed(seed)
     console.log(`%c[SEED] ${seed}`, 'color: black')
     console.log(`%c[LEVELS] ${LEVELS_COUNT}`, 'color: black')
@@ -171,6 +171,12 @@ export class App {
       if (this.city._autoExpanding) return
       const opacity = this.city._waveOpacity
       if (!opacity || opacity.value === 0) return
+
+      // Kill any pending mask render from a previous build
+      if (this._pendingMaskRender) {
+        this._pendingMaskRender.kill()
+        this._pendingMaskRender = null
+      }
 
       // Sync tween target with current uniform values
       this._waveFade.opacity = opacity.value

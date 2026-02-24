@@ -61,9 +61,11 @@ export class HexMapDebug {
           const isFailed = hm.failedCells.has(globalKey)
           const isDropped = hm.droppedCells.has(globalKey)
           const isReplaced = hm.replacedCells.has(globalKey)
+          const isSeeded = hm.seededCells.has(globalKey)
           const bgColor = isFailed ? 'rgba(150,50,200,0.9)'
             : isDropped ? 'rgba(200,50,50,0.9)'
             : isReplaced ? 'rgba(220,140,20,0.9)'
+            : isSeeded ? 'rgba(0,200,200,0.9)'
             : 'rgba(0,0,0,0.5)'
           div.style.cssText = `
             color: white;
@@ -110,10 +112,12 @@ export class HexMapDebug {
             const isFailed = hm.failedCells.has(globalKey)
             const isDropped = hm.droppedCells.has(globalKey)
             const isReplaced = hm.replacedCells.has(globalKey)
-            const isHighlighted = isFailed || isDropped || isReplaced
+            const isSeeded = hm.seededCells.has(globalKey)
+            const isHighlighted = isFailed || isDropped || isReplaced || isSeeded
             const bgColor = isFailed ? 'rgba(150,50,200,0.9)'
               : isDropped ? 'rgba(200,50,50,0.9)'
               : isReplaced ? 'rgba(220,140,20,0.9)'
+              : isSeeded ? 'rgba(0,200,200,0.9)'
               : 'rgba(0,0,0,0.3)'
             div.style.cssText = `
               color: ${isHighlighted ? 'white' : 'rgba(255,255,255,0.6)'};

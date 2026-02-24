@@ -1,14 +1,11 @@
 # TODO
 
-- check seed #88956 has 2x level 3 road dead-ends into ocean?
-
 - figure out why build all is failing more now who knows? not related to ocean tiles. run more tests
 
 - make intro screen? audio? start btn wait for audio
 - figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
 
-- tune AO / water color / colors /trees less black?
-- prebake AO in blender?
+- dial in AO / water color / colors /trees less black?
 
 - fix weather
   - fix rain looks like poles
@@ -16,21 +13,20 @@
   - do weather scaling to lock min/max rain/snow sizes on zoom.
 
 
-
-
-
 - WORLD FEATURES
   - use bigger world noise fields for water, mountains + forests, cities? WIP
   - create world noise map as circle. white for land. smaller blobs for mountains/ forests / towns
   - Edge biasing for coast/ocean - Pre-seed boundary cells with water before solving, or use position-based weights to boost ocean/coast near edges and grass near center
   - use just seed some map edges with ocean/ mountains?
+  - biome noise for texture colors?
 
 - push. record video. make blog post: shadow map, waves + coveyness. sparkles - img is chepaer and better. wfc recovery.
+- send link to codrops
 
 ####
 
 # MORE DEC
-- boats and ports
+- boats
 - add a little minifig meeple have his hex outline lit up. control him to walk around.
 - day/night (cross fade skybox)
 - add animated fires
