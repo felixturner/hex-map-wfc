@@ -50,10 +50,9 @@ export const HexGridState = {
  * - POPULATED: Hides Placeholder, shows Helper (if debug enabled)
  */
 export class HexGrid {
-  constructor(scene, material, gridRadius, worldOffset = { x: 0, z: 0 }, treeMaterial = null) {
+  constructor(scene, material, gridRadius, worldOffset = { x: 0, z: 0 }) {
     this.scene = scene
     this.material = material
-    this.treeMaterial = treeMaterial
     this.gridRadius = gridRadius
     this.worldOffset = worldOffset
 
@@ -196,7 +195,7 @@ export class HexGrid {
 
     // Initialize decorations for this grid (pass worldOffset for noise sampling)
     this.decorations = new Decorations(this.group, this.worldOffset)
-    await this.decorations.init(this.material, this.treeMaterial)
+    await this.decorations.init(this.material)
 
     return true
   }

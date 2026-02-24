@@ -8,7 +8,7 @@ import {
   TextureLoader,
   SRGBColorSpace,
 } from 'three/webgpu'
-import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionWorld, positionLocal, positionGeometry, normalLocal, mx_noise_float, float, clamp, time as tslTime, sin, cos, modelWorldMatrix, fract, floor as tslFloor, instanceIndex, drawIndex, textureLoad, textureSize, mat3, mat4, int, ivec2 } from 'three/tsl'
+import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionGeometry, float, clamp } from 'three/tsl'
 import { cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, globalToLocalGrid } from './HexWFCCore.js'
 import { WFCManager } from './WFCManager.js'
 import { ConflictResolver } from './ConflictResolver.js'
@@ -28,7 +28,6 @@ import {
 } from './HexGridConnector.js'
 import { initGlobalTreeNoise, Decorations } from './Decorations.js'
 import { Water } from './effects/Water.js'
-import { Weather } from './effects/Weather.js'
 import { random } from '../SeededRandom.js'
 import { Sounds } from '../lib/Sounds.js'
 
@@ -108,9 +107,6 @@ export class HexMap {
     this.helpersVisible = false
     this.axesHelpersVisible = false
 
-    // Weather
-    this.weather = null
-
     // Regeneration state (prevents overlay rendering during disposal)
     this.isRegenerating = false
     this._buildCancelled = false
@@ -137,10 +133,6 @@ export class HexMap {
     this.initWfcRules()
     this.initWfcWorker()
     initGlobalTreeNoise()  // Initialize shared noise for tree placement
-
-    this.weather = new Weather()
-    this.weather.init()
-    this.scene.add(this.weather.group)
 
     // Hover highlight for click-to-solve region
     this.interaction.initHoverHighlight()
@@ -174,84 +166,10 @@ export class HexMap {
       diffuseColor.a.assign(diffuseColor.a.mul(opacityNode))
     }
 
-    // Clone material for trees (separate so we can add wind sway positionNode)
-    this.treeMaterial = this.roadMaterial.clone()
-    this.treeMaterial.setupDiffuseColor = this.roadMaterial.setupDiffuseColor
-
     // Load season textures and set up noise-blended colorNode
     await this._initTextureBlend()
 
     this.roadMaterial.colorNode = this._combinedColor
-    this.treeMaterial.colorNode = this._combinedColor
-
-    // Wind sway — override setupPosition to apply sway AFTER batch transform.
-    // Replicates BatchNode logic inline so positionLocal is post-batch (world space)
-    // before sway is added, ensuring consistent sway direction across all instances.
-    this._windStrength = uniform(0.0375)
-    this._windSpeed = uniform(1.46)
-    this._windFreq = uniform(0.902)
-    const time = tslTime
-    const windStrength = this._windStrength
-    const windSpeed = this._windSpeed
-    const windFreq = this._windFreq
-
-    this.treeMaterial.setupPosition = function(builder) {
-      const { object } = builder
-
-      if (object.isBatchedMesh) {
-        // --- Replicate BatchNode logic to get batchingMatrix ---
-        const batchingIdNode = builder.getDrawIndex() === null ? instanceIndex : drawIndex
-
-        // Indirect index lookup
-        const indTex = object._indirectTexture
-        const indSize = textureSize(textureLoad(indTex), 0)
-        const indX = int(batchingIdNode).modInt(int(indSize))
-        const indY = int(batchingIdNode).div(int(indSize))
-        const indirectId = textureLoad(indTex, ivec2(indX, indY)).x
-
-        // Per-instance matrix from _matricesTexture
-        const matTex = object._matricesTexture
-        const matSize = textureSize(textureLoad(matTex), 0)
-        const j = float(indirectId).mul(4).toInt().toVar()
-        const mx = j.modInt(matSize)
-        const my = j.div(int(matSize))
-        const batchingMatrix = mat4(
-          textureLoad(matTex, ivec2(mx, my)),
-          textureLoad(matTex, ivec2(mx.add(1), my)),
-          textureLoad(matTex, ivec2(mx.add(2), my)),
-          textureLoad(matTex, ivec2(mx.add(3), my))
-        )
-
-        // Apply batch transform to position
-        positionLocal.assign(batchingMatrix.mul(positionLocal))
-
-        // Transform normals
-        const bm = mat3(batchingMatrix)
-        const transformedNormal = normalLocal.div(vec3(bm[0].dot(bm[0]), bm[1].dot(bm[1]), bm[2].dot(bm[2])))
-        normalLocal.assign(bm.mul(transformedNormal).xyz)
-
-        // Per-instance colors (level data + rotation)
-        if (object._colorsTexture) {
-          const colSize = textureSize(textureLoad(object._colorsTexture), 0).x
-          const cx = int(indirectId).modInt(colSize)
-          const cy = int(indirectId).div(colSize)
-          varyingProperty('vec3', 'vBatchColor').assign(
-            textureLoad(object._colorsTexture, ivec2(cx, cy)).rgb
-          )
-        }
-
-        // --- Wind sway in world space (positionLocal is now post-batch) ---
-        const wPos = modelWorldMatrix.mul(vec4(positionLocal, float(1))).xyz
-        const phase = wPos.x.mul(windFreq).add(wPos.z.mul(windFreq).mul(0.6))
-        const swayMask = positionGeometry.y.mul(windStrength)
-        const swayX = sin(time.mul(windSpeed).add(phase)).mul(swayMask)
-        const swayZ = sin(time.mul(windSpeed).mul(0.85).add(phase).add(1.5)).mul(swayMask)
-        positionLocal.addAssign(vec3(swayX, float(0), swayZ))
-      }
-
-      return positionLocal
-    }
-
   }
 
   /**
@@ -388,7 +306,7 @@ export class HexMap {
     const globalCenterCube = worldOffsetToGlobalCube(worldOffset)
 
     // Create grid in PLACEHOLDER state
-    const grid = new HexGrid(this.scene, this.roadMaterial, this.hexGridRadius, worldOffset, this.treeMaterial)
+    const grid = new HexGrid(this.scene, this.roadMaterial, this.hexGridRadius, worldOffset)
     grid.gridCoords = { x: gridX, z: gridZ }
     grid.globalCenterCube = globalCenterCube
     grid.onClick = () => {
@@ -1633,12 +1551,6 @@ export class HexMap {
   }
 
   update(dt) {
-    if (this.weather) {
-      const app = App.instance
-      const target = app?.controls?.target
-      const camera = app?.camera
-      this.weather.update(dt, target, camera)
-    }
   }
 
   // === Water uniform proxies (GUI accesses via app.city._waterSpeed etc.) ===
@@ -1730,7 +1642,6 @@ export class HexMap {
       if (slot === 'lo') this._texA = tex
       else this._texB = tex
       this.roadMaterial.needsUpdate = true
-      if (this.treeMaterial) this.treeMaterial.needsUpdate = true
     })
   }
 

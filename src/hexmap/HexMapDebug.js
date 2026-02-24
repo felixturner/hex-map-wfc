@@ -251,9 +251,6 @@ export class HexMapDebug {
   }
 
   getEffectsObjects() {
-    if (this.hexMap.isRegenerating) return []
-    const effects = []
-    if (this.hexMap.weather) effects.push(this.hexMap.weather.group)
-    return effects
+    return []
   }
 }

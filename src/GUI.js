@@ -103,9 +103,6 @@ export class GUIManager {
     decoration: {
       treeNoiseFreq: 0.05,
       treeThreshold: 0.5,
-      windStrength: 0.0375,
-      windSpeed: 1.46,
-      windFreq: 0.902,
     },
     water: {
       y: 0.88,
@@ -133,15 +130,6 @@ export class GUIManager {
       coveFade: true,
       coveThin: true,
       coveShow: false,
-    },
-    weather: {
-      mode: 'none',
-      intensity: 0.1,
-      opacity: 0.8,
-      speed: 0.4,
-      wind: 0,
-      wobble: 0.5,
-      snowSize: 5,
     },
   }
 
@@ -356,39 +344,6 @@ export class GUIManager {
       if (app.city._coveThin) app.city._coveThin.value = v ? 1 : 0
     })
 
-    // Weather folder
-    const weatherFolder = gui.addFolder('Weather').close()
-    weatherFolder.add(allParams.weather, 'mode', ['none', 'rain', 'snow']).name('Mode').onChange((v) => {
-      app.city.weather?.setMode(v)
-    })
-    weatherFolder.add(allParams.weather, 'intensity', 0, 1, 0.05).name('Intensity').onChange((v) => {
-      app.city.weather?.setIntensity(v)
-    })
-    weatherFolder.add(allParams.weather, 'opacity', 0, 1, 0.05).name('Opacity').onChange((v) => {
-      app.city.weather?.setOpacity(v)
-    })
-    weatherFolder.add(allParams.weather, 'speed', 0, 2, 0.05).name('Speed').onChange((v) => {
-      app.city.weather?.setSpeed(v)
-    })
-    weatherFolder.add(allParams.weather, 'wind', -1, 1, 0.05).name('Wind').onChange((v) => {
-      app.city.weather?.setWind(v)
-    })
-    weatherFolder.add(allParams.weather, 'wobble', 0, 5, 0.1).name('Wobble').onChange((v) => {
-      app.city.weather?.setWobble(v)
-    })
-    weatherFolder.add(allParams.weather, 'snowSize', 1, 20, 0.5).name('Snow Size').onChange((v) => {
-      app.city.weather?.setSnowSize(v)
-    })
-    weatherFolder.add(allParams.decoration, 'windStrength', 0, 0.15).name('Wind Strength').onChange((v) => {
-      if (app.city._windStrength) app.city._windStrength.value = v
-    })
-    weatherFolder.add(allParams.decoration, 'windSpeed', 0, 2.0).name('Wind Speed').onChange((v) => {
-      if (app.city._windSpeed) app.city._windSpeed.value = v
-    })
-    weatherFolder.add(allParams.decoration, 'windFreq', 0, 1.0).name('Wind Noise Freq').onChange((v) => {
-      if (app.city._windFreq) app.city._windFreq.value = v
-    })
-
     // Lights folder
     const lightsFolder = gui.addFolder('Lights').close()
     const hdrOptions = [
@@ -578,17 +533,6 @@ export class GUIManager {
 
     // Hex helper visibility
     app.city.setHelpersVisible(params.debug.hexGrid)
-
-    // Weather
-    if (app.city.weather) {
-      app.city.weather.setMode(params.weather.mode)
-      app.city.weather.setIntensity(params.weather.intensity)
-      app.city.weather.setOpacity(params.weather.opacity)
-      app.city.weather.setSpeed(params.weather.speed)
-      app.city.weather.setWind(params.weather.wind)
-      app.city.weather.setWobble(params.weather.wobble)
-      app.city.weather.setSnowSize(params.weather.snowSize)
-    }
 
     // Level bias
     if (app.city._levelBias) app.city._levelBias.value = params.debug.levelBias

@@ -135,7 +135,7 @@ export class Decorations {
     return instanceId
   }
 
-  async init(material, treeMaterial = null) {
+  async init(material) {
     const geoms = Decorations.cachedGeoms
     if (!geoms || geoms.size === 0) {
       console.warn('Decorations: No cached geometries (call Decorations.initGeometries first)')
@@ -182,10 +182,10 @@ export class Decorations {
       return { mesh, idMap }
     }
 
-    // treeMesh: trees + flowers (treeMaterial — wind sway)
+    // treeMesh: trees + flowers
     const treeGeoms = collectGeoms([...TreeMeshNames, ...FlowerMeshNames])
     if (treeGeoms.size > 0) {
-      const { mesh, idMap } = createBatchedMesh(treeGeoms, MAX_TREE_INSTANCES, treeMaterial || material)
+      const { mesh, idMap } = createBatchedMesh(treeGeoms, MAX_TREE_INSTANCES, material)
       this.treeMesh = mesh
       this.treeGeomIds = idMap
     }
