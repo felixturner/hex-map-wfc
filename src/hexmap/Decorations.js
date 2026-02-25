@@ -487,7 +487,7 @@ export class Decorations {
       }
     }
 
-    // Place shipyard on COAST_A/COAST_B tiles, facing rotated SE direction, max 1 per grid (20% chance)
+    // Place shipyard on COAST_A/COAST_B tiles, facing rotated SE direction, max 1 per grid (25% chance)
     const coastBuildingNames = [...CoastBuildingMeshNames].filter(n => this.staticGeomIds.has(n))
     if (coastBuildingNames.length > 0) {
       const shipyardCandidates = []
@@ -510,7 +510,7 @@ export class Decorations {
         if (!blocked) shipyardCandidates.push({ tile, waterAngle })
       }
       shuffle(shipyardCandidates)
-      if (shipyardCandidates.length > 0) {
+      if (shipyardCandidates.length > 0 /* && random() < 0.25 */) {
         const { tile, waterAngle } = shipyardCandidates[0]
         const localPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
         const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
