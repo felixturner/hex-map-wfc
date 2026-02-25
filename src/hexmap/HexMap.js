@@ -1455,6 +1455,47 @@ export class HexMap {
     Sounds.play('intro')
   }
 
+  async runBuildAllBenchmark(runs = 3) {
+    log(`[BENCHMARK-BA] Starting ${runs} Build-All runs`, 'color: blue')
+    const results = []
+
+    for (let i = 0; i < runs; i++) {
+      const seed = Math.floor(Math.random() * 100000)
+      log(`[BENCHMARK-BA] Run ${i + 1}/${runs} (seed: ${seed})`, 'color: blue')
+
+      setSeed(seed)
+      await this.reset()
+
+      const result = await this.populateAllGrids(null, { animate: false })
+      results.push({ seed, ...(result || { success: false }) })
+
+      if (this._buildCancelled) {
+        log('[BENCHMARK-BA] Cancelled', 'color: red')
+        break
+      }
+    }
+
+    const successes = results.filter(r => r.success).length
+    const failures = results.filter(r => !r.success && !r.cancelled).length
+    const times = results.filter(r => r.success).map(r => r.time)
+    const avgTime = times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : '-'
+    const backtracks = results.filter(r => r.success).map(r => r.backtracks || 0)
+    const avgBT = backtracks.length ? (backtracks.reduce((a, b) => a + b, 0) / backtracks.length).toFixed(0) : '-'
+
+    log(`[BENCHMARK-BA] === RESULTS ===`, 'color: green')
+    log(`[BENCHMARK-BA] ${successes}/${results.length} succeeded, ${failures} failed, avg time: ${avgTime}s, avg backtracks: ${avgBT}`, 'color: green')
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]
+      if (r.success) {
+        log(`[BENCHMARK-BA]   Run ${i + 1} (seed ${r.seed}): SUCCESS (${r.time}s, ${r.backtracks || 0} backtracks, ${r.tries || 0} tries)`, 'color: green')
+      } else if (!r.cancelled) {
+        log(`[BENCHMARK-BA]   Run ${i + 1} (seed ${r.seed}): FAIL`, 'color: red')
+      }
+    }
+
+    Sounds.play('intro')
+  }
+
   async reset() {
     ++this._buildEpoch
     this._buildCancelled = true

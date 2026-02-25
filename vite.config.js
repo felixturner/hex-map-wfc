@@ -16,7 +16,7 @@ export default defineConfig({
   server: {
     port: 5176,
     watch: {
-      ignored: ['**/*.md', '**/*.txt'],
+      ignored: ['**/*.md', '**/*.txt', '**/docs/**'],
     },
   },
   build: {

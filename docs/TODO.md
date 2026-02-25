@@ -8,17 +8,10 @@
 - dial in AO 
 - clean up old assets
 
-
 - figure out why build all is failing more now? 
 
-
-
 - push. record video. 
-  - make blog post: 
-  - shadow map, 
-  - waves + coveyness. sparkles - img is chepaer and better. 
-  - wfc recovery.
-  - tree + building noise
+
 - send link to codrops
 
 ####

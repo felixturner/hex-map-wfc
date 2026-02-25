@@ -592,6 +592,8 @@ class HexWFCSolver {
       let failed = false
       let collapseCount = 0
       const totalCells = this.cells.size
+      const isBuildAll = false // this.options.gridId === 'BUILD_ALL'
+      const progressInterval = isBuildAll ? Math.max(1, Math.floor(totalCells / 5)) : 0
 
       while (true) {
         const targetKey = this.findLowestEntropyCell()
@@ -613,6 +615,14 @@ class HexWFCSolver {
         }
 
         collapseCount++
+
+        // Progress logging for Build All
+        if (progressInterval && collapseCount % progressInterval === 0) {
+          const frac = collapseCount / totalCells
+          const filled = Math.round(frac * 10)
+          const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled)
+          this.log(`[BUILD ALL] ${bar} ${collapseCount}/${totalCells} cells, ${this.backtracks} backtracks`, 'blue')
+        }
 
         if (!this.propagate()) {
           // Conflict — backtrack
