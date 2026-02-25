@@ -24,15 +24,16 @@ export function hideAllInstances(grid) {
   }
 
   if (grid.decorations) {
+    const mesh = grid.decorations.mesh
     const pairs = [
-      [grid.decorations.trees, grid.decorations.treeMesh],
-      [grid.decorations.buildings, grid.decorations.staticMesh],
-      [grid.decorations.bridges, grid.decorations.staticMesh],
-      [grid.decorations.waterlilies, grid.decorations.staticMesh],
-      [grid.decorations.flowers, grid.decorations.treeMesh],
-      [grid.decorations.rocks, grid.decorations.staticMesh],
-      [grid.decorations.hills, grid.decorations.staticMesh],
-      [grid.decorations.mountains, grid.decorations.staticMesh],
+      [grid.decorations.trees, mesh],
+      [grid.decorations.buildings, mesh],
+      [grid.decorations.bridges, mesh],
+      [grid.decorations.waterlilies, mesh],
+      [grid.decorations.flowers, mesh],
+      [grid.decorations.rocks, mesh],
+      [grid.decorations.hills, mesh],
+      [grid.decorations.mountains, mesh],
     ]
     for (const [items, mesh] of pairs) {
       for (const item of items) mesh.setMatrixAt(item.instanceId, dummy.matrix)
@@ -105,7 +106,9 @@ function buildDecorationMap(grid) {
     }
   }
 
-  addItems(decs.trees, decs.treeMesh, (t, pos) => ({
+  const mesh = decs.mesh
+
+  addItems(decs.trees, mesh, (t, pos) => ({
     x: pos.x + (t.ox ?? 0), y: t.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z + (t.oz ?? 0),
     rotationY: t.rotationY ?? 0
   }))
@@ -114,7 +117,7 @@ function buildDecorationMap(grid) {
   const fanByInstanceId = new Map()
   for (const fan of decs.windmillFans) fanByInstanceId.set(fan.instanceId, fan)
 
-  addItems(decs.buildings, decs.staticMesh, (b, pos) => {
+  addItems(decs.buildings, mesh, (b, pos) => {
     const entry = {
       x: pos.x + (b.ox ?? 0), y: b.tile.level * LEVEL_HEIGHT + TILE_SURFACE + (b.oy ?? 0), z: pos.z + (b.oz ?? 0),
       rotationY: b.rotationY ?? 0
@@ -124,12 +127,12 @@ function buildDecorationMap(grid) {
     return entry
   })
 
-  addItems(decs.bridges, decs.staticMesh, (b, pos) => ({
+  addItems(decs.bridges, mesh, (b, pos) => ({
     x: pos.x, y: b.tile.level * LEVEL_HEIGHT, z: pos.z,
     rotationY: -b.tile.rotation * Math.PI / 3
   }))
 
-  addItems(decs.waterlilies, decs.staticMesh, (l, pos) => {
+  addItems(decs.waterlilies, mesh, (l, pos) => {
     const name = TILE_LIST[l.tile.type]?.name || ''
     const dip = (name.startsWith('COAST_') || name === 'OCEAN') ? -0.2 : 0
     return {
@@ -138,12 +141,12 @@ function buildDecorationMap(grid) {
     }
   })
 
-  addItems(decs.flowers, decs.treeMesh, (f, pos) => ({
+  addItems(decs.flowers, mesh, (f, pos) => ({
     x: pos.x + (f.ox ?? 0), y: f.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z + (f.oz ?? 0),
     rotationY: f.rotationY ?? 0, scale: 2
   }))
 
-  addItems(decs.rocks, decs.staticMesh, (r, pos) => {
+  addItems(decs.rocks, mesh, (r, pos) => {
     const name = TILE_LIST[r.tile.type]?.name || ''
     const dip = name === 'OCEAN' ? -0.2 : (name.startsWith('COAST_') || name.startsWith('RIVER_')) ? -0.1 : 0
     return {
@@ -152,7 +155,7 @@ function buildDecorationMap(grid) {
     }
   })
 
-  addItems(decs.hills, decs.staticMesh, (h, pos) => {
+  addItems(decs.hills, mesh, (h, pos) => {
     const isRiverEnd = TILE_LIST[h.tile.type]?.name === 'RIVER_END'
     return {
       x: pos.x, y: h.tile.level * LEVEL_HEIGHT + TILE_SURFACE + (isRiverEnd ? -0.1 : 0), z: pos.z,
@@ -160,7 +163,7 @@ function buildDecorationMap(grid) {
     }
   })
 
-  addItems(decs.mountains, decs.staticMesh, (m, pos) => ({
+  addItems(decs.mountains, mesh, (m, pos) => ({
     x: pos.x, y: m.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z,
     rotationY: m.rotationY ?? 0
   }))

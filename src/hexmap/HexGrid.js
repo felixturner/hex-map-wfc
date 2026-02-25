@@ -154,7 +154,7 @@ export class HexGrid {
       totalI += HexTileGeometry.bottomGeom.index ? HexTileGeometry.bottomGeom.index.count : 0
     }
 
-    const maxInstances = 25 * 25 * 2  // Extra room for bottom fill instances
+    const maxInstances = 217 * 2  // 217 tiles + 217 bottom fills (radius-8 hex grid)
 
     // Create BatchedMesh for hex tiles (positioned at 0,0,0 local - group handles offset)
     this.hexMesh = new BatchedMesh(maxInstances, totalV * 2, totalI * 2, this.material)

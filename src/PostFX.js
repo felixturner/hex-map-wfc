@@ -19,7 +19,6 @@ import {
 import { ao } from 'three/addons/tsl/display/GTAONode.js'
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js'
 import { dof } from 'three/addons/tsl/display/DepthOfFieldNode.js'
-import { bleach } from 'three/addons/tsl/display/BleachBypass.js'
 
 export class PostFX {
   constructor(renderer, scene, camera) {
@@ -33,7 +32,7 @@ export class PostFX {
     this.aoEnabled = uniform(1)
     this.vignetteEnabled = uniform(1)
     this.dofEnabled = uniform(0)
-    this.bleachEnabled = uniform(0)
+
     this.lutEnabled = uniform(0)
     this.grainEnabled = uniform(0)
 
@@ -48,9 +47,6 @@ export class PostFX {
     this.dofFocus = uniform(100)
     this.dofAperture = uniform(0.025)
     this.dofMaxblur = uniform(0.01)
-
-    // Bleach bypass parameters
-    this.bleachAmount = uniform(0.5)
 
     // LUT parameters
     this.lutAmount = uniform(1)
@@ -180,16 +176,12 @@ export class PostFX {
     const overlayTexture = texture(this.overlayTarget.texture)
     const withOverlay = withWater.add(overlayTexture.rgb.mul(overlayTexture.a))
 
-    // ---- Bleach bypass (after overlay, before LUT) ----
-    const bleachedColor = bleach(withOverlay, this.bleachAmount)
-    const afterBleach = mix(withOverlay.rgb, bleachedColor.rgb, this.bleachEnabled)
-
-    // ---- LUT color grading (after bleach, before vignette) ----
+    // ---- LUT color grading (after overlay, before vignette) ----
     const lutTexNode = texture(this.lutTexture)
     this._lutTexNode = lutTexNode
 
     // Clamp input to [0,1] for safe LUT indexing
-    const lutInput = afterBleach.clamp(0, 1)
+    const lutInput = withOverlay.rgb.clamp(0, 1)
     const blue = lutInput.b.mul(63.0)
     const blueIdx = blue.floor()
     const nextIdx = blueIdx.add(1.0).min(63.0)
@@ -217,7 +209,7 @@ export class PostFX {
     const lutSample1 = lutTexNode.sample(uv1).rgb
     const lutSample2 = lutTexNode.sample(uv2).rgb
     const lutColor = mix(lutSample1, lutSample2, blue.fract())
-    const afterLut = mix(afterBleach, lutColor, this.lutEnabled.mul(this.lutAmount))
+    const afterLut = mix(withOverlay.rgb, lutColor, this.lutEnabled.mul(this.lutAmount))
 
     // ---- Vignette: darken edges toward black ----
     const vignetteFactor = float(1).sub(

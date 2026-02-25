@@ -63,8 +63,6 @@ export class GUIManager {
       dof: true,
       dofAperture: 0.21,
       dofMaxblur: 0.005,
-      bleach: false,
-      bleachAmount: 0.3,
       lut: true,
       lutStyle: 'etikate',
       lutAmount: 0.1,
@@ -454,12 +452,6 @@ export class GUIManager {
     fxFolder.add(allParams.fx, 'dofMaxblur', 0.001, 0.02, 0.001).name('DOF Max Blur').onChange((v) => {
       app.dofMaxblur.value = v
     })
-    fxFolder.add(allParams.fx, 'bleach').name('Bleach Bypass').onChange((v) => {
-      app.bleachEnabled.value = v ? 1 : 0
-    })
-    fxFolder.add(allParams.fx, 'bleachAmount', 0, 0.3, 0.05).name('Bleach Amount').onChange((v) => {
-      app.bleachAmount.value = v
-    })
     fxFolder.add(allParams.fx, 'lut').name('LUT').onChange((v) => {
       app.lutEnabled.value = v ? 1 : 0
     })
@@ -525,8 +517,6 @@ export class GUIManager {
     app.dofEnabled.value = params.fx.dof ? 1 : 0
     app.dofAperture.value = params.fx.dofAperture / 1000
     app.dofMaxblur.value = params.fx.dofMaxblur
-    app.bleachEnabled.value = params.fx.bleach ? 1 : 0
-    app.bleachAmount.value = params.fx.bleachAmount
     app.lutEnabled.value = params.fx.lut ? 1 : 0
     app.lutAmount.value = params.fx.lutAmount
     app.grainEnabled.value = params.fx.grain ? 1 : 0

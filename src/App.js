@@ -148,13 +148,9 @@ export class App {
             this._savedMats.set(grid.hexMesh, grid.hexMesh.material)
             grid.hexMesh.material = maskMat
           }
-          if (grid.decorations?.treeMesh) {
-            this._savedMats.set(grid.decorations.treeMesh, grid.decorations.treeMesh.material)
-            grid.decorations.treeMesh.material = maskMat
-          }
-          if (grid.decorations?.staticMesh) {
-            this._savedMats.set(grid.decorations.staticMesh, grid.decorations.staticMesh.material)
-            grid.decorations.staticMesh.material = maskMat
+          if (grid.decorations?.mesh) {
+            this._savedMats.set(grid.decorations.mesh, grid.decorations.mesh.material)
+            grid.decorations.mesh.material = maskMat
           }
         }
       } else {
@@ -403,8 +399,6 @@ export class App {
     this.dofFocus = this.postFX.dofFocus
     this.dofAperture = this.postFX.dofAperture
     this.dofMaxblur = this.postFX.dofMaxblur
-    this.bleachEnabled = this.postFX.bleachEnabled
-    this.bleachAmount = this.postFX.bleachAmount
     this.lutEnabled = this.postFX.lutEnabled
     this.lutAmount = this.postFX.lutAmount
     this.grainEnabled = this.postFX.grainEnabled
@@ -506,6 +500,46 @@ export class App {
       buttons.push(btn)
       if (key === 'move') btn.style.borderColor = 'white'
     }
+
+    // Action buttons (not toggle — fire once)
+    const actions = [
+      { label: 'Reset', action: () => {
+        this.city.reset()
+        this.city.setHelpersVisible(this.params.debug.hexGrid)
+        this.perspCamera.position.set(0.903, 100.036, 59.610)
+        this.controls.target.set(0.903, 1, 1.168)
+        this.controls.update()
+      }},
+      { label: 'Auto\nBuild', action: () => {
+        this.city.autoBuild([
+          [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
+        ])
+      }},
+    ]
+
+    for (const { label, action } of actions) {
+      const btn = document.createElement('button')
+      btn.textContent = label
+      btn.style.cssText = `
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        border: 2px solid rgba(255,255,255,0.3);
+        background: rgba(0,0,0,0.4);
+        color: white;
+        font-family: monospace;
+        font-size: 11px;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+        white-space: pre-line;
+      `
+      btn.addEventListener('pointerdown', (e) => e.stopPropagation())
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        action()
+      })
+      container.appendChild(btn)
+    }
   }
 
   onResize(_e, toSize) {
@@ -563,8 +597,7 @@ export class App {
     const maskObjects = []
     for (const grid of this.city.grids.values()) {
       if (grid.hexMesh) maskObjects.push(grid.hexMesh)
-      if (grid.decorations?.treeMesh) maskObjects.push(grid.decorations.treeMesh)
-      if (grid.decorations?.staticMesh) maskObjects.push(grid.decorations.staticMesh)
+      if (grid.decorations?.mesh) maskObjects.push(grid.decorations.mesh)
     }
     postFX.setWaterMaskObjects(maskObjects)
     postFX.setOverlayObjects(this.city.getOverlayObjects())

@@ -259,6 +259,5 @@ export const MAX_ROCKS = 50
 export const MAX_HILLS = 10
 export const MAX_MOUNTAINS = 10
 
-// Merged mesh limits (2 BMs total)
-export const MAX_TREE_INSTANCES = MAX_TREES + MAX_FLOWERS + 1   // treeMaterial: trees + flowers + dummy
-export const MAX_STATIC_INSTANCES = MAX_BUILDINGS + MAX_BRIDGES + MAX_WATERLILIES + MAX_ROCKS + MAX_HILLS + MAX_MOUNTAINS + 1  // material: everything else + dummy
+// Single merged BatchedMesh limit
+export const MAX_DEC_INSTANCES = MAX_TREES + MAX_FLOWERS + MAX_BUILDINGS + MAX_BRIDGES + MAX_WATERLILIES + MAX_ROCKS + MAX_HILLS + MAX_MOUNTAINS + 1  // all decorations + dummy

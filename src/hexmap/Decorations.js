@@ -16,7 +16,7 @@ import {
   HillDefs, MountainDefs, HillMeshNames, MountainMeshNames, RiverEndDefs,
   WHITE, levelColor,
   MAX_TREES, MAX_BUILDINGS, MAX_BRIDGES, MAX_WATERLILIES, MAX_FLOWERS, MAX_ROCKS, MAX_HILLS, MAX_MOUNTAINS,
-  MAX_TREE_INSTANCES, MAX_STATIC_INSTANCES,
+  MAX_DEC_INSTANCES,
 } from './DecorationDefs.js'
 
 // Re-export noise functions so existing imports from Decorations.js still work
@@ -82,11 +82,9 @@ export class Decorations {
     this.scene = scene
     this.worldOffset = worldOffset
 
-    // Two merged BatchedMeshes
-    this.treeMesh = null        // treeMaterial: trees + flowers
-    this.treeGeomIds = new Map()
-    this.staticMesh = null      // material: buildings + bridges + waterlilies + rocks + hills + mountains
-    this.staticGeomIds = new Map()
+    // Single merged BatchedMesh for all decorations
+    this.mesh = null
+    this.geomIds = new Map()
 
     // Per-type instance tracking (needed for per-type clears and populate logic)
     this.trees = []
@@ -141,73 +139,55 @@ export class Decorations {
       return
     }
 
-    // Helper: collect cached geoms for a set of mesh names
-    const collectGeoms = (meshNames) => {
-      const map = new Map()
-      for (const name of meshNames) {
-        const geom = geoms.get(name)
-        if (geom) map.set(name, geom)
-      }
-      return map
-    }
-
-    // Helper: create a BatchedMesh from a geometry map
-    const createBatchedMesh = (geomMap, maxInstances, mat) => {
-      let totalV = 0, totalI = 0
-      for (const geom of geomMap.values()) {
-        totalV += geom.attributes.position.count
-        totalI += geom.index ? geom.index.count : 0
-      }
-      const mesh = new BatchedMesh(maxInstances, totalV * 2, totalI * 2, mat)
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      mesh.frustumCulled = false
-      this.scene.add(mesh)
-
-      const idMap = new Map()
-      for (const [name, geom] of geomMap) {
-        idMap.set(name, mesh.addGeometry(geom))
-      }
-
-      // Dummy white instance (fixes WebGPU color sync issue)
-      const firstGeomId = idMap.values().next().value
-      mesh._dummyInstanceId = mesh.addInstance(firstGeomId)
-      mesh.setColorAt(mesh._dummyInstanceId, WHITE)
-      this.dummy.position.set(0, -1000, 0)
-      this.dummy.scale.setScalar(0)
-      this.dummy.updateMatrix()
-      mesh.setMatrixAt(mesh._dummyInstanceId, this.dummy.matrix)
-
-      return { mesh, idMap }
-    }
-
-    // treeMesh: trees + flowers
-    const treeGeoms = collectGeoms([...TreeMeshNames, ...FlowerMeshNames])
-    if (treeGeoms.size > 0) {
-      const { mesh, idMap } = createBatchedMesh(treeGeoms, MAX_TREE_INSTANCES, material)
-      this.treeMesh = mesh
-      this.treeGeomIds = idMap
-    }
-
-    // staticMesh: buildings + bridges + waterlilies + rocks + hills + mountains (material — no sway)
-    const staticNames = [
+    // Collect all decoration geometries into one map
+    const allNames = [
+      ...TreeMeshNames, ...FlowerMeshNames,
       ...BuildingMeshNames, TOWER_TOP_MESH, ...CoastBuildingMeshNames, ...WindmillMeshNames,
       ...BridgeMeshNames, ...WaterlilyMeshNames, ...RockMeshNames,
       ...HillMeshNames, ...MountainMeshNames,
     ]
-    const staticGeoms = collectGeoms(staticNames)
-    if (staticGeoms.size > 0) {
-      const { mesh, idMap } = createBatchedMesh(staticGeoms, MAX_STATIC_INSTANCES, material)
-      this.staticMesh = mesh
-      this.staticGeomIds = idMap
+    const allGeoms = new Map()
+    for (const name of allNames) {
+      const geom = geoms.get(name)
+      if (geom) allGeoms.set(name, geom)
     }
+    if (allGeoms.size === 0) return
+
+    // Create single BatchedMesh for all decorations
+    let totalV = 0, totalI = 0
+    for (const geom of allGeoms.values()) {
+      totalV += geom.attributes.position.count
+      totalI += geom.index ? geom.index.count : 0
+    }
+    const mesh = new BatchedMesh(MAX_DEC_INSTANCES, totalV * 2, totalI * 2, material)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.frustumCulled = false
+    this.scene.add(mesh)
+
+    const idMap = new Map()
+    for (const [name, geom] of allGeoms) {
+      idMap.set(name, mesh.addGeometry(geom))
+    }
+
+    // Dummy white instance (fixes WebGPU color sync issue)
+    const firstGeomId = idMap.values().next().value
+    mesh._dummyInstanceId = mesh.addInstance(firstGeomId)
+    mesh.setColorAt(mesh._dummyInstanceId, WHITE)
+    this.dummy.position.set(0, -1000, 0)
+    this.dummy.scale.setScalar(0)
+    this.dummy.updateMatrix()
+    mesh.setMatrixAt(mesh._dummyInstanceId, this.dummy.matrix)
+
+    this.mesh = mesh
+    this.geomIds = idMap
   }
 
   populate(hexTiles, gridRadius, options = {}) {
     this.clearTrees()
     this.dummy.rotation.set(0, 0, 0)  // Reset from windmill fan animation
 
-    if (!this.treeMesh || this.treeGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
     if (!globalNoiseA || !globalNoiseB) return  // Need global noise initialized
 
     const threshold = getCurrentTreeThreshold()  // noise > threshold = tree
@@ -264,8 +244,8 @@ export class Decorations {
       const normalizedNoise = (noiseVal - threshold) / (1 - threshold)  // 0..1
       const tierIndex = Math.min(3, Math.floor(normalizedNoise * 4))
       const meshName = TreesByType[treeType][tierIndex]
-      const geomId = this.treeGeomIds.get(meshName)
-      const instanceId = this._addInstance(this.treeMesh, geomId)
+      const geomId = this.geomIds.get(meshName)
+      const instanceId = this._addInstance(this.mesh, geomId)
       if (instanceId === -1) break
 
       // Position at tile center with random offset (local coords since mesh is in group)
@@ -274,7 +254,7 @@ export class Decorations {
       const oz = (random() - 0.5) * 0.4
       const c = levelColor(tile.level)
       c.b = rotationY / (Math.PI * 2)
-      this.treeMesh.setColorAt(instanceId, c)
+      this.mesh.setColorAt(instanceId, c)
       this.dummy.position.set(
         localPos.x + ox,
         tile.level * LEVEL_HEIGHT + TILE_SURFACE,
@@ -284,7 +264,7 @@ export class Decorations {
       this.dummy.scale.setScalar(1 + random() * 0.2)
       this.dummy.updateMatrix()
 
-      this.treeMesh.setMatrixAt(instanceId, this.dummy.matrix)
+      this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
       this.trees.push({ tile, meshName, instanceId, rotationY, ox, oz })
     }
   }
@@ -292,9 +272,9 @@ export class Decorations {
   populateBuildings(hexTiles, hexGrid, gridRadius, options = {}) {
     this.clearBuildings()
 
-    if (!this.staticMesh || this.staticGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
 
-    const hasWindmill = WindmillMeshNames.every(n => this.staticGeomIds.has(n))
+    const hasWindmill = WindmillMeshNames.every(n => this.geomIds.has(n))
 
     // Direction to Y-rotation mapping (building front is +Z, atan2(worldX, worldZ) for each hex dir)
     const dirToAngle = {
@@ -395,14 +375,14 @@ export class Decorations {
 
       let meshName = weightedPick(BuildingDefs)
       if (rerollIfUnique(meshName)) meshName = weightedPick(BuildingDefs)
-      const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
+      const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
       if (instanceId === -1) break
       trackUnique(meshName)
       this.buildings.push({ tile, meshName, instanceId, rotationY: roadAngle })
 
       // Optionally place tower top
       if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
-        const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
+        const topId = this._placeInstance(this.mesh, this.geomIds, TOWER_TOP_MESH, localPos.x, baseY, localPos.z, roadAngle, 1, tile.level)
         if (topId !== -1) this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: roadAngle })
       }
     }
@@ -423,14 +403,14 @@ export class Decorations {
 
       let meshName = weightedPick(BuildingDefs)
       if (rerollIfUnique(meshName)) meshName = weightedPick(BuildingDefs)
-      const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
+      const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
       if (instanceId === -1) break
       trackUnique(meshName)
       this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
 
       // Optionally place tower top (same jitter as base)
       if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
-        const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
+        const topId = this._placeInstance(this.mesh, this.geomIds, TOWER_TOP_MESH, localPos.x + jitterOx, baseY, localPos.z + jitterOz, jitterAngle, 1, tile.level)
         if (topId !== -1) this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: jitterAngle })
       }
     }
@@ -447,7 +427,7 @@ export class Decorations {
         const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
 
         // Place windmill base
-        const baseInstanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, 'building_windmill_yellow', localPos.x, baseY, localPos.z, waterAngle, 1, tile.level)
+        const baseInstanceId = this._placeInstance(this.mesh, this.geomIds, 'building_windmill_yellow', localPos.x, baseY, localPos.z, waterAngle, 1, tile.level)
         if (baseInstanceId === -1) break
         this.buildings.push({ tile, meshName: 'building_windmill_yellow', instanceId: baseInstanceId, rotationY: waterAngle, oy: 0 })
 
@@ -455,7 +435,7 @@ export class Decorations {
         const cosA = Math.cos(waterAngle), sinA = Math.sin(waterAngle)
         const topOx = WINDMILL_TOP_OFFSET.x * cosA + WINDMILL_TOP_OFFSET.z * sinA
         const topOz = -WINDMILL_TOP_OFFSET.x * sinA + WINDMILL_TOP_OFFSET.z * cosA
-        const topInstanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, 'building_windmill_top_yellow', localPos.x + topOx, baseY + WINDMILL_TOP_OFFSET.y, localPos.z + topOz, waterAngle, 1, tile.level)
+        const topInstanceId = this._placeInstance(this.mesh, this.geomIds, 'building_windmill_top_yellow', localPos.x + topOx, baseY + WINDMILL_TOP_OFFSET.y, localPos.z + topOz, waterAngle, 1, tile.level)
         if (topInstanceId === -1) break
         this.buildings.push({ tile, meshName: 'building_windmill_top_yellow', instanceId: topInstanceId, rotationY: waterAngle, oy: WINDMILL_TOP_OFFSET.y })
 
@@ -465,7 +445,7 @@ export class Decorations {
         const fanX = localPos.x + fanOx
         const fanY = baseY + WINDMILL_FAN_OFFSET.y
         const fanZ = localPos.z + fanOz
-        const fanInstanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, 'building_windmill_top_fan_yellow', fanX, fanY, fanZ, waterAngle, 1, tile.level)
+        const fanInstanceId = this._placeInstance(this.mesh, this.geomIds, 'building_windmill_top_fan_yellow', fanX, fanY, fanZ, waterAngle, 1, tile.level)
         if (fanInstanceId === -1) break
         this.buildings.push({ tile, meshName: 'building_windmill_top_fan_yellow', instanceId: fanInstanceId, rotationY: waterAngle, oy: WINDMILL_FAN_OFFSET.y, oz: fanOz, ox: fanOx })
         const fan = { instanceId: fanInstanceId, x: fanX, y: fanY, z: fanZ, baseRotationY: waterAngle, spin: { angle: 0 } }
@@ -480,7 +460,7 @@ export class Decorations {
             this.dummy.rotateZ(fan.spin.angle)
             this.dummy.scale.setScalar(1)
             this.dummy.updateMatrix()
-            try { this.staticMesh.setMatrixAt(fan.instanceId, this.dummy.matrix) } catch (_) {}
+            try { this.mesh.setMatrixAt(fan.instanceId, this.dummy.matrix) } catch (_) {}
           }
         })
         this.windmillFans.push(fan)
@@ -488,7 +468,7 @@ export class Decorations {
     }
 
     // Place shipyard on COAST_A/COAST_B tiles, facing rotated SE direction, max 1 per grid (25% chance)
-    const coastBuildingNames = [...CoastBuildingMeshNames].filter(n => this.staticGeomIds.has(n))
+    const coastBuildingNames = [...CoastBuildingMeshNames].filter(n => this.geomIds.has(n))
     if (coastBuildingNames.length > 0) {
       const shipyardCandidates = []
       for (const tile of hexTiles) {
@@ -515,7 +495,7 @@ export class Decorations {
         const localPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
         const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
         const meshName = weightedPick(CoastBuildingDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, waterAngle, 1, tile.level)
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY, localPos.z, waterAngle, 1, tile.level)
         if (instanceId !== -1) {
           this.buildings.push({ tile, meshName, instanceId, rotationY: waterAngle })
         }
@@ -527,7 +507,7 @@ export class Decorations {
   populateBridges(hexTiles, gridRadius) {
     this.clearBridges()
 
-    if (!this.staticMesh || this.staticGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
 
     for (const tile of hexTiles) {
       // Only river crossing tiles
@@ -543,7 +523,7 @@ export class Decorations {
         tile.gridX - gridRadius,
         tile.gridZ - gridRadius
       )
-      const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, tile.level * LEVEL_HEIGHT, localPos.z, -tile.rotation * Math.PI / 3, 1, tile.level)
+      const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, tile.level * LEVEL_HEIGHT, localPos.z, -tile.rotation * Math.PI / 3, 1, tile.level)
       if (instanceId === -1) continue
       this.bridges.push({ tile, meshName, instanceId })
     }
@@ -552,9 +532,9 @@ export class Decorations {
   populateWaterlilies(hexTiles, gridRadius) {
     this.clearWaterlilies()
 
-    if (!this.staticMesh || this.staticGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
 
-    const lilyNames = WaterlilyMeshNames.filter(n => this.staticGeomIds.has(n))
+    const lilyNames = WaterlilyMeshNames.filter(n => this.geomIds.has(n))
 
     for (const tile of hexTiles) {
       // River tiles (not crossings — those have bridges) and coast tiles
@@ -578,7 +558,7 @@ export class Decorations {
       const ox = (random() - 0.5) * 0.3
       const oz = (random() - 0.5) * 0.3
       const rotationY = random() * Math.PI * 2
-      const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE - 0.2, localPos.z + oz, rotationY, 2, tile.level)
+      const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE - 0.2, localPos.z + oz, rotationY, 2, tile.level)
       if (instanceId === -1) break
       this.waterlilies.push({ tile, meshName, instanceId, rotationY, ox: ox, oz: oz })
     }
@@ -587,9 +567,9 @@ export class Decorations {
   populateFlowers(hexTiles, gridRadius) {
     this.clearFlowers()
 
-    if (!this.treeMesh || this.treeGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
 
-    const flowerNames = FlowerMeshNames.filter(n => this.treeGeomIds.has(n))
+    const flowerNames = FlowerMeshNames.filter(n => this.geomIds.has(n))
     const { x: offsetX, z: offsetZ } = this.worldOffset
     const hasNoise = globalNoiseA && globalNoiseB
 
@@ -632,7 +612,7 @@ export class Decorations {
         const ox = (random() - 0.5) * 1.6
         const oz = (random() - 0.5) * 1.6
         const rotationY = random() * Math.PI * 2
-        const instanceId = this._placeInstance(this.treeMesh, this.treeGeomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z + oz, rotationY, 2, tile.level)
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z + oz, rotationY, 2, tile.level)
         if (instanceId === -1) break
         this.flowers.push({ tile, meshName, instanceId, rotationY, ox, oz })
       }
@@ -642,9 +622,9 @@ export class Decorations {
   populateRocks(hexTiles, gridRadius) {
     this.clearRocks()
 
-    if (!this.staticMesh || this.staticGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
 
-    const rockNames = RockMeshNames.filter(n => this.staticGeomIds.has(n))
+    const rockNames = RockMeshNames.filter(n => this.geomIds.has(n))
     const treeTileIds = new Set(this.trees.map(t => t.tile.id))
 
     // Collect candidate tiles: cliffs, coasts, rivers, tree tiles
@@ -682,7 +662,7 @@ export class Decorations {
         const rotationY = random() * Math.PI * 2
         const tileName = TILE_LIST[tile.type]?.name || ''
         const surfaceDip = tileName === 'OCEAN' ? -0.2 : (tileName.startsWith('COAST_') || tileName.startsWith('RIVER_')) ? -0.1 : 0
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE + surfaceDip, localPos.z + oz, rotationY, 1, tile.level)
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE + surfaceDip, localPos.z + oz, rotationY, 1, tile.level)
         if (instanceId === -1) break
         this.rocks.push({ tile, meshName, instanceId, rotationY, ox, oz })
       }
@@ -693,10 +673,10 @@ export class Decorations {
     this.clearHills()
     this.clearMountains()
 
-    const hillNames = HillMeshNames.filter(n => this.staticGeomIds.has(n))
-    const mountainNames = MountainMeshNames.filter(n => this.staticGeomIds.has(n))
-    const hasHills = this.staticMesh && hillNames.length > 0
-    const hasMountains = this.staticMesh && mountainNames.length > 0
+    const hillNames = HillMeshNames.filter(n => this.geomIds.has(n))
+    const mountainNames = MountainMeshNames.filter(n => this.geomIds.has(n))
+    const hasHills = this.mesh && hillNames.length > 0
+    const hasMountains = this.mesh && mountainNames.length > 0
 
     if (!hasHills && !hasMountains) return
 
@@ -726,7 +706,7 @@ export class Decorations {
         if (this.mountains.length >= MAX_MOUNTAINS - 1) continue
         const meshName = weightedPick(MountainDefs)
         const mtRotY = Math.floor(random() * 6) * Math.PI / 3
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, mtRotY, 1, tile.level)
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY, localPos.z, mtRotY, 1, tile.level)
         if (instanceId === -1) continue
         this.mountains.push({ tile, meshName, instanceId, rotationY: mtRotY })
         continue
@@ -736,7 +716,7 @@ export class Decorations {
       if (isRiverEnd && hasHills) {
         if (this.hills.length >= MAX_HILLS - 1) continue
         const meshName = weightedPick(RiverEndDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY - 0.1, localPos.z, rotationY, 1, tile.level)
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY - 0.1, localPos.z, rotationY, 1, tile.level)
         if (instanceId === -1) continue
         this.hills.push({ tile, meshName, instanceId, rotationY })
         continue
@@ -746,13 +726,13 @@ export class Decorations {
         if (this.mountains.length >= MAX_MOUNTAINS - 1) continue
         const meshName = weightedPick(MountainDefs)
         const mtRotY = Math.floor(random() * 6) * Math.PI / 3
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, mtRotY, 1, tile.level)
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY, localPos.z, mtRotY, 1, tile.level)
         if (instanceId === -1) continue
         this.mountains.push({ tile, meshName, instanceId, rotationY })
       } else if (def.levelIncrement === 1 && hasHills) {
         if (this.hills.length >= MAX_HILLS - 1) continue
         const meshName = weightedPick(HillDefs)
-        const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, rotationY, 1, tile.level)
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY, localPos.z, rotationY, 1, tile.level)
         if (instanceId === -1) continue
         this.hills.push({ tile, meshName, instanceId, rotationY })
       }
@@ -770,20 +750,20 @@ export class Decorations {
     this.clearMountains()
   }
 
-  clearTrees() { this._clearInstances(this.trees, this.treeMesh); this.trees = [] }
+  clearTrees() { this._clearInstances(this.trees, this.mesh); this.trees = [] }
 
   clearBuildings() {
     for (const fan of this.windmillFans) { if (fan.tween) fan.tween.kill() }
     this.windmillFans = []
-    this._clearInstances(this.buildings, this.staticMesh); this.buildings = []
+    this._clearInstances(this.buildings, this.mesh); this.buildings = []
   }
 
-  clearBridges() { this._clearInstances(this.bridges, this.staticMesh); this.bridges = [] }
-  clearWaterlilies() { this._clearInstances(this.waterlilies, this.staticMesh); this.waterlilies = [] }
-  clearFlowers() { this._clearInstances(this.flowers, this.treeMesh); this.flowers = [] }
-  clearRocks() { this._clearInstances(this.rocks, this.staticMesh); this.rocks = [] }
-  clearHills() { this._clearInstances(this.hills, this.staticMesh); this.hills = [] }
-  clearMountains() { this._clearInstances(this.mountains, this.staticMesh); this.mountains = [] }
+  clearBridges() { this._clearInstances(this.bridges, this.mesh); this.bridges = [] }
+  clearWaterlilies() { this._clearInstances(this.waterlilies, this.mesh); this.waterlilies = [] }
+  clearFlowers() { this._clearInstances(this.flowers, this.mesh); this.flowers = [] }
+  clearRocks() { this._clearInstances(this.rocks, this.mesh); this.rocks = [] }
+  clearHills() { this._clearInstances(this.hills, this.mesh); this.hills = [] }
+  clearMountains() { this._clearInstances(this.mountains, this.mesh); this.mountains = [] }
 
   /**
    * Add a bridge on a single tile if it's a river crossing
@@ -791,7 +771,7 @@ export class Decorations {
    * @param {number} gridRadius - Grid radius for position calculation
    */
   addBridgeAt(tile, gridRadius) {
-    if (!this.staticMesh || this.staticGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
     if (tile.type !== TileType.RIVER_CROSSING_A &&
         tile.type !== TileType.RIVER_CROSSING_B) return
 
@@ -803,7 +783,7 @@ export class Decorations {
       tile.gridX - gridRadius,
       tile.gridZ - gridRadius
     )
-    const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, tile.level * LEVEL_HEIGHT, localPos.z, -tile.rotation * Math.PI / 3, 1, tile.level)
+    const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, tile.level * LEVEL_HEIGHT, localPos.z, -tile.rotation * Math.PI / 3, 1, tile.level)
     if (instanceId === -1) return
     this.bridges.push({ tile, meshName, instanceId })
   }
@@ -812,9 +792,9 @@ export class Decorations {
    * Place a random mountain on a specific tile (used to hide dropped cells)
    */
   addMountainAt(tile, gridRadius) {
-    if (!this.staticMesh || this.staticGeomIds.size === 0) return
+    if (!this.mesh || this.geomIds.size === 0) return
 
-    const mountainNames = MountainMeshNames.filter(n => this.staticGeomIds.has(n))
+    const mountainNames = MountainMeshNames.filter(n => this.geomIds.has(n))
     if (mountainNames.length === 0) return
 
     const meshName = weightedPick(MountainDefs)
@@ -824,7 +804,7 @@ export class Decorations {
     )
     const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
     const rotY = Math.floor(random() * 6) * Math.PI / 3
-    const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, baseY, localPos.z, rotY, 1, tile.level)
+    const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY, localPos.z, rotY, 1, tile.level)
     if (instanceId === -1) return
     this.mountains.push({ tile, meshName, instanceId, rotationY: rotY })
   }
@@ -856,24 +836,24 @@ export class Decorations {
       const name = def.name
 
       // Buildings first (dead-ends + noise-based villages)
-      if (this.staticMesh && this.buildings.length < MAX_BUILDINGS - 1) {
+      if (this.mesh && this.buildings.length < MAX_BUILDINGS - 1) {
         const dirToAngle = { NE: 5*Math.PI/6, E: Math.PI/2, SE: Math.PI/6, SW: -Math.PI/6, W: -Math.PI/2, NW: -5*Math.PI/6 }
 
         const deadEndInfo = getRoadDeadEndInfo(tile.type, tile.rotation)
         if (deadEndInfo.isDeadEnd) {
           const buildingAngle = dirToAngle[deadEndInfo.exitDir] ?? 0
           const meshName = weightedPick(BuildingDefs)
-          const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z, buildingAngle, 1, tile.level)
+          const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z, buildingAngle, 1, tile.level)
           if (instanceId !== -1) {
             this.buildings.push({ tile, meshName, instanceId, rotationY: buildingAngle })
-            newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: buildingAngle })
+            newItems.push({ mesh: this.mesh, instanceId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: buildingAngle })
             buildingTileIds.add(tile.id)
 
             if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
-              const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z, buildingAngle, 1, tile.level)
+              const topId = this._placeInstance(this.mesh, this.geomIds, TOWER_TOP_MESH, localPos.x, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z, buildingAngle, 1, tile.level)
               if (topId !== -1) {
                 this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: buildingAngle })
-                newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: buildingAngle })
+                newItems.push({ mesh: this.mesh, instanceId: topId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: buildingAngle })
               }
             }
           }
@@ -887,17 +867,17 @@ export class Decorations {
             const jOz = (random() - 0.5) * 0.6
             const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
             const meshName = weightedPick(BuildingDefs)
-            const instanceId = this._placeInstance(this.staticMesh, this.staticGeomIds, meshName, localPos.x + jOx, y, localPos.z + jOz, jitterAngle, 1, tile.level)
+            const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + jOx, y, localPos.z + jOz, jitterAngle, 1, tile.level)
             if (instanceId !== -1) {
               this.buildings.push({ tile, meshName, instanceId, rotationY: jitterAngle })
-              newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jitterAngle })
+              newItems.push({ mesh: this.mesh, instanceId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jitterAngle })
               buildingTileIds.add(tile.id)
 
               if (meshName === 'building_tower_A_yellow' && random() < TOWER_TOP_CHANCE) {
-                const topId = this._placeInstance(this.staticMesh, this.staticGeomIds, TOWER_TOP_MESH, localPos.x + jOx, y, localPos.z + jOz, jitterAngle, 1, tile.level)
+                const topId = this._placeInstance(this.mesh, this.geomIds, TOWER_TOP_MESH, localPos.x + jOx, y, localPos.z + jOz, jitterAngle, 1, tile.level)
                 if (topId !== -1) {
                   this.buildings.push({ tile, meshName: TOWER_TOP_MESH, instanceId: topId, rotationY: jitterAngle })
-                  newItems.push({ mesh: this.staticMesh, instanceId: topId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jitterAngle })
+                  newItems.push({ mesh: this.mesh, instanceId: topId, x: localPos.x + jOx, y, z: localPos.z + jOz, rotationY: jitterAngle })
                 }
               }
             }
@@ -906,7 +886,7 @@ export class Decorations {
       }
 
       // Trees (noise-based, skip tiles with buildings)
-      if (tile.type === TileType.GRASS && !buildingTileIds.has(tile.id) && this.treeMesh && globalNoiseA && globalNoiseB) {
+      if (tile.type === TileType.GRASS && !buildingTileIds.has(tile.id) && this.mesh && globalNoiseA && globalNoiseB) {
         const worldX = localPos.x + offsetX
         const worldZ = localPos.z + offsetZ
         const noiseA = globalNoiseA.scaled2D(worldX, worldZ)
@@ -927,13 +907,13 @@ export class Decorations {
             const normalizedNoise = (noiseVal - threshold) / (1 - threshold)
             const tierIndex = Math.min(3, Math.floor(normalizedNoise * 4))
             const meshName = TreesByType[treeType][tierIndex]
-            const geomId = this.treeGeomIds.get(meshName)
-            const instanceId = this._addInstance(this.treeMesh, geomId)
+            const geomId = this.geomIds.get(meshName)
+            const instanceId = this._addInstance(this.mesh, geomId)
             if (instanceId !== -1) {
               const rotY = random() * Math.PI * 2
               const c = levelColor(tile.level)
               c.b = rotY / (Math.PI * 2)
-              this.treeMesh.setColorAt(instanceId, c)
+              this.mesh.setColorAt(instanceId, c)
               const ox = (random() - 0.5) * 0.2
               const oz = (random() - 0.5) * 0.2
               const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
@@ -941,9 +921,9 @@ export class Decorations {
               this.dummy.rotation.set(0, rotY, 0)
               this.dummy.scale.setScalar(1)
               this.dummy.updateMatrix()
-              this.treeMesh.setMatrixAt(instanceId, this.dummy.matrix)
+              this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
               this.trees.push({ tile, meshName, instanceId, rotationY: rotY, ox, oz })
-              newItems.push({ mesh: this.treeMesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY: rotY })
+              newItems.push({ mesh: this.mesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY: rotY })
             }
           }
         }
@@ -955,20 +935,20 @@ export class Decorations {
       if (this.bridges.length > bridgeCountBefore) {
         const bridge = this.bridges[this.bridges.length - 1]
         const bPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
-        newItems.push({ mesh: this.staticMesh, instanceId: bridge.instanceId, x: bPos.x, y: tile.level * LEVEL_HEIGHT, z: bPos.z, rotationY: -tile.rotation * Math.PI / 3 })
+        newItems.push({ mesh: this.mesh, instanceId: bridge.instanceId, x: bPos.x, y: tile.level * LEVEL_HEIGHT, z: bPos.z, rotationY: -tile.rotation * Math.PI / 3 })
       }
 
       // Waterlilies
       const isRiver = name.startsWith('RIVER_') && !name.startsWith('RIVER_CROSSING')
       const isCoast = name.startsWith('COAST_')
-      if ((isRiver || isCoast) && this.staticMesh && random() <= 0.075) {
-        const lilyNames = WaterlilyMeshNames.filter(n => this.staticGeomIds.has(n))
+      if ((isRiver || isCoast) && this.mesh && random() <= 0.075) {
+        const lilyNames = WaterlilyMeshNames.filter(n => this.geomIds.has(n))
         if (lilyNames.length > 0 && this.waterlilies.length < MAX_WATERLILIES - 1) {
           const meshName = lilyNames[Math.floor(random() * lilyNames.length)]
-          const geomId = this.staticGeomIds.get(meshName)
-          const instanceId = this._addInstance(this.staticMesh, geomId)
+          const geomId = this.geomIds.get(meshName)
+          const instanceId = this._addInstance(this.mesh, geomId)
           if (instanceId !== -1) {
-            this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
+            this.mesh.setColorAt(instanceId, levelColor(tile.level))
             const ox = (random() - 0.5) * 0.3
             const oz = (random() - 0.5) * 0.3
             const rotationY = random() * Math.PI * 2
@@ -977,9 +957,9 @@ export class Decorations {
             this.dummy.rotation.y = rotationY
             this.dummy.scale.setScalar(2)
             this.dummy.updateMatrix()
-            this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
+            this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
             this.waterlilies.push({ tile, meshName, instanceId, rotationY, ox, oz })
-            newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY, scale: 2 })
+            newItems.push({ mesh: this.mesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY, scale: 2 })
           }
         }
       }
@@ -988,7 +968,7 @@ export class Decorations {
       const isCliff = def.levelIncrement && name.includes('CLIFF')
       const isRiverEnd = name === 'RIVER_END'
       const isHighGrass = name === 'GRASS' && tile.level >= 2
-      if ((isCliff || isRiverEnd || isHighGrass) && this.staticMesh) {
+      if ((isCliff || isRiverEnd || isHighGrass) && this.mesh) {
         const chance = isRiverEnd ? 0.7 : isHighGrass ? 0.1 : 0.1
         if (random() <= chance) {
           if (isHighGrass) {
@@ -996,45 +976,45 @@ export class Decorations {
             this.addMountainAt(tile, gridRadius)
             if (this.mountains.length > mtCountBefore) {
               const mt = this.mountains[this.mountains.length - 1]
-              newItems.push({ mesh: this.staticMesh, instanceId: mt.instanceId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: mt.rotationY })
+              newItems.push({ mesh: this.mesh, instanceId: mt.instanceId, x: localPos.x, y: tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: localPos.z, rotationY: mt.rotationY })
             }
           } else if (isRiverEnd) {
             if (this.hills.length < MAX_HILLS - 1) {
               const meshName = weightedPick(RiverEndDefs)
-              const geomId = this.staticGeomIds.get(meshName)
+              const geomId = this.geomIds.get(meshName)
               if (geomId !== undefined) {
-                const instanceId = this._addInstance(this.staticMesh, geomId)
+                const instanceId = this._addInstance(this.mesh, geomId)
                 if (instanceId !== -1) {
-                  this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
+                  this.mesh.setColorAt(instanceId, levelColor(tile.level))
                   const rotationY = Math.floor(random() * 6) * Math.PI / 3
                   const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE - 0.1
                   this.dummy.position.set(localPos.x, y, localPos.z)
                   this.dummy.rotation.y = rotationY
                   this.dummy.scale.setScalar(1)
                   this.dummy.updateMatrix()
-                  this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
+                  this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
                   this.hills.push({ tile, meshName, instanceId, rotationY })
-                  newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY })
+                  newItems.push({ mesh: this.mesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY })
                 }
               }
             }
           } else {
-            const hillNames = HillMeshNames.filter(n => this.staticGeomIds.has(n))
+            const hillNames = HillMeshNames.filter(n => this.geomIds.has(n))
             if (hillNames.length > 0 && this.hills.length < MAX_HILLS - 1) {
               const meshName = weightedPick(HillDefs)
-              const geomId = this.staticGeomIds.get(meshName)
-              const instanceId = this._addInstance(this.staticMesh, geomId)
+              const geomId = this.geomIds.get(meshName)
+              const instanceId = this._addInstance(this.mesh, geomId)
               if (instanceId !== -1) {
-                this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
+                this.mesh.setColorAt(instanceId, levelColor(tile.level))
                 const rotationY = Math.floor(random() * 6) * Math.PI / 3
                 const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE
                 this.dummy.position.set(localPos.x, y, localPos.z)
                 this.dummy.rotation.y = rotationY
                 this.dummy.scale.setScalar(1)
                 this.dummy.updateMatrix()
-                this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
+                this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
                 this.hills.push({ tile, meshName, instanceId, rotationY })
-                newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY })
+                newItems.push({ mesh: this.mesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY })
               }
             }
           }
@@ -1042,14 +1022,14 @@ export class Decorations {
       }
 
       // Rocks
-      if ((name.includes('CLIFF') || isCoast || isRiver) && this.staticMesh) {
-        const rockNames = RockMeshNames.filter(n => this.staticGeomIds.has(n))
+      if ((name.includes('CLIFF') || isCoast || isRiver) && this.mesh) {
+        const rockNames = RockMeshNames.filter(n => this.geomIds.has(n))
         if (rockNames.length > 0 && random() <= 0.3 && this.rocks.length < MAX_ROCKS - 1) {
           const meshName = rockNames[Math.floor(random() * rockNames.length)]
-          const geomId = this.staticGeomIds.get(meshName)
-          const instanceId = this._addInstance(this.staticMesh, geomId)
+          const geomId = this.geomIds.get(meshName)
+          const instanceId = this._addInstance(this.mesh, geomId)
           if (instanceId !== -1) {
-            this.staticMesh.setColorAt(instanceId, levelColor(tile.level))
+            this.mesh.setColorAt(instanceId, levelColor(tile.level))
             const ox = (random() - 0.5) * 1.2
             const oz = (random() - 0.5) * 1.2
             const rotationY = random() * Math.PI * 2
@@ -1059,9 +1039,9 @@ export class Decorations {
             this.dummy.rotation.y = rotationY
             this.dummy.scale.setScalar(1)
             this.dummy.updateMatrix()
-            this.staticMesh.setMatrixAt(instanceId, this.dummy.matrix)
+            this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
             this.rocks.push({ tile, meshName, instanceId, rotationY, ox, oz })
-            newItems.push({ mesh: this.staticMesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY })
+            newItems.push({ mesh: this.mesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY })
           }
         }
       }
@@ -1092,14 +1072,14 @@ export class Decorations {
         return true
       })
     }
-    this.trees = filterOut(this.trees, this.treeMesh)
-    this.flowers = filterOut(this.flowers, this.treeMesh)
-    this.buildings = filterOut(this.buildings, this.staticMesh)
-    this.bridges = filterOut(this.bridges, this.staticMesh)
-    this.waterlilies = filterOut(this.waterlilies, this.staticMesh)
-    this.rocks = filterOut(this.rocks, this.staticMesh)
-    this.hills = filterOut(this.hills, this.staticMesh)
-    this.mountains = filterOut(this.mountains, this.staticMesh)
+    this.trees = filterOut(this.trees, this.mesh)
+    this.flowers = filterOut(this.flowers, this.mesh)
+    this.buildings = filterOut(this.buildings, this.mesh)
+    this.bridges = filterOut(this.bridges, this.mesh)
+    this.waterlilies = filterOut(this.waterlilies, this.mesh)
+    this.rocks = filterOut(this.rocks, this.mesh)
+    this.hills = filterOut(this.hills, this.mesh)
+    this.mountains = filterOut(this.mountains, this.mesh)
   }
 
   /**
@@ -1108,19 +1088,12 @@ export class Decorations {
   dispose() {
     this.clear()
 
-    if (this.treeMesh) {
-      this.scene.remove(this.treeMesh)
-      this.treeMesh.dispose()
-      this.treeMesh = null
+    if (this.mesh) {
+      this.scene.remove(this.mesh)
+      this.mesh.dispose()
+      this.mesh = null
     }
 
-    if (this.staticMesh) {
-      this.scene.remove(this.staticMesh)
-      this.staticMesh.dispose()
-      this.staticMesh = null
-    }
-
-    this.treeGeomIds.clear()
-    this.staticGeomIds.clear()
+    this.geomIds.clear()
   }
 }
