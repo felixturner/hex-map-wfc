@@ -225,14 +225,14 @@ export class GUIManager {
       app.controls.target.set(0.903, 1, 1.168)
       app.controls.update()
     } }, 'reset').name('Reset')
-    gui.add({ autoBuild: () => app.city.autoExpand([
+    gui.add({ autoBuild: () => app.city.autoBuild([
       [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
     ]) }, 'autoBuild').name('Auto-Build')
     gui.add({ buildAll: () => {
       import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0, 0.3))
       app.city.populateAllGrids()
     } }, 'buildAll').name('Build All')
-    gui.add({ benchmark: () => app.city.runBenchmark(3) }, 'benchmark').name('Benchmark (3 runs)')
+    gui.add({ benchmark: () => app.city.runBenchmark(50) }, 'benchmark').name('Benchmark (50 runs)')
 
     gui.add({
       copyState: () => {

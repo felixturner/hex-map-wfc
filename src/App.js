@@ -168,7 +168,7 @@ export class App {
 
     // Fade out waves immediately when a new grid starts building
     this.city.onBeforeTilesChanged = () => {
-      if (this.city._autoExpanding) return
+      if (this.city._autoBuilding) return
       const opacity = this.city._waveOpacity
       if (!opacity || opacity.value === 0) return
 
@@ -197,7 +197,7 @@ export class App {
     // After tiles drop, re-render mask and fade waves back in
     this._pendingMaskRender = null
     this.city.onTilesChanged = (animDonePromise) => {
-      if (this.city._autoExpanding) return
+      if (this.city._autoBuilding) return
       const opacity = this.city._waveOpacity
       if (!opacity) return
 

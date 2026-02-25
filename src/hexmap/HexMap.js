@@ -27,7 +27,7 @@ import {
 } from './HexGridConnector.js'
 import { initGlobalTreeNoise, Decorations } from './Decorations.js'
 import { Water } from './effects/Water.js'
-import { random } from '../SeededRandom.js'
+import { random, setSeed } from '../SeededRandom.js'
 import { Sounds } from '../lib/Sounds.js'
 
 const LEVEL_HEIGHT = 0.5
@@ -113,7 +113,7 @@ export class HexMap {
     this._wfcBusy = false
     this._wfcQueue = []
     this._wfcIdleResolve = null
-    this._autoExpanding = false
+    this._autoBuilding = false
     this._waterSideIndex = null
 
     // Convenience alias
@@ -320,7 +320,7 @@ export class HexMap {
     grid.gridCoords = { x: gridX, z: gridZ }
     grid.globalCenterCube = globalCenterCube
     grid.onClick = () => {
-      if (this._autoExpanding) return
+      if (this._autoBuilding) return
       if (grid._clickQueued) return  // already queued, ignore duplicate clicks
       grid._clickQueued = true
       grid.placeholder?.startSpinning()
@@ -942,14 +942,14 @@ export class HexMap {
    * Handle click on a grid (placeholder button clicked)
    * @param {HexGrid} grid - Grid that was clicked
    */
-  async onGridClick(grid, { skipPrune = false } = {}) {
+  async onGridClick(grid, { skipPrune = false, animate } = {}) {
     if (grid.state !== HexGridState.PLACEHOLDER) return 0
 
     const gridKey = getGridKey(grid.gridCoords.x, grid.gridCoords.z)
     const params = App.instance?.params
 
     const animDuration = await this.populateGrid(grid, [], {
-      animate: params?.roads?.animateWFC ?? false,
+      animate: animate ?? params?.roads?.animateWFC ?? false,
       animateDelay: params?.roads?.animateDelay ?? 20,
     }) || 0
 
@@ -976,11 +976,11 @@ export class HexMap {
    * Auto-expand grids in a given order (for testing/replay)
    * @param {Array<[number,number]>} order - Array of [gridX, gridZ] pairs
    */
-  async autoExpand(order) {
+  async autoBuild(order, { animate } = {}) {
     const myEpoch = ++this._buildEpoch
     this._buildCancelled = false
     this.onBeforeTilesChanged?.()
-    this._autoExpanding = true
+    this._autoBuilding = true
     this._wfcQueue.length = 0  // clear any pending clicks
     await this._waitForWfcIdle()
     this._wfcBusy = true  // hold the lock for the entire build
@@ -990,10 +990,10 @@ export class HexMap {
     for (let i = 0; i < order.length; i++) {
       const [gx, gz] = order[i]
       if (this._buildCancelled || this._buildEpoch !== myEpoch) {
-        this._autoExpanding = false
+        this._autoBuilding = false
         this._releaseWfcLock()
         log('[AUTO-BUILD] Cancelled', 'color: red')
-        return
+        return { success: false, cancelled: true }
       }
       const key = getGridKey(gx, gz)
       let grid = this.grids.get(key)
@@ -1002,24 +1002,25 @@ export class HexMap {
       }
       if (grid.state === HexGridState.PLACEHOLDER) {
         Sounds.play('pop', 1.0, 0.2, 0.7)
-        await this.onGridClick(grid, { skipPrune: true })
+        await this.onGridClick(grid, { skipPrune: true, animate })
         if (grid.animationDone) animPromises.push(grid.animationDone)
       }
     }
-    this._autoExpanding = false
+    this._autoBuilding = false
     this._releaseWfcLock()
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1)
-    const stats = [
-      `${elapsed}s`,
-      `${this.conflictCount} conflicts`,
-      `${this.droppedCells.size} dropped`,
-    ]
-    log(`[AUTO-BUILD] Done (${stats.join(', ')})`, 'color: green')
+    log(`[AUTO-BUILD] Done (${elapsed}s, ${this.droppedCells.size} dropped)`, 'color: green')
 
     // Wait for all drop animations to finish, then rebuild waves mask
     await Promise.all(animPromises)
     Sounds.play('intro')
     this.onTilesChanged?.(Promise.resolve())
+
+    return {
+      success: true,
+      time: elapsed,
+      dropped: this.droppedCells.size,
+    }
   }
 
   /**
@@ -1030,7 +1031,7 @@ export class HexMap {
   async populateAllGrids(expansionCoords = null, options = {}) {
     ++this._buildEpoch
     this._buildCancelled = false
-    this._autoExpanding = true
+    this._autoBuilding = true
     this._wfcQueue.length = 0
     await this._waitForWfcIdle()
     this._wfcBusy = true
@@ -1130,14 +1131,14 @@ export class HexMap {
     })
 
     if (this._buildCancelled) {
-      this._autoExpanding = false
+      this._autoBuilding = false
       this._releaseWfcLock()
       log('[BUILD ALL] Cancelled', 'color: red')
       return { success: false, cancelled: true }
     }
 
     if (!result.success) {
-      this._autoExpanding = false
+      this._autoBuilding = false
       this._releaseWfcLock()
       log('[BUILD ALL] WFC FAILED', 'color: red')
       const { Sounds } = await import('../lib/Sounds.js')
@@ -1216,7 +1217,7 @@ export class HexMap {
       this.createTileLabels()
     }
 
-    this._autoExpanding = false
+    this._autoBuilding = false
     this._releaseWfcLock()
     const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
     log(`[BUILD ALL] Complete (${totalTime}s total)`, 'color: green')
@@ -1318,10 +1319,10 @@ export class HexMap {
 
   /**
    * Enqueue an async WFC operation. Only one runs at a time.
-   * Rejects silently during build seq (_autoExpanding).
+   * Rejects silently during build seq (_autoBuilding).
    */
   _enqueueWfc(fn) {
-    if (this._autoExpanding) return
+    if (this._autoBuilding) return
     if (this._wfcBusy) {
       this._wfcQueue.push(fn)
       return
@@ -1333,7 +1334,7 @@ export class HexMap {
     this._wfcBusy = true
     try { await fn() } catch (e) { console.error('[WFC Queue]', e) }
     while (this._wfcQueue.length > 0) {
-      if (this._autoExpanding) { this._wfcQueue.length = 0; break }
+      if (this._autoBuilding) { this._wfcQueue.length = 0; break }
       const next = this._wfcQueue.shift()
       try { await next() } catch (e) { console.error('[WFC Queue]', e) }
     }
@@ -1358,7 +1359,7 @@ export class HexMap {
   // ---- Rebuild-WFC (mini WFC on tile click in rebuild mode) ----
 
   queueRebuildWfc(globalCubeCoords, global, def) {
-    if (this._autoExpanding) return
+    if (this._autoBuilding) return
     this._enqueueWfc(() => this._runRebuildWfc({ globalCubeCoords, global, def }))
   }
 
@@ -1413,33 +1414,41 @@ export class HexMap {
   clearHoverHighlight() { this.interaction.clearHoverHighlight() }
 
   async runBenchmark(runs = 3) {
-    const oceanWeight = TILE_LIST[TileType.OCEAN].weight
-    log(`[BENCHMARK] Starting ${runs} runs (ocean weight: ${oceanWeight})`, 'color: blue')
+    const autoBuildOrder = [
+      [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
+    ]
+    log(`[BENCHMARK] Starting ${runs} Auto-Build runs`, 'color: blue')
     const results = []
 
     for (let i = 0; i < runs; i++) {
+      const seed = Math.floor(Math.random() * 100000)
+      log(`[BENCHMARK] Run ${i + 1}/${runs} (seed: ${seed})`, 'color: blue')
+
+      setSeed(seed)
+      await this.reset()
+
+      const result = await this.autoBuild(autoBuildOrder, { animate: false })
+      results.push({ seed, ...(result || { success: false }) })
+
       if (this._buildCancelled) {
         log('[BENCHMARK] Cancelled', 'color: red')
         break
       }
-      log(`[BENCHMARK] Run ${i + 1}/${runs}`, 'color: blue')
-      const result = await this.populateAllGrids(null, { animate: false })
-      results.push(result || { success: false })
     }
 
     const successes = results.filter(r => r.success).length
     const failures = results.filter(r => !r.success && !r.cancelled).length
-    const times = results.filter(r => r.success).map(r => r.time)
+    const times = results.filter(r => r.success).map(r => parseFloat(r.time))
     const avgTime = times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : '-'
 
-    log(`[BENCHMARK] === RESULTS (ocean weight: ${oceanWeight}) ===`, 'color: green')
+    log(`[BENCHMARK] === RESULTS ===`, 'color: green')
     log(`[BENCHMARK] ${successes}/${results.length} succeeded, ${failures} failed, avg time: ${avgTime}s`, 'color: green')
     for (let i = 0; i < results.length; i++) {
       const r = results[i]
       if (r.success) {
-        log(`[BENCHMARK]   Run ${i + 1}: SUCCESS (${r.time}s, ${r.backtracks} backtracks, ${r.tries} tries)`, 'color: green')
-      } else {
-        log(`[BENCHMARK]   Run ${i + 1}: FAIL`, 'color: red')
+        log(`[BENCHMARK]   Run ${i + 1} (seed ${r.seed}): SUCCESS (${r.time}s, ${r.dropped} dropped)`, 'color: green')
+      } else if (!r.cancelled) {
+        log(`[BENCHMARK]   Run ${i + 1} (seed ${r.seed}): FAIL`, 'color: red')
       }
     }
 
@@ -1449,7 +1458,7 @@ export class HexMap {
   async reset() {
     ++this._buildEpoch
     this._buildCancelled = true
-    this._autoExpanding = false
+    this._autoBuilding = false
     this._wfcQueue.length = 0
     await this._waitForWfcIdle()
     this.isRegenerating = true
@@ -1490,7 +1499,7 @@ export class HexMap {
   }
 
   async regenerateAll(options = {}) {
-    this._autoExpanding = false
+    this._autoBuilding = false
     this._wfcQueue.length = 0
     await this._waitForWfcIdle()
     this._wfcBusy = true
