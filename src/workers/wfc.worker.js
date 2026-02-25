@@ -44,18 +44,18 @@ class HexWFCSolver {
     this.propagationStack = []
     this.restartCount = 0
     this.lastContradiction = null
-    this.seedingContradiction = null
+    this.neighborContradiction = null
     this.collapseOrder = []
     // Backtracking state (trail-based — records only changes, not full copies)
     this.trail = []       // { key, stateKey } — each possibility removed during propagation
     this.decisions = []   // stack of { targetKey, prevPossibilities, trailStart, collapseOrderLen, triedStates }
     this.maxBacktracks = 500
     this.backtracks = 0
-    // Soft fixed cell data: cells that CAN be unfixed on seeding contradiction
-    this.softFixedData = new Map()     // cubeKey → { q,r,s, anchors: [...], original: {type,rotation,level} }
-    this.softFixedOriginals = new Map() // cubeKey → { q,r,s, type, rotation, level } — preserved after unfixing
-    this.unfixedKeys = []              // cubeKeys of soft cells that were converted to solve cells
-    this.changedFixedCells = []        // soft cells that ended up with different tiles
+    // Neighbor cell data: cells that CAN be unfixed on neighbor contradiction
+    this.neighborData = new Map()     // cubeKey → { q,r,s, anchors: [...], original: {type,rotation,level} }
+    this.neighborOriginals = new Map() // cubeKey → { q,r,s, type, rotation, level } — preserved after unfixing
+    this.unfixedKeys = []              // cubeKeys of neighbor cells that were converted to solve cells
+    this.changedFixedCells = []        // neighbor cells that ended up with different tiles
   }
 
   init(solveCells, fixedCells) {
@@ -400,23 +400,23 @@ class HexWFCSolver {
   }
 
   /**
-   * Store soft fixed cell data for the solver
-   * @param {Array} softFixedCells - [{q,r,s,type,rotation,level, anchors:[{q,r,s,type,rotation,level}]}]
+   * Store neighbor cell data for the solver
+   * @param {Array} neighborCells - [{q,r,s,type,rotation,level, anchors:[{q,r,s,type,rotation,level}]}]
    */
-  initSoftFixedData(softFixedCells) {
-    this.softFixedData = new Map()
-    this.softFixedOriginals = new Map()
+  initNeighborData(neighborCells) {
+    this.neighborData = new Map()
+    this.neighborOriginals = new Map()
     this.unfixedKeys = []
     this.changedFixedCells = []
-    if (!softFixedCells) return
-    for (const sfc of softFixedCells) {
+    if (!neighborCells) return
+    for (const sfc of neighborCells) {
       const key = cubeKey(sfc.q, sfc.r, sfc.s)
-      this.softFixedData.set(key, {
+      this.neighborData.set(key, {
         q: sfc.q, r: sfc.r, s: sfc.s,
         original: { type: sfc.type, rotation: sfc.rotation, level: sfc.level },
         anchors: sfc.anchors || [],
       })
-      this.softFixedOriginals.set(key, {
+      this.neighborOriginals.set(key, {
         q: sfc.q, r: sfc.r, s: sfc.s,
         type: sfc.type, rotation: sfc.rotation, level: sfc.level,
       })
@@ -424,15 +424,15 @@ class HexWFCSolver {
   }
 
   /**
-   * Find soft fixed cells adjacent to a contradiction cell
+   * Find neighbor cells adjacent to a contradiction cell
    * @param {string} failedKey - cubeKey of the cell that reached 0 possibilities
    * @param {string} sourceKey - cubeKey of the cell that caused the contradiction
-   * @returns {string[]} cubeKeys of adjacent soft fixed cells
+   * @returns {string[]} cubeKeys of adjacent neighbor cells
    */
-  findAdjacentSoftFixed(failedKey, sourceKey) {
+  findAdjacentNeighbors(failedKey, sourceKey) {
     const candidates = []
     // Check if the source of the contradiction was a fixed cell
-    if (sourceKey && this.fixedCells.has(sourceKey) && this.softFixedData.has(sourceKey)) {
+    if (sourceKey && this.fixedCells.has(sourceKey) && this.neighborData.has(sourceKey)) {
       candidates.push(sourceKey)
     }
     // Also check all fixed neighbors of the failed cell
@@ -440,7 +440,7 @@ class HexWFCSolver {
     for (let i = 0; i < 6; i++) {
       const dir = CUBE_DIRS[i]
       const nKey = cubeKey(q + dir.dq, r + dir.dr, s + dir.ds)
-      if (nKey !== sourceKey && this.fixedCells.has(nKey) && this.softFixedData.has(nKey)) {
+      if (nKey !== sourceKey && this.fixedCells.has(nKey) && this.neighborData.has(nKey)) {
         candidates.push(nKey)
       }
     }
@@ -448,14 +448,14 @@ class HexWFCSolver {
   }
 
   /**
-   * Unfix a soft fixed cell: remove from fixedCells, add as a solve cell
+   * Unfix a neighbor cell: remove from fixedCells, add as a solve cell
    * Its anchors become new fixed cells to maintain compatibility with the original grid.
-   * @param {string} key - cubeKey of the soft fixed cell to unfix
+   * @param {string} key - cubeKey of the neighbor cell to unfix
    * @param {Array} solveCells - mutable array of solve cells to add to
    * @param {Array} fixedCells - mutable array of fixed cells to modify
    */
-  unfixSoftCell(key, solveCells, fixedCells) {
-    const softData = this.softFixedData.get(key)
+  unfixNeighbor(key, solveCells, fixedCells) {
+    const softData = this.neighborData.get(key)
     if (!softData) return
 
     const { q, r, s } = parseCubeKey(key)
@@ -481,8 +481,8 @@ class HexWFCSolver {
       }
     }
 
-    // Remove from softFixedData so it won't be unfixed again
-    this.softFixedData.delete(key)
+    // Remove from neighborData so it won't be unfixed again
+    this.neighborData.delete(key)
     this.unfixedKeys.push(key)
   }
 
@@ -523,25 +523,25 @@ class HexWFCSolver {
         this.propagationStack.push(key)
       }
 
-      // Seeding propagation with soft fixed cell unfixing loop
-      let seedingOk = true
+      // Neighbor propagation with neighbor cell unfixing loop
+      let neighborSeedingOk = true
       if (currentFixedCells.length > 0 || initialCollapses.length > 0) {
-        seedingOk = this.propagate()
+        neighborSeedingOk = this.propagate()
 
-        // On seeding failure, try unfixing soft fixed cells
-        let maxUnfixes = this.softFixedData.size
+        // On neighbor failure, try unfixing neighbor cells
+        let maxUnfixes = this.neighborData.size
         const unfixedBefore = this.unfixedKeys.length
-        while (!seedingOk && maxUnfixes > 0) {
+        while (!neighborSeedingOk && maxUnfixes > 0) {
           maxUnfixes--
           const contradiction = this.lastContradiction
           if (!contradiction) break
 
-          // Find soft fixed cells adjacent to the contradiction
-          const softCandidates = this.findAdjacentSoftFixed(contradiction.failedKey, contradiction.sourceKey)
+          // Find neighbor cells adjacent to the contradiction
+          const softCandidates = this.findAdjacentNeighbors(contradiction.failedKey, contradiction.sourceKey)
           if (softCandidates.length === 0) break
 
           // Unfix the first candidate
-          this.unfixSoftCell(softCandidates[0], currentSolveCells, currentFixedCells)
+          this.unfixNeighbor(softCandidates[0], currentSolveCells, currentFixedCells)
 
           // Full re-init with updated solve/fixed cells
           this.init(currentSolveCells, currentFixedCells)
@@ -568,7 +568,7 @@ class HexWFCSolver {
             this.propagationStack.push(key)
           }
 
-          seedingOk = this.propagate()
+          neighborSeedingOk = this.propagate()
         }
         const unfixedCount = this.unfixedKeys.length - unfixedBefore
         if (unfixedCount > 0) {
@@ -576,8 +576,8 @@ class HexWFCSolver {
         }
       }
 
-      if (!seedingOk) {
-        this.seedingContradiction = this.lastContradiction
+      if (!neighborSeedingOk) {
+        this.neighborContradiction = this.lastContradiction
         if (!this.options.quiet) {
           const c = this.lastContradiction
           const loc = c ? ` at (${c.failedCol},${c.failedRow})` : ''
@@ -649,13 +649,13 @@ class HexWFCSolver {
       }
     }
 
-    // Check which unfixed soft cells ended up with different tiles
+    // Check which unfixed neighbor cells ended up with different tiles
     this.changedFixedCells = []
     for (const unfixedKey of this.unfixedKeys) {
       const cell = this.cells.get(unfixedKey)
       if (!cell?.tile) continue
 
-      const original = this.softFixedOriginals.get(unfixedKey)
+      const original = this.neighborOriginals.get(unfixedKey)
       if (!original) continue
 
       if (cell.tile.type !== original.type ||
@@ -706,8 +706,8 @@ self.onmessage = function(e) {
       }
     })
 
-    // Initialize soft fixed cell data before solving
-    solver.initSoftFixedData(options?.softFixedCells)
+    // Initialize neighbor cell data before solving
+    solver.initNeighborData(options?.neighborCells)
 
     const result = solver.solve(
       solveCells,
@@ -715,7 +715,7 @@ self.onmessage = function(e) {
       options?.initialCollapses ?? []
     )
     const collapseOrder = solver.collapseOrder || []
-    const seedingContradiction = solver.seedingContradiction
+    const neighborContradiction = solver.neighborContradiction
     const lastContradiction = solver.lastContradiction
 
     self.postMessage({
@@ -724,7 +724,7 @@ self.onmessage = function(e) {
       success: result !== null,
       tiles: result,
       collapseOrder,
-      seedingContradiction,
+      neighborContradiction,
       lastContradiction,
       changedFixedCells: solver.changedFixedCells || [],
       unfixedKeys: solver.unfixedKeys || [],

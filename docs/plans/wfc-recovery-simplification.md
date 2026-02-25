@@ -10,22 +10,22 @@
 
 **Outer loop** (HexMap.js — `_runWfcWithRecovery()`):
 1. **Initial attempt** — run inner loop
-2. **Local-WFC — seed conflict** (max 3) — only for neighbor contradictions with known source (`isSeedConflict && sourceKey`). Mini-WFC radius-2 around sourceKey in neighbor grid
+2. **Local-WFC — neighbor conflict** (max 3) — only for neighbor contradictions with known source (`isNeighborConflict && sourceKey`). Mini-WFC radius-2 around sourceKey in neighbor grid
 3. **Local-WFC — general** (max 5) — for any failure. Mini-WFC radius-2 around nearest fixed cell to failure point
 4. **Drop phase** (unbounded) — last resort, drop fixed cells + place mountains
 
 ## Proposed Change: Merge the two Local-WFC phases
 
 Phases 2 and 3 are nearly identical — both run a mini-WFC on a radius-2 region in a neighbor grid. Differences:
-- Seed conflict phase centers on `sourceKey` (exact cell that caused contradiction)
+- Neighbor conflict phase centers on `sourceKey` (exact cell that caused contradiction)
 - General phase centers on nearest fixed cell to `failedCell`
-- For seed conflicts, these are usually the same or adjacent cells
+- For neighbor conflicts, these are usually the same or adjacent cells
 
-Merge into a single Local-WFC phase (max 5-8 attempts). For seed conflicts where `sourceKey` is known, use that as the first center candidate. Otherwise (or after first attempt), use nearest fixed cell to failure point. Track attempted centers to avoid repeats.
+Merge into a single Local-WFC phase (max 5-8 attempts). For neighbor conflicts where `sourceKey` is known, use that as the first center candidate. Otherwise (or after first attempt), use nearest fixed cell to failure point. Track attempted centers to avoid repeats.
 
 ### Recovery flow after simplification
 1. Inner loop: collapse + backtrack + neighbor unfixing during seeding
-2. If inner loop fails → Local-WFC (max N attempts, covers both seed conflicts and mid-solve failures)
+2. If inner loop fails → Local-WFC (max N attempts, covers both neighbor conflicts and mid-solve failures)
 3. If Local-WFC fails → Drop (last resort)
 
 ### Consider merging inner/outer unfixing

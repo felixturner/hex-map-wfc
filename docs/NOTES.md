@@ -12,11 +12,11 @@
 ### Edge Matching System
 Each tile defines 6 edges (NE, E, SE, SW, W, NW) with types: `grass | road | river | ocean | coast`. Adjacent edges must match type AND level (except grass which allows any level). Slopes have `highEdges` array — edges facing uphill have `baseLevel + levelIncrement`.
 
-All solved tiles are stored in a global `Map<cubeKey, cell>` (`HexMap.globalCells`). When expanding to a new grid, boundary matching uses soft fixed cells:
+All solved tiles are stored in a global `Map<cubeKey, cell>` (`HexMap.globalCells`). When expanding to a new grid, boundary matching uses neighbor cells:
 
 - **Fixed cells**: Solved tiles from neighboring grids used as read-only constraints
-- **Soft fixed cells**: Fixed cells adjacent to the solve region that CAN be unfixed if they cause seeding contradictions. Each soft cell stores its original tile data and a list of anchor neighbors
-- **Anchors**: When a soft cell is unfixed, its neighbors outside the solve set become new fixed cells, preserving compatibility with the original grid
+- **Neighbor cells**: Fixed cells adjacent to the solve region that CAN be unfixed if they cause neighbor contradictions. Each neighbor cell stores its original tile data and a list of anchor neighbors
+- **Anchors**: When a neighbor cell is unfixed, its neighbors outside the solve set become new fixed cells, preserving compatibility with the original grid
 
 ### Backtracking
 Trail-based delta backtracking (no full state copies):
@@ -26,32 +26,32 @@ Trail-based delta backtracking (no full state copies):
 - If all states exhausted for a cell, pops the decision and backtracks further up the stack
 - `maxBacktracks = 500`, full restart as fallback
 
-### Soft Fixed Cells
-When initial propagation from fixed cells causes a seeding contradiction:
-1. Find soft fixed cells adjacent to the failed cell
+### Neighbor Cells
+When initial propagation from fixed cells causes a neighbor contradiction:
+1. Find neighbor cells adjacent to the failed cell
 2. Unfix the first candidate — remove from fixed, add to solve cells, add its anchors as new fixed cells
 3. Full re-init with updated solve/fixed arrays, re-seed, re-propagate
-4. Loop until seeding succeeds or no more soft cells to unfix
+4. Loop until seeding succeeds or no more neighbor cells to unfix
 5. After WFC succeeds, compare unfixed cells against originals — changed tiles are sent back as `changedFixedCells` and updated in their source grids via `replaceTile()`
 
 ### Pre-WFC Validation (Disabled)
-Previously checked fixed cells for conflicts before WFC. Disabled because it found false positives that caused cascading issues. The soft cell unfixing system handles these cases better.
+Previously checked fixed cells for conflicts before WFC. Disabled because it found false positives that caused cascading issues. The neighbor cell unfixing system handles these cases better.
 
 ### Persisted Unfixed Cells
-When WFC fails and soft cells were unfixed during that attempt, those cells are persisted across retries:
+When WFC fails and neighbor cells were unfixed during that attempt, those cells are persisted across retries:
 - Removed from fixed cells, added to solve cells WITH their anchors as new fixed cells
 - Ensures edge compatibility (either WFC succeeds with matching cells, or fails cleanly)
 - After success, persisted-unfixed cells are compared against originals — changed tiles update source grids (orange labels)
 
 ### Retry Logic (Two Levels)
 
-**Inner loop** (WFC worker, `wfc.worker.js`): Runs the core solve with backtracking (max 500 backtracks). On backtrack limit, does a full restart (re-init from scratch). `maxRestarts` controls restart count (currently 1 for grids with neighbors, 10 for first grid). Also handles soft fixed cell unfixing during seeding. Returns success or failure with two possible failure modes:
-- **Neighbor contradiction**: Propagation from fixed/soft cells empties a cell's possibilities before the solve even starts
+**Inner loop** (WFC worker, `wfc.worker.js`): Runs the core solve with backtracking (max 500 backtracks). On backtrack limit, does a full restart (re-init from scratch). `maxRestarts` controls restart count (currently 1 for grids with neighbors, 10 for first grid). Also handles neighbor cell unfixing during seeding. Returns success or failure with two possible failure modes:
+- **Neighbor contradiction**: Propagation from fixed/neighbor cells empties a cell's possibilities before the solve even starts
 - **Backtrack limit**: Solver exhausted max backtracks during the main collapse loop
 
 **Outer loop** (`_runWfcWithRecovery` in `HexMap.js`): When the inner loop fails, three recovery phases run in sequence. Each phase modifies neighbor grid tiles via a local mini-WFC or drops cells, then retries the main grid:
 
-1. **Local-WFC — seed conflict** (max 3 attempts): Only triggers when the failure is a neighbor contradiction with a known source cell (`isSeedConflict && sourceKey`). Centers the mini-WFC on the specific neighbor cell that caused the contradiction. Same center is retried each attempt since the local-WFC changes the surrounding region.
+1. **Local-WFC — neighbor conflict** (max 3 attempts): Only triggers when the failure is a neighbor contradiction with a known source cell (`isNeighborConflict && sourceKey`). Centers the mini-WFC on the specific neighbor cell that caused the contradiction. Same center is retried each attempt since the local-WFC changes the surrounding region.
 2. **Local-WFC — general** (max 5 attempts): Triggers for any failure type. Centers the mini-WFC on the nearest fixed cell to the failure point. Each attempt tries the next nearest fixed cell not yet attempted.
 3. **Drop phase** (unbounded): Last resort fallback. Drops fixed cells one by one nearest the failure point, placing mountains to hide mismatches.
 
@@ -59,7 +59,7 @@ When WFC fails and soft cells were unfixed during that attempt, those cells are 
 Both Local-WFC phases use the same pattern: run a mini-WFC solve on a radius-2 region around a center cell in a neighbor grid (`maxRestarts: 3-5`, `quiet: true`). Apply results to source grids via `applyTileResultsToGrids()`, update `globalCells`, rebuild the main grid's fixed cells and anchor map, clear persisted unfixed state, then retry the main grid solve. Falls through to the next phase if all attempts fail.
 
 ### Build All
-`populateAllGrids()` creates all 19 grids upfront, collects all cells, and runs a single WFC pass with zero fixed cells. No soft cells or fallbacks needed — just one big solve relying on backtracking.
+`populateAllGrids()` creates all 19 grids upfront, collects all cells, and runs a single WFC pass with zero fixed cells. No neighbor cells or fallbacks needed — just one big solve relying on backtracking.
 
 ### Future Improvements
 
@@ -87,8 +87,8 @@ The WFC worker runs in a separate thread with its own copy of `SeededRandom.js` 
 - Cell — A position in the grid that can hold a Tile
 - Tile — The actual mesh placed in a Cell (`src/HexTiles.js`)
 - Fixed Cell — A solved tile from a neighboring grid used as a read-only constraint during WFC
-- Soft Fixed Cell — A fixed cell adjacent to the solve region that can be unfixed if it causes a seeding contradiction
-- Anchor — A neighbor of a soft fixed cell that becomes a new fixed constraint when the soft cell is unfixed
+- Neighbor Cell — A fixed cell adjacent to the solve region that can be unfixed if it causes a neighbor contradiction
+- Anchor — A neighbor of a neighbor cell that becomes a new fixed constraint when the neighbor cell is unfixed
 - RNG Seed — The number that initializes the random number generator (global)
 
 ## Map Dimensions
@@ -148,8 +148,8 @@ Conversion (pointy-top odd-row offset):
 - App: 1:1 scale, hex tile is 2 WU wide on X axis
 
 ## Debug Label Colors
-- Purple = Neighbor contradiction (0 possibilities during initial propagation from fixed cells)
-- Orange = Replaced fixed cell (soft cell change or persisted-unfixed cell change)
+- Purple = Neighbor contradiction (0 possibilities during initial propagation from fixed/neighbor cells)
+- Orange = Replaced fixed cell (neighbor cell change or persisted-unfixed cell change)
 - Red = Dropped fixed cell (mountain placed to hide mismatch)
 
 ## Fragile Code

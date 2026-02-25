@@ -413,8 +413,8 @@ export class HexMap {
   /** Track WFC failure info (add to failedCells, count contradictions) */
   _trackWfcFailure(gridKey, wfcResult) {
     this.contradictionCount++
-    if (wfcResult.seedingContradiction) {
-      const c = wfcResult.seedingContradiction
+    if (wfcResult.neighborContradiction) {
+      const c = wfcResult.neighborContradiction
       this.failedCells.add(`${c.failedCol},${c.failedRow}`)
     }
   }
@@ -432,7 +432,7 @@ export class HexMap {
     let changedFixedCells = []
     let unfixedKeys = []
 
-    // Phase 0: Initial attempt (solver handles soft fixed cell unfixing internally)
+    // Phase 0: Initial attempt (solver handles neighbor cell unfixing internally)
     const initialResult = await this.wfcManager.runWfcAttempt(ctx)
     if (initialResult.success) {
       result = initialResult.tiles
@@ -448,13 +448,13 @@ export class HexMap {
 
       this._trackWfcFailure(ctx.gridKey, initialResult)
       let failedCell = initialResult.failedCell
-      let isSeedConflict = initialResult.seedConflict
+      let isNeighborConflict = initialResult.neighborConflict
       let sourceKey = initialResult.sourceKey
 
       // Local-WFC phase 1: Re-solve the area around the neighbor contradiction source
-      // Only runs for seed conflicts where we know which fixed cell caused the problem
+      // Only runs for neighbor conflicts where we know which fixed cell caused the problem
       const maxConflictWfcAttempts = 3
-      if (isSeedConflict && sourceKey) {
+      if (isNeighborConflict && sourceKey) {
         for (let cwfc = 0; cwfc < maxConflictWfcAttempts; cwfc++) {
           stats.localWfcAttempts++
           const { q: centerQ, r: centerR, s: centerS } = parseCubeKey(sourceKey)
@@ -509,9 +509,9 @@ export class HexMap {
 
           this._trackWfcFailure(ctx.gridKey, retryResult)
           failedCell = retryResult.failedCell
-          isSeedConflict = retryResult.seedConflict
+          isNeighborConflict = retryResult.neighborConflict
           sourceKey = retryResult.sourceKey
-          if (!isSeedConflict || !sourceKey) break
+          if (!isNeighborConflict || !sourceKey) break
         }
       }
 
@@ -588,7 +588,7 @@ export class HexMap {
         stats.unfixedCount += (retryResult.unfixedKeys || []).length
         this._trackWfcFailure(ctx.gridKey, retryResult)
         failedCell = retryResult.failedCell
-        isSeedConflict = retryResult.seedConflict
+        isNeighborConflict = retryResult.neighborConflict
       }
 
       // Drop phase: Drop fixed cells one by one, sorted by proximity to failed cell

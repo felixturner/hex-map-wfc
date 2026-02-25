@@ -67,8 +67,8 @@ export class WFCManager {
     } else if (type === 'result') {
       const resolve = this.wfcPendingResolvers.get(id)
       if (resolve) {
-        const { seedingContradiction, lastContradiction, changedFixedCells, unfixedKeys, backtracks, restarts } = e.data
-        resolve({ success, tiles, collapseOrder, seedingContradiction, lastContradiction, changedFixedCells, unfixedKeys, backtracks, restarts })
+        const { neighborContradiction, lastContradiction, changedFixedCells, unfixedKeys, backtracks, restarts } = e.data
+        resolve({ success, tiles, collapseOrder, neighborContradiction, lastContradiction, changedFixedCells, unfixedKeys, backtracks, restarts })
         this.wfcPendingResolvers.delete(id)
       }
     }
@@ -187,9 +187,9 @@ export class WFCManager {
 
   /**
    * Run a single WFC attempt using the populate context.
-   * Handles persisted-unfixed cells, soft fixed cell construction, and failure tracking.
+   * Handles persisted-unfixed cells, neighbor cell construction, and failure tracking.
    * @param {Object} ctx - Populate context from HexMap._setupPopulateContext
-   * @returns {Object} { success, tiles?, collapseOrder?, changedFixedCells?, unfixedKeys?, seedConflict?, failedCell?, sourceKey?, seedingContradiction?, lastContradiction? }
+   * @returns {Object} { success, tiles?, collapseOrder?, changedFixedCells?, unfixedKeys?, neighborConflict?, failedCell?, sourceKey?, neighborContradiction?, lastContradiction? }
    */
   async runWfcAttempt(ctx) {
     ctx.attempt++
@@ -225,8 +225,8 @@ export class WFCManager {
       activeFixed = [...activeFixed, ...anchorFixed]
     }
 
-    // Build soft fixed cells, excluding already-unfixed cells from previous attempts
-    const activeSoftFixed = activeFixed
+    // Build neighbor cells, excluding already-unfixed cells from previous attempts
+    const activeNeighborCells = activeFixed
       .filter(fc => !ctx.persistedUnfixedKeys.has(cubeKey(fc.q, fc.r, fc.s)))
       .map(fc => ({
         q: fc.q, r: fc.r, s: fc.s,
@@ -240,7 +240,7 @@ export class WFCManager {
       initialCollapses: ctx.initialCollapses,
       gridId: ctx.gridKey,
       attemptNum: ctx.attempt,
-      softFixedCells: activeSoftFixed,
+      neighborCells: activeNeighborCells,
     })
 
     // Account for restarts so next attempt's try number continues incrementally
@@ -268,13 +268,13 @@ export class WFCManager {
       }
     }
 
-    const failedInfo = wfcResult.seedingContradiction || wfcResult.lastContradiction
+    const failedInfo = wfcResult.neighborContradiction || wfcResult.lastContradiction
     return {
       success: false,
-      seedConflict: !!wfcResult.seedingContradiction,
+      neighborConflict: !!wfcResult.neighborContradiction,
       failedCell: failedInfo ? { q: failedInfo.failedQ, r: failedInfo.failedR, s: failedInfo.failedS } : null,
       sourceKey: failedInfo?.sourceKey ?? null,
-      seedingContradiction: wfcResult.seedingContradiction,
+      neighborContradiction: wfcResult.neighborContradiction,
       lastContradiction: wfcResult.lastContradiction,
       backtracks: wfcResult.backtracks || 0,
       restarts: wfcResult.restarts || 0,
