@@ -1,15 +1,12 @@
 # TODO
 
 - rather than do drop on wfc fail try a exta wfc
-- check port coveyness
 - add flyhtrough button
-- less churches?
 
 - make intro screen? audio? start btn wait for audio
 - figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
-
-- dial in AO / 
-- water darker + readd coast glow?
+- dial in AO 
+- clean up old assets
 
 
 - figure out why build all is failing more now? 

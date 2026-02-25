@@ -45,16 +45,18 @@ When WFC fails and soft cells were unfixed during that attempt, those cells are 
 
 ### Retry Logic (Two Levels)
 
-**Inner loop** (WFC worker, `wfc.worker.js`): Runs the core solve with backtracking (max 500 backtracks). On backtrack limit, does a full restart (re-init from scratch). `maxRestarts` controls restart count (currently 1 for grids with neighbors, 10 for first grid). Also handles soft fixed cell unfixing during seeding. Returns success or failure.
+**Inner loop** (WFC worker, `wfc.worker.js`): Runs the core solve with backtracking (max 500 backtracks). On backtrack limit, does a full restart (re-init from scratch). `maxRestarts` controls restart count (currently 1 for grids with neighbors, 10 for first grid). Also handles soft fixed cell unfixing during seeding. Returns success or failure with two possible failure modes:
+- **Neighbor contradiction**: Propagation from fixed/soft cells empties a cell's possibilities before the solve even starts
+- **Backtrack limit**: Solver exhausted max backtracks during the main collapse loop
 
-**Outer loop** (`_runWfcWithRecovery` in `HexMap.js`): When the inner loop fails, three recovery phases run in sequence. Each phase retries a fresh inner WFC solve after modifying fixed cells:
+**Outer loop** (`_runWfcWithRecovery` in `HexMap.js`): When the inner loop fails, three recovery phases run in sequence. Each phase modifies neighbor grid tiles via a local mini-WFC or drops cells, then retries the main grid:
 
-1. **Conflict-WFC phase** (max 3 attempts): Only for seed conflicts with a known source. Re-solves a radius-2 region around the conflict source in the neighbor grid, updates `globalCells`, rebuilds `fixedCells`, then retries.
-2. **Replace phase** (max 5 attempts): Skipped for seed conflicts. Swaps the nearest fixed cell with a compatible tile (`tryReplaceFixedCell`), then retries.
-3. **Drop phase** (unbounded): Last resort. Drops fixed cells one by one nearest the failure point, placing mountains to hide mismatches. Re-sorts when failure point changes.
+1. **Local-WFC — seed conflict** (max 3 attempts): Only triggers when the failure is a neighbor contradiction with a known source cell (`isSeedConflict && sourceKey`). Centers the mini-WFC on the specific neighbor cell that caused the contradiction. Same center is retried each attempt since the local-WFC changes the surrounding region.
+2. **Local-WFC — general** (max 5 attempts): Triggers for any failure type. Centers the mini-WFC on the nearest fixed cell to the failure point. Each attempt tries the next nearest fixed cell not yet attempted.
+3. **Drop phase** (unbounded): Last resort fallback. Drops fixed cells one by one nearest the failure point, placing mountains to hide mismatches.
 
-### Conflict-WFC Recovery
-On seed conflict, re-solves a radius-2 region around the conflict source in the neighbor grid (max 3 attempts, `maxRestarts: 5` each). Updates `globalCells` and source grid visuals, rebuilds fixed cells, then retries the original grid. Falls through to replace/drop on failure.
+### Local-WFC Recovery
+Both Local-WFC phases use the same pattern: run a mini-WFC solve on a radius-2 region around a center cell in a neighbor grid (`maxRestarts: 3-5`, `quiet: true`). Apply results to source grids via `applyTileResultsToGrids()`, update `globalCells`, rebuild the main grid's fixed cells and anchor map, clear persisted unfixed state, then retry the main grid solve. Falls through to the next phase if all attempts fail.
 
 ### Build All
 `populateAllGrids()` creates all 19 grids upfront, collects all cells, and runs a single WFC pass with zero fixed cells. No soft cells or fallbacks needed — just one big solve relying on backtracking.
@@ -66,9 +68,6 @@ From the [N-WFC paper](https://ar5iv.labs.arxiv.org/html/2308.07307). Design the
 
 #### Driven WFC (Noise-Based Pre-Constraints)
 [Townscaper-style](https://www.boristhebrave.com/2021/06/06/driven-wavefunctioncollapse/). Use continuous world noise fields to pre-determine tile categories (water, mountain, flat grass, etc.) before WFC runs. WFC only picks among variants within that category. Cross-grid boundaries become trivial because noise is continuous and doesn't care about grid edges. WFC becomes more of a detail pass than a generator.
-
-#### Localized Re-Solve
-Instead of dropping cells at conflict points, create a small WFC solve zone (half-grid radius) centered on the conflict cell. The zone can span multiple grids — perimeter cells become fixed constraints from `globalCells`, interior cells are re-solved. After solving, update affected source grids via `replaceTile()`. Uses existing infrastructure: `cubeCoordsInRadius`, `solveWfcAsync`, global cell map.
 
 ## Seeded RNG
 
@@ -149,7 +148,7 @@ Conversion (pointy-top odd-row offset):
 - App: 1:1 scale, hex tile is 2 WU wide on X axis
 
 ## Debug Label Colors
-- Purple = Seed conflict (0 possibilities during initial propagation from fixed cells)
+- Purple = Neighbor contradiction (0 possibilities during initial propagation from fixed cells)
 - Orange = Replaced fixed cell (soft cell change or persisted-unfixed cell change)
 - Red = Dropped fixed cell (mountain placed to hide mismatch)
 

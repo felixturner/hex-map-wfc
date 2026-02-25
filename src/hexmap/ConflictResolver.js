@@ -1,6 +1,5 @@
-import { TILE_LIST, HexDir, HexOpposite, rotateHexEdges, LEVELS_COUNT } from './HexTileData.js'
+import { TILE_LIST, HexDir, HexOpposite, rotateHexEdges } from './HexTileData.js'
 import { CUBE_DIRS, cubeKey, parseCubeKey, cubeToOffset, getEdgeLevel, edgesCompatible, globalToLocalGrid } from './HexWFCCore.js'
-import { shuffle } from '../SeededRandom.js'
 
 /**
  * ConflictResolver — conflict detection and fixed-cell replacement logic.
@@ -17,84 +16,6 @@ export class ConflictResolver {
   /** Called after WFCManager init to receive the rules reference */
   setWfcRules(rules) {
     this.hexWfcRules = rules
-  }
-
-  /**
-   * Find replacement tiles for a fixed cell that preserve compatibility with its neighbors in globalCells
-   * @param {number} q - Cell cube q
-   * @param {number} r - Cell cube r
-   * @param {number} s - Cell cube s
-   * @param {number} currentType - Current tile type
-   * @param {number} currentRotation - Current rotation
-   * @param {number} currentLevel - Current level
-   * @returns {Array} Shuffled replacement candidates [{ type, rotation, level }]
-   */
-  findReplacementTilesForCell(q, r, s, currentType, currentRotation, currentLevel) {
-    const lockedEdges = {}
-    for (let i = 0; i < 6; i++) {
-      const dir = CUBE_DIRS[i]
-      const nq = q + dir.dq
-      const nr = r + dir.dr
-      const ns = s + dir.ds
-      const nKey = cubeKey(nq, nr, ns)
-      const neighbor = this.globalCells.get(nKey)
-
-      if (neighbor) {
-        const neighborDef = TILE_LIST[neighbor.type]
-        if (!neighborDef) continue
-        const neighborEdges = rotateHexEdges(neighborDef.edges, neighbor.rotation)
-        const oppositeDir = HexOpposite[HexDir[i]]
-        const neighborEdgeType = neighborEdges[oppositeDir]
-        const neighborEdgeLevel = getEdgeLevel(neighbor.type, neighbor.rotation, oppositeDir, neighbor.level ?? 0)
-
-        if (neighborEdgeType === 'grass') {
-          lockedEdges[HexDir[i]] = { type: neighborEdgeType, level: null }
-        } else {
-          lockedEdges[HexDir[i]] = { type: neighborEdgeType, level: neighborEdgeLevel }
-        }
-      }
-    }
-
-    const currentDef = TILE_LIST[currentType]
-    const candidates = []
-
-    for (let tileType = 0; tileType < TILE_LIST.length; tileType++) {
-      const def = TILE_LIST[tileType]
-
-      if (def.mesh === currentDef.mesh) continue
-
-      const isSlope = def.highEdges?.length > 0
-      if (isSlope) {
-        const increment = def.levelIncrement ?? 1
-        const maxBaseLevel = LEVELS_COUNT - 1 - increment
-        if (currentLevel > maxBaseLevel) continue
-      }
-
-      for (let rot = 0; rot < 6; rot++) {
-        const edges = rotateHexEdges(def.edges, rot)
-
-        let matchesLocked = true
-        for (const [dir, required] of Object.entries(lockedEdges)) {
-          const edgeType = edges[dir]
-          const edgeLevel = getEdgeLevel(tileType, rot, dir, currentLevel)
-          if (edgeType !== required.type) {
-            matchesLocked = false
-            break
-          }
-          if (required.level !== null && edgeType !== 'grass' && edgeLevel !== required.level) {
-            matchesLocked = false
-            break
-          }
-        }
-
-        if (matchesLocked) {
-          candidates.push({ type: tileType, rotation: rot, level: currentLevel })
-        }
-      }
-    }
-
-    shuffle(candidates)
-    return candidates
   }
 
   /**
@@ -243,84 +164,6 @@ export class ConflictResolver {
     }
 
     return { valid: conflicts.length === 0, conflicts }
-  }
-
-  /**
-   * Try to replace a fixed cell with a compatible alternative
-   * Updates both globalCells and the rendered tile in the source grid
-   * @param {Object} fixedCell - {q,r,s,type,rotation,level} the cell to replace
-   * @param {Array} fixedCells - Current list of fixed cells (for adjacency checks)
-   * @param {Set} replacedKeys - Already-replaced cell keys (avoid replacing twice)
-   * @returns {boolean} True if replacement was found and applied
-   */
-  tryReplaceFixedCell(fixedCell, fixedCells, replacedKeys) {
-    const key = cubeKey(fixedCell.q, fixedCell.r, fixedCell.s)
-    if (replacedKeys.has(key)) return false
-
-    const candidates = this.findReplacementTilesForCell(
-      fixedCell.q, fixedCell.r, fixedCell.s,
-      fixedCell.type, fixedCell.rotation, fixedCell.level
-    )
-    if (candidates.length === 0) return false
-
-    const fixedMap = new Map()
-    for (const fc of fixedCells) {
-      if (fc !== fixedCell) {
-        fixedMap.set(cubeKey(fc.q, fc.r, fc.s), fc)
-      }
-    }
-
-    for (const replacement of candidates) {
-      const replacementEdges = rotateHexEdges(TILE_LIST[replacement.type]?.edges || {}, replacement.rotation)
-      let compatibleWithFixed = true
-
-      for (let i = 0; i < 6; i++) {
-        const dir = CUBE_DIRS[i]
-        const nq = fixedCell.q + dir.dq
-        const nr = fixedCell.r + dir.dr
-        const ns = fixedCell.s + dir.ds
-        const nKey = cubeKey(nq, nr, ns)
-        const adjacentFixed = fixedMap.get(nKey)
-
-        if (adjacentFixed) {
-          const myEdge = replacementEdges[HexDir[i]]
-          const myLevel = getEdgeLevel(replacement.type, replacement.rotation, HexDir[i], replacement.level)
-          const adjacentEdges = rotateHexEdges(TILE_LIST[adjacentFixed.type]?.edges || {}, adjacentFixed.rotation)
-          const theirEdge = adjacentEdges[HexOpposite[HexDir[i]]]
-          const theirLevel = getEdgeLevel(adjacentFixed.type, adjacentFixed.rotation, HexOpposite[HexDir[i]], adjacentFixed.level ?? 0)
-
-          if (!edgesCompatible(myEdge, myLevel, theirEdge, theirLevel)) {
-            compatibleWithFixed = false
-            break
-          }
-        }
-      }
-
-      if (compatibleWithFixed) {
-        const existing = this.globalCells.get(key)
-        if (existing) {
-          existing.type = replacement.type
-          existing.rotation = replacement.rotation
-          existing.level = replacement.level
-
-          const sourceGrid = this.grids.get(existing.gridKey)
-          if (sourceGrid) {
-            const { gridX, gridZ } = globalToLocalGrid(fixedCell, sourceGrid.globalCenterCube, sourceGrid.gridRadius)
-            sourceGrid.replaceTile(gridX, gridZ, replacement.type, replacement.rotation, replacement.level)
-          }
-        }
-
-        fixedCell.type = replacement.type
-        fixedCell.rotation = replacement.rotation
-        fixedCell.level = replacement.level
-        replacedKeys.add(key)
-        const rco = cubeToOffset(fixedCell.q, fixedCell.r, fixedCell.s)
-        this.replacedCells.add(`${rco.col},${rco.row}`)
-        return true
-      }
-    }
-
-    return false
   }
 
   /**

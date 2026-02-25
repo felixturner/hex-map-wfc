@@ -172,7 +172,6 @@ export class WavesMask {
    * @param {Map} [globalCells] - global cell map for cove probe
    */
   render(mainScene, showMeshes = [], waterPlane = null, globalCells = null) {
-    console.log('%c[waves]%c render', 'color:blue', 'color:black')
     const { renderer, _sceneCam, _rtA, _rtB } = this
 
     // ---- Step 1: render tiles + blue water plane top-down to _rtA ----

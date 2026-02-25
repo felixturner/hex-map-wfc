@@ -243,6 +243,9 @@ export class WFCManager {
       softFixedCells: activeSoftFixed,
     })
 
+    // Account for restarts so next attempt's try number continues incrementally
+    ctx.attempt += wfcResult.restarts || 0
+
     if (wfcResult.success) {
       return {
         success: true,
@@ -250,6 +253,8 @@ export class WFCManager {
         collapseOrder: wfcResult.collapseOrder || [],
         changedFixedCells: wfcResult.changedFixedCells || [],
         unfixedKeys: wfcResult.unfixedKeys || [],
+        backtracks: wfcResult.backtracks || 0,
+        restarts: wfcResult.restarts || 0,
       }
     }
 
@@ -271,6 +276,8 @@ export class WFCManager {
       sourceKey: failedInfo?.sourceKey ?? null,
       seedingContradiction: wfcResult.seedingContradiction,
       lastContradiction: wfcResult.lastContradiction,
+      backtracks: wfcResult.backtracks || 0,
+      restarts: wfcResult.restarts || 0,
     }
   }
 

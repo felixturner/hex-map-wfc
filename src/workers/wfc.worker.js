@@ -31,6 +31,8 @@ class HexWFCSolver {
       tileTypes: options.tileTypes ?? null,
       log: options.log ?? (() => {}),
       attemptNum: options.attemptNum ?? 0,
+      gridId: options.gridId ?? '',
+      quiet: options.quiet ?? false,
     }
     this.log = this.options.log
     // Map<cubeKey, HexWFCCell> — cells to solve
@@ -294,7 +296,7 @@ class HexWFCSolver {
   backtrack() {
     this.backtracks++
     if (this.backtracks >= this.maxBacktracks) {
-      this.log(`Backtrack limit reached (${this.maxBacktracks})`, 'red')
+      if (!this.options.quiet) this.log(`${this.options.gridId ? `[${this.options.gridId}] ` : ''}WFC FAIL [backtrack limit reached]`, 'red')
       return false
     }
 
@@ -457,8 +459,6 @@ class HexWFCSolver {
     if (!softData) return
 
     const { q, r, s } = parseCubeKey(key)
-    const co = cubeToOffset(q, r, s)
-    this.log(`Unfixed soft cell at (${co.col},${co.row})`)
 
     // Remove from fixed cells array
     const fixedIdx = fixedCells.findIndex(fc => cubeKey(fc.q, fc.r, fc.s) === key)
@@ -491,10 +491,14 @@ class HexWFCSolver {
     let currentSolveCells = [...solveCells]
     let currentFixedCells = [...fixedCells]
 
+    let totalBacktracks = 0
     for (let restart = 0; restart <= this.options.maxRestarts; restart++) {
       const baseAttempt = this.options.attemptNum || 0
       const tryNum = baseAttempt + restart
-      this.log(`WFC START (try ${tryNum}, ${currentSolveCells.length} cells, ${currentFixedCells.length} fixed)`, 'green')
+      if (!this.options.quiet) {
+        const prefix = this.options.gridId ? `[${this.options.gridId}] ` : ''
+        this.log(`${prefix}WFC START [try ${tryNum}]`, 'green')
+      }
 
       this.init(currentSolveCells, currentFixedCells)
       this.trail = []
@@ -526,6 +530,7 @@ class HexWFCSolver {
 
         // On seeding failure, try unfixing soft fixed cells
         let maxUnfixes = this.softFixedData.size
+        const unfixedBefore = this.unfixedKeys.length
         while (!seedingOk && maxUnfixes > 0) {
           maxUnfixes--
           const contradiction = this.lastContradiction
@@ -565,14 +570,19 @@ class HexWFCSolver {
 
           seedingOk = this.propagate()
         }
+        const unfixedCount = this.unfixedKeys.length - unfixedBefore
+        if (unfixedCount > 0) {
+          this.log(`Unfixed ${unfixedCount} neighbor(s)`)
+        }
       }
 
       if (!seedingOk) {
         this.seedingContradiction = this.lastContradiction
-        this.log('WFC failed - propagation failed after seeding')
-        if (this.seedingContradiction) {
+        if (!this.options.quiet) {
           const c = this.lastContradiction
-          this.log(`  FAILED CELL: (${c.failedCol},${c.failedRow})`)
+          const loc = c ? ` at (${c.failedCol},${c.failedRow})` : ''
+          const prefix = this.options.gridId ? `[${this.options.gridId}] ` : ''
+          this.log(`${prefix}WFC FAIL [neighbor contradiction${loc}]`, 'red')
         }
         return null
       }
@@ -603,9 +613,6 @@ class HexWFCSolver {
         }
 
         collapseCount++
-        if (collapseCount % 500 === 0) {
-          this.log(`WFC (try ${tryNum}): ${collapseCount}/${totalCells} collapsed, ${this.backtracks} backtracks, trail size ${this.trail.length}`)
-        }
 
         if (!this.propagate()) {
           // Contradiction — backtrack
@@ -613,20 +620,18 @@ class HexWFCSolver {
         }
       }
 
+      totalBacktracks += this.backtracks
       if (solved) {
-        if (restart > 0 || this.backtracks > 0) {
-          this.log(`WFC solved after ${restart} restarts, ${this.backtracks} backtracks`)
-        }
+        this.restartCount = restart
+        this.backtracks = totalBacktracks
         return this.extractResult()
       }
 
       // Backtrack limit reached — full restart
-      if (restart < this.options.maxRestarts) {
-        this.log(`Full restart ${restart + 1}/${this.options.maxRestarts}`)
-      }
+      this.restartCount = restart
     }
 
-    this.log('WFC failed - all restarts exhausted')
+    this.backtracks = totalBacktracks
     return null
   }
 

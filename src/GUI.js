@@ -227,7 +227,7 @@ export class GUIManager {
     } }, 'reset').name('Reset')
     gui.add({ autoBuild: () => app.city.autoExpand([
       [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
-    ]) }, 'autoBuild').name('Build Sequentially')
+    ]) }, 'autoBuild').name('Auto-Build')
     gui.add({ buildAll: () => {
       import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0, 0.3))
       app.city.populateAllGrids()
