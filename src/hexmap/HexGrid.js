@@ -465,7 +465,7 @@ export class HexGrid {
 
   /**
    * Replace an existing tile with a different type/rotation
-   * Used by neighbor tile replacement to fix neighbor conflicts
+   * Used by neighbor tile replacement and rebuild-wfc
    */
   replaceTile(gridX, gridZ, newType, newRotation, newLevel = 0) {
     if (!this.hexGrid) return null

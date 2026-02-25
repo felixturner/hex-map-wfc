@@ -74,3 +74,7 @@
   - more coasts
   - 1 corner of hill to fill jagged gaps in cliffs?(like coast)
 
+# DONE / FAILED
+
+- Sub-Complete Tileset — [N-WFC paper](https://ar5iv.labs.arxiv.org/html/2308.07307). Design tileset so any valid edge config on one side guarantees a matching tile regardless of other 5 edges. Tried, too many edge combos for hex grids.
+- Driven WFC (Noise-Based Pre-Constraints) — [Townscaper-style](https://www.boristhebrave.com/2021/06/06/driven-wavefunctioncollapse/). Use noise fields to pre-determine tile categories before WFC. Tried, didn't eliminate cross-grid boundary issues as hoped.

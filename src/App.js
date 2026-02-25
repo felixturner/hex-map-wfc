@@ -89,7 +89,7 @@ export class App {
       return
     }
 
-    const seed = 85934
+    const seed = Math.floor(Math.random() * 100000)
     setSeed(seed)
     console.log(`%c[SEED] ${seed}`, 'color: black')
     console.log(`%c[LEVELS] ${LEVELS_COUNT}`, 'color: black')
@@ -474,7 +474,7 @@ export class App {
 
     const modes = [
       { key: 'move', label: 'Move' },
-      { key: 'build', label: 'Build' },
+      { key: 'build', label: 'Rebuild' },
     ]
     const buttons = []
 
@@ -489,7 +489,7 @@ export class App {
         background: rgba(0,0,0,0.4);
         color: white;
         font-family: monospace;
-        font-size: 14px;
+        font-size: 11px;
         cursor: pointer;
         backdrop-filter: blur(4px);
       `

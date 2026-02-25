@@ -27,7 +27,7 @@ class HexWFCSolver {
   constructor(rules, options = {}) {
     this.rules = rules
     this.options = {
-      maxRestarts: options.maxRestarts ?? 10,
+      maxTries: options.maxTries ?? 2,
       tileTypes: options.tileTypes ?? null,
       log: options.log ?? (() => {}),
       attemptNum: options.attemptNum ?? 0,
@@ -42,16 +42,16 @@ class HexWFCSolver {
     // Map<cubeKey, [{key, dir, returnDir}]> — precomputed neighbors
     this.neighbors = new Map()
     this.propagationStack = []
-    this.restartCount = 0
-    this.lastContradiction = null
-    this.neighborContradiction = null
+    this.tryCount = 0
+    this.lastConflict = null
+    this.neighborConflict = null
     this.collapseOrder = []
     // Backtracking state (trail-based — records only changes, not full copies)
     this.trail = []       // { key, stateKey } — each possibility removed during propagation
     this.decisions = []   // stack of { targetKey, prevPossibilities, trailStart, collapseOrderLen, triedStates }
     this.maxBacktracks = 500
     this.backtracks = 0
-    // Neighbor cell data: cells that CAN be unfixed on neighbor contradiction
+    // Neighbor cell data: cells that CAN be unfixed on neighbor conflict
     this.neighborData = new Map()     // cubeKey → { q,r,s, anchors: [...], original: {type,rotation,level} }
     this.neighborOriginals = new Map() // cubeKey → { q,r,s, type, rotation, level } — preserved after unfixing
     this.unfixedKeys = []              // cubeKeys of neighbor cells that were converted to solve cells
@@ -381,7 +381,7 @@ class HexWFCSolver {
         if (neighbor.possibilities.size === 0) {
           const { q, r, s } = parseCubeKey(nKey)
           const failedOffset = cubeToOffset(q, r, s)
-          this.lastContradiction = {
+          this.lastConflict = {
             failedKey: nKey,
             failedQ: q, failedR: r, failedS: s,
             failedCol: failedOffset.col, failedRow: failedOffset.row,
@@ -424,14 +424,14 @@ class HexWFCSolver {
   }
 
   /**
-   * Find neighbor cells adjacent to a contradiction cell
+   * Find neighbor cells adjacent to a conflict cell
    * @param {string} failedKey - cubeKey of the cell that reached 0 possibilities
-   * @param {string} sourceKey - cubeKey of the cell that caused the contradiction
+   * @param {string} sourceKey - cubeKey of the cell that caused the conflict
    * @returns {string[]} cubeKeys of adjacent neighbor cells
    */
   findAdjacentNeighbors(failedKey, sourceKey) {
     const candidates = []
-    // Check if the source of the contradiction was a fixed cell
+    // Check if the source of the conflict was a fixed cell
     if (sourceKey && this.fixedCells.has(sourceKey) && this.neighborData.has(sourceKey)) {
       candidates.push(sourceKey)
     }
@@ -492,9 +492,9 @@ class HexWFCSolver {
     let currentFixedCells = [...fixedCells]
 
     let totalBacktracks = 0
-    for (let restart = 0; restart <= this.options.maxRestarts; restart++) {
+    for (let attempt = 1; attempt <= this.options.maxTries; attempt++) {
       const baseAttempt = this.options.attemptNum || 0
-      const tryNum = baseAttempt + restart
+      const tryNum = baseAttempt + attempt - 1
       if (!this.options.quiet) {
         const prefix = this.options.gridId ? `[${this.options.gridId}] ` : ''
         this.log(`${prefix}WFC START [try ${tryNum}]`, 'green')
@@ -533,11 +533,11 @@ class HexWFCSolver {
         const unfixedBefore = this.unfixedKeys.length
         while (!neighborSeedingOk && maxUnfixes > 0) {
           maxUnfixes--
-          const contradiction = this.lastContradiction
-          if (!contradiction) break
+          const conflict = this.lastConflict
+          if (!conflict) break
 
-          // Find neighbor cells adjacent to the contradiction
-          const softCandidates = this.findAdjacentNeighbors(contradiction.failedKey, contradiction.sourceKey)
+          // Find neighbor cells adjacent to the conflict
+          const softCandidates = this.findAdjacentNeighbors(conflict.failedKey, conflict.sourceKey)
           if (softCandidates.length === 0) break
 
           // Unfix the first candidate
@@ -577,12 +577,12 @@ class HexWFCSolver {
       }
 
       if (!neighborSeedingOk) {
-        this.neighborContradiction = this.lastContradiction
+        this.neighborConflict = this.lastConflict
         if (!this.options.quiet) {
-          const c = this.lastContradiction
+          const c = this.lastConflict
           const loc = c ? ` at (${c.failedCol},${c.failedRow})` : ''
           const prefix = this.options.gridId ? `[${this.options.gridId}] ` : ''
-          this.log(`${prefix}WFC FAIL [neighbor contradiction${loc}]`, 'red')
+          this.log(`${prefix}WFC FAIL [neighbor conflict${loc}]`, 'red')
         }
         return null
       }
@@ -615,20 +615,20 @@ class HexWFCSolver {
         collapseCount++
 
         if (!this.propagate()) {
-          // Contradiction — backtrack
+          // Conflict — backtrack
           if (!this.backtrack()) { failed = true; break }
         }
       }
 
       totalBacktracks += this.backtracks
       if (solved) {
-        this.restartCount = restart
+        this.tryCount = attempt
         this.backtracks = totalBacktracks
         return this.extractResult()
       }
 
       // Backtrack limit reached — full restart
-      this.restartCount = restart
+      this.tryCount = attempt
     }
 
     this.backtracks = totalBacktracks
@@ -715,8 +715,8 @@ self.onmessage = function(e) {
       options?.initialCollapses ?? []
     )
     const collapseOrder = solver.collapseOrder || []
-    const neighborContradiction = solver.neighborContradiction
-    const lastContradiction = solver.lastContradiction
+    const neighborConflict = solver.neighborConflict
+    const lastConflict = solver.lastConflict
 
     self.postMessage({
       type: 'result',
@@ -724,12 +724,12 @@ self.onmessage = function(e) {
       success: result !== null,
       tiles: result,
       collapseOrder,
-      neighborContradiction,
-      lastContradiction,
+      neighborConflict,
+      lastConflict,
       changedFixedCells: solver.changedFixedCells || [],
       unfixedKeys: solver.unfixedKeys || [],
       backtracks: solver.backtracks || 0,
-      restarts: solver.restartCount || 0,
+      tries: solver.tryCount || 0,
     })
   }
 }

@@ -67,8 +67,8 @@ export class WFCManager {
     } else if (type === 'result') {
       const resolve = this.wfcPendingResolvers.get(id)
       if (resolve) {
-        const { neighborContradiction, lastContradiction, changedFixedCells, unfixedKeys, backtracks, restarts } = e.data
-        resolve({ success, tiles, collapseOrder, neighborContradiction, lastContradiction, changedFixedCells, unfixedKeys, backtracks, restarts })
+        const { neighborConflict, lastConflict, changedFixedCells, unfixedKeys, backtracks, tries } = e.data
+        resolve({ success, tiles, collapseOrder, neighborConflict, lastConflict, changedFixedCells, unfixedKeys, backtracks, tries })
         this.wfcPendingResolvers.delete(id)
       }
     }
@@ -189,7 +189,7 @@ export class WFCManager {
    * Run a single WFC attempt using the populate context.
    * Handles persisted-unfixed cells, neighbor cell construction, and failure tracking.
    * @param {Object} ctx - Populate context from HexMap._setupPopulateContext
-   * @returns {Object} { success, tiles?, collapseOrder?, changedFixedCells?, unfixedKeys?, neighborConflict?, failedCell?, sourceKey?, neighborContradiction?, lastContradiction? }
+   * @returns {Object} { success, tiles?, collapseOrder?, changedFixedCells?, unfixedKeys?, isNeighborConflict?, failedCell?, sourceKey?, neighborConflict?, lastConflict? }
    */
   async runWfcAttempt(ctx) {
     ctx.attempt++
@@ -236,15 +236,15 @@ export class WFCManager {
 
     const wfcResult = await this.solveWfcAsync(activeSolveCells, activeFixed, {
       tileTypes: ctx.tileTypes,
-      maxRestarts: ctx.initialFixedCount === 0 ? 10 : 1,
+      maxTries: 2,
       initialCollapses: ctx.initialCollapses,
       gridId: ctx.gridKey,
       attemptNum: ctx.attempt,
       neighborCells: activeNeighborCells,
     })
 
-    // Account for restarts so next attempt's try number continues incrementally
-    ctx.attempt += wfcResult.restarts || 0
+    // Account for extra tries so next attempt's try number continues incrementally
+    ctx.attempt += Math.max(0, (wfcResult.tries || 1) - 1)
 
     if (wfcResult.success) {
       return {
@@ -254,7 +254,7 @@ export class WFCManager {
         changedFixedCells: wfcResult.changedFixedCells || [],
         unfixedKeys: wfcResult.unfixedKeys || [],
         backtracks: wfcResult.backtracks || 0,
-        restarts: wfcResult.restarts || 0,
+        tries: wfcResult.tries || 0,
       }
     }
 
@@ -268,16 +268,16 @@ export class WFCManager {
       }
     }
 
-    const failedInfo = wfcResult.neighborContradiction || wfcResult.lastContradiction
+    const failedInfo = wfcResult.neighborConflict || wfcResult.lastConflict
     return {
       success: false,
-      neighborConflict: !!wfcResult.neighborContradiction,
+      isNeighborConflict: !!wfcResult.neighborConflict,
       failedCell: failedInfo ? { q: failedInfo.failedQ, r: failedInfo.failedR, s: failedInfo.failedS } : null,
       sourceKey: failedInfo?.sourceKey ?? null,
-      neighborContradiction: wfcResult.neighborContradiction,
-      lastContradiction: wfcResult.lastContradiction,
+      neighborConflict: wfcResult.neighborConflict,
+      lastConflict: wfcResult.lastConflict,
       backtracks: wfcResult.backtracks || 0,
-      restarts: wfcResult.restarts || 0,
+      tries: wfcResult.tries || 0,
     }
   }
 

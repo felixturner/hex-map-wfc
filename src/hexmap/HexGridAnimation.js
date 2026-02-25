@@ -46,7 +46,7 @@ export function hideAllInstances(grid) {
 }
 
 /**
- * Animate a single tile dropping in from above (reused by click-resolve)
+ * Animate a single tile dropping in from above (reused by rebuild-wfc)
  */
 export function animateTileDrop(grid, tile) {
   if (!tile || tile.instanceId === null) return

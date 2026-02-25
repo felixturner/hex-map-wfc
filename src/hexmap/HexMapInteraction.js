@@ -276,7 +276,7 @@ export class HexMapInteraction {
             const global = localToGlobalCoords(tile.gridX, tile.gridZ, grid.gridRadius, globalCube)
             const globalCubeCoords = offsetToCube(global.col, global.row)
 
-            hm.queueClickSolve(globalCubeCoords, global, def)
+            hm.queueRebuildWfc(globalCubeCoords, global, def)
           }
         }
       }

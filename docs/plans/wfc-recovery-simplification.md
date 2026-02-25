@@ -1,4 +1,4 @@
-# WFC Recovery Simplification
+# WFC Recovery Simplification — DONE
 
 ## Current Recovery Architecture
 

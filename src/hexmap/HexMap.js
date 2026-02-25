@@ -11,7 +11,6 @@ import {
 import { uniform, varyingProperty, materialColor, diffuseColor, materialOpacity, vec3, vec4, texture, uv, mix, select, positionGeometry, float, clamp } from 'three/tsl'
 import { cubeKey, parseCubeKey, cubeCoordsInRadius, cubeDistance, offsetToCube, cubeToOffset, localToGlobalCoords, globalToLocalGrid } from './HexWFCCore.js'
 import { WFCManager } from './WFCManager.js'
-import { ConflictResolver } from './ConflictResolver.js'
 import { HexMapDebug } from './HexMapDebug.js'
 import { HexMapInteraction } from './HexMapInteraction.js'
 import { setStatus, setStatusAsync, log, App } from '../App.js'
@@ -90,13 +89,10 @@ export class HexMap {
     this.tileLabels.visible = false
     this.tileLabelMode = 'coords'
     this.failedCells = new Set()   // Track global coords of cells that caused WFC failures (purple labels)
-    this.contradictionCount = 0
+    this.conflictCount = 0
     this.droppedCells = new Set() // Track global coords of dropped fixed cells (red labels)
     this.replacedCells = new Set() // Track global coords of replaced fixed cells (orange labels)
     this.seededCells = new Set()  // Track global coords of ocean-seeded cells (cyan labels)
-
-    // Conflict resolution (replacement/validation of fixed cells)
-    this.conflictResolver = new ConflictResolver(this.globalCells, this.grids, this.replacedCells)
 
     // Interaction (hover, pointer events)
     this.interaction = new HexMapInteraction(this)
@@ -259,7 +255,7 @@ export class HexMap {
   }
 
   // ---- WFCManager delegators ----
-  initWfcRules() { this.wfcManager.initWfcRules(); this.hexWfcRules = this.wfcManager.hexWfcRules; this.conflictResolver.setWfcRules(this.hexWfcRules) }
+  initWfcRules() { this.wfcManager.initWfcRules(); this.hexWfcRules = this.wfcManager.hexWfcRules }
   initWfcWorker() { this.wfcManager.initWfcWorker() }
   solveWfcAsync(solveCells, fixedCells, options) { return this.wfcManager.solveWfcAsync(solveCells, fixedCells, options) }
   addToGlobalCells(gridKey, tiles) { this.wfcManager.addToGlobalCells(gridKey, tiles) }
@@ -267,10 +263,25 @@ export class HexMap {
   getAnchorsForCell(fc, solveSet, fixedSet) { return this.wfcManager.getAnchorsForCell(fc, solveSet, fixedSet) }
   getDefaultTileTypes() { return this.wfcManager.getDefaultTileTypes() }
 
-  // ---- ConflictResolver delegators ----
-  filterConflictingFixedCells(fixedCells) { return this.conflictResolver.filterConflictingFixedCells(fixedCells) }
-  validateFixedCellConflicts(solveCells, fixedCells) { return this.conflictResolver.validateFixedCellConflicts(solveCells, fixedCells) }
-  applyTileResultsToGrids(tiles) { return this.conflictResolver.applyTileResultsToGrids(tiles) }
+  /** Apply WFC tile results to their source grids (replace tiles + collect changed tiles per grid) */
+  applyTileResultsToGrids(tiles) {
+    const changedTilesPerGrid = new Map()
+    for (const t of tiles) {
+      const key = cubeKey(t.q, t.r, t.s)
+      const existing = this.globalCells.get(key)
+      if (!existing) continue
+      const sourceGrid = this.grids.get(existing.gridKey)
+      if (!sourceGrid) continue
+      const { gridX, gridZ } = globalToLocalGrid(t, sourceGrid.globalCenterCube, sourceGrid.gridRadius)
+      sourceGrid.replaceTile(gridX, gridZ, t.type, t.rotation, t.level)
+      const replacedTile = sourceGrid.hexGrid[gridX]?.[gridZ]
+      if (replacedTile) {
+        if (!changedTilesPerGrid.has(sourceGrid)) changedTilesPerGrid.set(sourceGrid, [])
+        changedTilesPerGrid.get(sourceGrid).push(replacedTile)
+      }
+    }
+    return changedTilesPerGrid
+  }
 
   createFloor() {
     const floorGeometry = new PlaneGeometry(296, 296)
@@ -410,22 +421,22 @@ export class HexMap {
     }
   }
 
-  /** Track WFC failure info (add to failedCells, count contradictions) */
+  /** Track WFC failure info (add to failedCells, count conflicts) */
   _trackWfcFailure(gridKey, wfcResult) {
-    this.contradictionCount++
-    if (wfcResult.neighborContradiction) {
-      const c = wfcResult.neighborContradiction
+    this.conflictCount++
+    if (wfcResult.neighborConflict) {
+      const c = wfcResult.neighborConflict
       this.failedCells.add(`${c.failedCol},${c.failedRow}`)
     }
   }
 
   /**
-   * Run WFC with full conflict recovery: initial attempt → conflict-WFC → local re-solve → drop
+   * Run WFC with recovery: initial attempt → local-WFC → drop
    * @param {Object} ctx - Populate context from _setupPopulateContext
    * @returns {{ result, resultCollapseOrder, changedFixedCells, unfixedKeys, droppedFixedCubes, stats }}
    */
   async _runWfcWithRecovery(ctx) {
-    const stats = { postDroppedCount: 0, localWfcAttempts: 0, backtracks: 0, restarts: 0 }
+    const stats = { postDroppedCount: 0, localWfcAttempts: 0, backtracks: 0, tries: 0 }
     const droppedFixedCubes = []
     let result = null
     let resultCollapseOrder = []
@@ -440,127 +451,70 @@ export class HexMap {
       changedFixedCells = initialResult.changedFixedCells || []
       unfixedKeys = initialResult.unfixedKeys || []
       stats.backtracks += initialResult.backtracks || 0
-      stats.restarts += initialResult.restarts || 0
+      stats.tries += initialResult.tries || 0
 
     } else {
       stats.backtracks += initialResult.backtracks || 0
-      stats.restarts += initialResult.restarts || 0
+      stats.tries += initialResult.tries || 0
 
       this._trackWfcFailure(ctx.gridKey, initialResult)
       let failedCell = initialResult.failedCell
-      let isNeighborConflict = initialResult.neighborConflict
+      let isNeighborConflict = initialResult.isNeighborConflict
       let sourceKey = initialResult.sourceKey
 
-      // Local-WFC phase 1: Re-solve the area around the neighbor contradiction source
-      // Only runs for neighbor conflicts where we know which fixed cell caused the problem
-      const maxConflictWfcAttempts = 3
-      if (isNeighborConflict && sourceKey) {
-        for (let cwfc = 0; cwfc < maxConflictWfcAttempts; cwfc++) {
-          stats.localWfcAttempts++
-          const { q: centerQ, r: centerR, s: centerS } = parseCubeKey(sourceKey)
-          const cco = cubeToOffset(centerQ, centerR, centerS)
-          log(`[${ctx.gridKey}] Local-WFC resolving around (${cco.col},${cco.row})`, 'color: blue')
-
-          const conflictSolveCells = cubeCoordsInRadius(centerQ, centerR, centerS, 2)
-            .filter(c => this.globalCells.has(cubeKey(c.q, c.r, c.s)))
-          const conflictFixedCells = this.getFixedCellsForRegion(conflictSolveCells)
-
-          const conflictResult = await this.solveWfcAsync(conflictSolveCells, conflictFixedCells, {
-            tileTypes: ctx.tileTypes, maxRestarts: 5, quiet: true,
-          })
-
-          if (!conflictResult.success || !conflictResult.tiles) {
-            log(`[${ctx.gridKey}] Local-WFC failed`, 'color: red')
-            break
-          }
-
-          const changedTilesPerGrid = this.applyTileResultsToGrids(conflictResult.tiles)
-          for (const [g, tiles] of changedTilesPerGrid) {
-            g.decorations?.repopulateTilesAt(tiles, g.gridRadius, g.hexGrid)
-          }
-          this.addToGlobalCells('local-wfc', conflictResult.tiles)
-          log(`[${ctx.gridKey}] Local-WFC re-solved ${conflictResult.tiles.length} cells`, 'color: blue')
-
-          // Rebuild context from updated globalCells
-          ctx.fixedCells = this.getFixedCellsForRegion(ctx.solveCells)
-          const newSolveSet = new Set(ctx.solveCells.map(c => cubeKey(c.q, c.r, c.s)))
-          const newFixedSet = new Set(ctx.fixedCells.map(fc => cubeKey(fc.q, fc.r, fc.s)))
-          ctx.anchorMap.clear()
-          for (const fc of ctx.fixedCells) {
-            ctx.anchorMap.set(cubeKey(fc.q, fc.r, fc.s), this.getAnchorsForCell(fc, newSolveSet, newFixedSet))
-          }
-          ctx.persistedUnfixedKeys.clear()
-          ctx.persistedUnfixedOriginals.clear()
-
-          const retryResult = await this.wfcManager.runWfcAttempt(ctx)
-          if (retryResult.success) {
-            result = retryResult.tiles
-            resultCollapseOrder = retryResult.collapseOrder
-            changedFixedCells = retryResult.changedFixedCells || []
-            unfixedKeys = retryResult.unfixedKeys || []
-            stats.backtracks += retryResult.backtracks || 0
-            stats.restarts += retryResult.restarts || 0
-      
-            break
-          }
-
-          stats.backtracks += retryResult.backtracks || 0
-          stats.restarts += retryResult.restarts || 0
-
-          this._trackWfcFailure(ctx.gridKey, retryResult)
-          failedCell = retryResult.failedCell
-          isNeighborConflict = retryResult.neighborConflict
-          sourceKey = retryResult.sourceKey
-          if (!isNeighborConflict || !sourceKey) break
-        }
-      }
-
-      // Local Re-Solve phase: Mini-WFC around nearest fixed cell to failure
-      const maxLocalResolveAttempts = 5
+      // Local-WFC recovery: resolve neighbor regions around the failure
+      const maxLocalAttempts = 8
       const resolvedRegions = new Set()
       let localAttempts = 0
 
-      while (!result && localAttempts < maxLocalResolveAttempts) {
+      while (!result && localAttempts < maxLocalAttempts) {
         if (!failedCell) break
 
-        const resolveCandidates = ctx.fixedCells.filter(fc =>
-          !fc.dropped && !resolvedRegions.has(cubeKey(fc.q, fc.r, fc.s))
-        )
-        if (resolveCandidates.length === 0) break
+        // Pick center: sourceKey first if neighbor conflict, then nearest fixed cell
+        let centerQ, centerR, centerS
+        if (localAttempts === 0 && isNeighborConflict && sourceKey) {
+          ;({ q: centerQ, r: centerR, s: centerS } = parseCubeKey(sourceKey))
+          resolvedRegions.add(sourceKey)
+        } else {
+          const candidates = ctx.fixedCells.filter(fc =>
+            !fc.dropped && !resolvedRegions.has(cubeKey(fc.q, fc.r, fc.s))
+          )
+          if (candidates.length === 0) break
+          candidates.sort((a, b) =>
+            cubeDistance(a.q, a.r, a.s, failedCell.q, failedCell.r, failedCell.s) -
+            cubeDistance(b.q, b.r, b.s, failedCell.q, failedCell.r, failedCell.s)
+          )
+          centerQ = candidates[0].q; centerR = candidates[0].r; centerS = candidates[0].s
+          resolvedRegions.add(cubeKey(centerQ, centerR, centerS))
+        }
 
-        resolveCandidates.sort((a, b) => {
-          const distA = cubeDistance(a.q, a.r, a.s, failedCell.q, failedCell.r, failedCell.s)
-          const distB = cubeDistance(b.q, b.r, b.s, failedCell.q, failedCell.r, failedCell.s)
-          return distA - distB
-        })
-        const center = resolveCandidates[0]
-        resolvedRegions.add(cubeKey(center.q, center.r, center.s))
         localAttempts++
         stats.localWfcAttempts++
-
-        const co = cubeToOffset(center.q, center.r, center.s)
+        const co = cubeToOffset(centerQ, centerR, centerS)
         log(`[${ctx.gridKey}] Local-WFC resolving around (${co.col},${co.row})`, 'color: blue')
 
-        const localSolveCells = cubeCoordsInRadius(center.q, center.r, center.s, 2)
+        // Mini-WFC on radius-2 region
+        const localSolveCells = cubeCoordsInRadius(centerQ, centerR, centerS, 2)
           .filter(c => this.globalCells.has(cubeKey(c.q, c.r, c.s)))
         const localFixedCells = this.getFixedCellsForRegion(localSolveCells)
-
-        const miniResult = await this.solveWfcAsync(localSolveCells, localFixedCells, {
-          tileTypes: ctx.tileTypes, maxRestarts: 3, quiet: true,
+        const localResult = await this.solveWfcAsync(localSolveCells, localFixedCells, {
+          tileTypes: ctx.tileTypes, maxTries: 5, quiet: true,
         })
 
-        if (!miniResult.success || !miniResult.tiles) {
+        if (!localResult.success || !localResult.tiles) {
           log(`[${ctx.gridKey}] Local-WFC failed`, 'color: red')
           continue
         }
 
-        const changedTilesPerGrid = this.applyTileResultsToGrids(miniResult.tiles)
+        // Apply local results to neighbor grids
+        const changedTilesPerGrid = this.applyTileResultsToGrids(localResult.tiles)
         for (const [g, tiles] of changedTilesPerGrid) {
           g.decorations?.repopulateTilesAt(tiles, g.gridRadius, g.hexGrid)
         }
-        this.addToGlobalCells('local-resolve', miniResult.tiles)
-        log(`[${ctx.gridKey}] Local-WFC re-solved ${miniResult.tiles.length} cells`, 'color: blue')
+        this.addToGlobalCells('local-wfc', localResult.tiles)
+        log(`[${ctx.gridKey}] Local-WFC re-solved ${localResult.tiles.length} cells`, 'color: blue')
 
+        // Rebuild context from updated globalCells
         ctx.fixedCells = this.getFixedCellsForRegion(ctx.solveCells)
         const newSolveSet = new Set(ctx.solveCells.map(c => cubeKey(c.q, c.r, c.s)))
         const newFixedSet = new Set(ctx.fixedCells.map(fc => cubeKey(fc.q, fc.r, fc.s)))
@@ -571,6 +525,7 @@ export class HexMap {
         ctx.persistedUnfixedKeys.clear()
         ctx.persistedUnfixedOriginals.clear()
 
+        // Retry main grid WFC
         const retryResult = await this.wfcManager.runWfcAttempt(ctx)
         if (retryResult.success) {
           result = retryResult.tiles
@@ -578,17 +533,16 @@ export class HexMap {
           changedFixedCells = retryResult.changedFixedCells || []
           unfixedKeys = retryResult.unfixedKeys || []
           stats.backtracks += retryResult.backtracks || 0
-          stats.restarts += retryResult.restarts || 0
-    
+          stats.tries += retryResult.tries || 0
           break
         }
 
         stats.backtracks += retryResult.backtracks || 0
-        stats.restarts += retryResult.restarts || 0
-        stats.unfixedCount += (retryResult.unfixedKeys || []).length
+        stats.tries += retryResult.tries || 0
         this._trackWfcFailure(ctx.gridKey, retryResult)
         failedCell = retryResult.failedCell
-        isNeighborConflict = retryResult.neighborConflict
+        isNeighborConflict = retryResult.isNeighborConflict
+        sourceKey = retryResult.sourceKey
       }
 
       // Drop phase: Drop fixed cells one by one, sorted by proximity to failed cell
@@ -621,11 +575,11 @@ export class HexMap {
           changedFixedCells = wfcResult.changedFixedCells || []
           unfixedKeys = wfcResult.unfixedKeys || []
           stats.backtracks += wfcResult.backtracks || 0
-          stats.restarts += wfcResult.restarts || 0
+          stats.tries += wfcResult.tries || 0
     
         } else {
           stats.backtracks += wfcResult.backtracks || 0
-          stats.restarts += wfcResult.restarts || 0
+          stats.tries += wfcResult.tries || 0
 
           this._trackWfcFailure(ctx.gridKey, wfcResult)
           if (wfcResult.failedCell) failedCell = wfcResult.failedCell
@@ -1057,7 +1011,7 @@ export class HexMap {
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1)
     const stats = [
       `${elapsed}s`,
-      `${this.contradictionCount} contradictions`,
+      `${this.conflictCount} conflicts`,
       `${this.droppedCells.size} dropped`,
     ]
     log(`[AUTO-BUILD] Done (${stats.join(', ')})`, 'color: green')
@@ -1091,7 +1045,7 @@ export class HexMap {
     this.isRegenerating = true
     this.globalCells.clear()
     this.failedCells.clear()
-    this.contradictionCount = 0
+    this.conflictCount = 0
     this.replacedCells.clear()
     this.droppedCells.clear()
     this.seededCells.clear()
@@ -1169,7 +1123,7 @@ export class HexMap {
     const result = await this.solveWfcAsync(allSolveCells, [], {
       tileTypes,
       weights: {},
-      maxRestarts: 5,
+      maxTries: 5,
       initialCollapses,
       gridId: 'BUILD_ALL',
       attemptNum: 1,
@@ -1196,7 +1150,7 @@ export class HexMap {
     }
 
     const solveTime = ((performance.now() - startTime) / 1000).toFixed(1)
-    log(`[BUILD ALL] WFC SUCCESS (${result.tiles.length} tiles, ${solveTime}s, ${result.backtracks || 0} backtracks, ${result.restarts || 0} restarts)`, 'color: green')
+    log(`[BUILD ALL] WFC SUCCESS (${result.tiles.length} tiles, ${solveTime}s, ${result.backtracks || 0} backtracks, ${result.tries || 0} tries)`, 'color: green')
     await setStatusAsync(`[BUILD ALL] Success! Distributing ${result.tiles.length} tiles...`)
 
     // ---- Build lookup map from results ----
@@ -1277,7 +1231,7 @@ export class HexMap {
     }
     this.onTilesChanged?.(Promise.all(animPromises))
 
-    return { success: true, time: parseFloat(totalTime), backtracks: result.backtracks || 0, restarts: result.restarts || 0 }
+    return { success: true, time: parseFloat(totalTime), backtracks: result.backtracks || 0, tries: result.tries || 0 }
   }
 
   /**
@@ -1401,15 +1355,15 @@ export class HexMap {
     }
   }
 
-  // ---- Click-solve (mini WFC on tile click in build mode) ----
+  // ---- Rebuild-WFC (mini WFC on tile click in rebuild mode) ----
 
-  queueClickSolve(globalCubeCoords, global, def) {
+  queueRebuildWfc(globalCubeCoords, global, def) {
     if (this._autoExpanding) return
-    this._enqueueWfc(() => this._runClickSolve({ globalCubeCoords, global, def }))
+    this._enqueueWfc(() => this._runRebuildWfc({ globalCubeCoords, global, def }))
   }
 
-  async _runClickSolve({ globalCubeCoords, global, def }) {
-    log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} — mini WFC solve`, 'color: blue')
+  async _runRebuildWfc({ globalCubeCoords, global, def }) {
+    log(`[REBUILD] (${global.col},${global.row}) ${def?.name || '?'} — rebuild WFC solve`, 'color: blue')
 
     const solveCells = cubeCoordsInRadius(
       globalCubeCoords.q, globalCubeCoords.r, globalCubeCoords.s, 2
@@ -1420,7 +1374,7 @@ export class HexMap {
 
     const result = await this.solveWfcAsync(solveCells, fixedCells, {
       tileTypes,
-      maxRestarts: 5,
+      maxTries: 5,
     })
 
     if (result.success && result.tiles) {
@@ -1442,13 +1396,13 @@ export class HexMap {
         }
       }
 
-      this.addToGlobalCells('click-resolve', result.tiles)
+      this.addToGlobalCells('rebuild-wfc', result.tiles)
       this.onTilesChanged?.(Promise.resolve())
 
-      log(`[TILE RESOLVE] (${global.col},${global.row}) solved ${result.tiles.length} tiles`, 'color: green')
+      log(`[REBUILD] (${global.col},${global.row}) solved ${result.tiles.length} tiles`, 'color: green')
       Sounds.play('pop', 1.0, 0.15)
     } else {
-      log(`[TILE CLICK] (${global.col},${global.row}) ${def?.name || '?'} — mini WFC failed`, 'color: red')
+      log(`[REBUILD] (${global.col},${global.row}) ${def?.name || '?'} — rebuild WFC failed`, 'color: red')
       Sounds.play('incorrect')
     }
   }
@@ -1483,7 +1437,7 @@ export class HexMap {
     for (let i = 0; i < results.length; i++) {
       const r = results[i]
       if (r.success) {
-        log(`[BENCHMARK]   Run ${i + 1}: SUCCESS (${r.time}s, ${r.backtracks} backtracks, ${r.restarts} restarts)`, 'color: green')
+        log(`[BENCHMARK]   Run ${i + 1}: SUCCESS (${r.time}s, ${r.backtracks} backtracks, ${r.tries} tries)`, 'color: green')
       } else {
         log(`[BENCHMARK]   Run ${i + 1}: FAIL`, 'color: red')
       }
@@ -1502,7 +1456,7 @@ export class HexMap {
 
     this.globalCells.clear()
     this.failedCells.clear()
-    this.contradictionCount = 0
+    this.conflictCount = 0
     this.droppedCells.clear()
     this.replacedCells.clear()
     this.seededCells.clear()
@@ -1547,7 +1501,7 @@ export class HexMap {
     // Clear global state
     this.globalCells.clear()
     this.failedCells.clear()
-    this.contradictionCount = 0
+    this.conflictCount = 0
     this.droppedCells.clear()
     this.replacedCells.clear()
     this.seededCells.clear()
