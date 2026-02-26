@@ -6,7 +6,7 @@
 /**
  * Number of elevation levels in the WFC system
  */
-export const LEVELS_COUNT = 6
+export const LEVELS_COUNT = 5
 
 /**
  * Consolidated tile definitions - single source of truth

@@ -232,7 +232,7 @@ export class HexMap {
     const blendedColor = mix(sampleA, sampleB, blendFactor)
 
     // Debug HSL gradient (level colors mode): hue 0 (red) → 250/360 (blue)
-    const hue = blendFactor.mul(250.0 / 360.0)
+    const hue = clamp(mix(float(100.0 / 360.0), float(360.0 / 360.0), blendFactor), 0, 1)
     const h6 = hue.mul(6.0)
     const hslR = clamp(h6.sub(3.0).abs().sub(1.0), 0, 1)
     const hslG = clamp(float(2.0).sub(h6.sub(2.0).abs()), 0, 1)
@@ -463,7 +463,7 @@ export class HexMap {
       let sourceKey = initialResult.sourceKey
 
       // Local-WFC recovery: resolve neighbor regions around the failure
-      const maxLocalAttempts = 8
+      const maxLocalAttempts = 5
       const resolvedRegions = new Set()
       let localAttempts = 0
 

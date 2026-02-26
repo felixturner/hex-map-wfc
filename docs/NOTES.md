@@ -22,22 +22,25 @@ Trail-based delta backtracking (no full state copies):
 - If all states exhausted for a cell, pops the decision and backtracks further up the stack
 - `maxBacktracks = 500`
 
-### Retry Logic
+### WFC Recovery
 
-#### Recovery Loop
-1. Run the solve loop. If it succeeds, done.
-2. Try **Local-WFC** (max 8 attempts) — re-solve a radius-2 region around a neighbor cell, then retry solve loop. If solve loop succeeds, done.
-   - First attempt on **neighbor conflict**: centers on the neighbor cell that caused the conflict
-   - All other attempts: picks the nearest neighbor cell to the failure point not yet tried
-   - If Local-WFC itself fails, skip to next candidate
-3. If Local-WFC didn't fix it, try **Drop phase** — drop neighbor cells one by one nearest the failure point, placing mountains to hide mismatches, retrying solve loop after each drop.
+Each grid solve has two levels: an inner **solve loop** that handles simple failures, and an outer **recovery loop** that restructures the problem when the solve loop can't fix it.
 
 #### Solve Loop
-`maxTries` controls attempts (2 for Grid-WFC, 5 for Local-WFC, Rebuild-WFC, and Build All). Steps:
+Retries the WFC up to `maxTries` times (2 for Grid-WFC, 5 for Local-WFC/Rebuild-WFC/Build All):
 1. Propagate from neighbor cells to constrain solve cells
-2. If a **neighbor conflict** occurs, try **unfixing** — convert the problem neighbor cell into a solve cell, with its anchors as new constraints. Loop until propagation succeeds or no candidates remain. If all candidates exhausted → fail as **neighbor conflict**.
-3. If propagation succeeds, run WFC
-4. If WFC fails, retry from step 1. If all tries exhausted → fail as **solve conflict**.
+2. If a **neighbor conflict** occurs, try **unfixing** — convert the problem neighbor into a solve cell, using its anchors (2 cells out) as constraints. This is the most common recovery mechanism and handles the vast majority of cross-grid conflicts.
+3. If propagation succeeds, run WFC with backtracking
+4. If WFC fails, retry from step 1. If all tries exhausted → fail.
+
+#### Recovery Loop
+Wraps the solve loop with escalating strategies when the solve loop fails entirely:
+1. Run the solve loop. If it succeeds, done.
+2. **Local-WFC** (max 5 attempts) — re-solve a radius-2 region (~19 cells) around a neighbor cell to create a more compatible boundary, then retry the solve loop.
+   - First attempt targets the neighbor cell that caused the conflict
+   - Subsequent attempts target the nearest untried neighbor cell to the failure point
+   - If Local-WFC itself fails, skip to next candidate
+3. **Drop phase** (last resort) — drop neighbor cells one by one nearest the failure point, placing mountains to hide mismatches, retrying the solve loop after each drop. In practice this never fires — unfixing and Local-WFC handle all cases across 50-run benchmarks.
 
 ### Build All
 `populateAllGrids()` creates all 19 grids upfront, collects all cells, and runs a single WFC pass with zero neighbor cells. No constraints or fallbacks needed — just one big solve relying on backtracking.
