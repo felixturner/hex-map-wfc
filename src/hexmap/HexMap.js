@@ -25,7 +25,7 @@ import {
   getGridWorldOffset,
   worldOffsetToGlobalCube,
 } from './HexGridConnector.js'
-import { initGlobalTreeNoise, Decorations } from './Decorations.js'
+import { initGlobalTreeNoise, rebuildNoiseTables, Decorations } from './Decorations.js'
 import { Water } from './effects/Water.js'
 import { random, setSeed } from '../SeededRandom.js'
 import { Sounds } from '../lib/Sounds.js'
@@ -237,7 +237,7 @@ export class HexMap {
     const hslR = clamp(h6.sub(3.0).abs().sub(1.0), 0, 1)
     const hslG = clamp(float(2.0).sub(h6.sub(2.0).abs()), 0, 1)
     const hslB = clamp(float(2.0).sub(h6.sub(4.0).abs()), 0, 1)
-    const debugColor = vec3(hslR, hslG, hslB)
+    const debugColor = vec3(hslR, hslG, hslB).mul(0.8)
 
     // Mode uniform: 0 = normal (blended textures), 1 = debug HSL, 2 = white
     this._colorMode = uniform(0)
@@ -546,10 +546,11 @@ export class HexMap {
       }
 
       // Drop phase: Drop fixed cells one by one, sorted by proximity to failed cell
+      // Clear persisted-unfixed state — their anchors create undroppable constraints
+      ctx.persistedUnfixedKeys.clear()
+      ctx.persistedUnfixedOriginals.clear()
       while (!result) {
-        const dropCandidates = ctx.fixedCells.filter(fc =>
-          !fc.dropped && !ctx.persistedUnfixedKeys.has(cubeKey(fc.q, fc.r, fc.s))
-        )
+        const dropCandidates = ctx.fixedCells.filter(fc => !fc.dropped)
         if (dropCandidates.length === 0) break
 
         if (failedCell) {
@@ -566,7 +567,8 @@ export class HexMap {
         droppedFixedCubes.push({ q: fcToDrop.q, r: fcToDrop.r, s: fcToDrop.s })
         fcToDrop.dropped = true
         stats.postDroppedCount++
-        log(`[${ctx.gridKey}] Post-WFC: dropped fixed cell at (${co.col},${co.row})`, 'color: red')
+        const tileName = TILE_LIST[fcToDrop.type]?.name ?? fcToDrop.type
+        log(`[${ctx.gridKey}] Dropped (${co.col},${co.row}) ${tileName}`, 'color: red')
 
         const wfcResult = await this.wfcManager.runWfcAttempt(ctx)
         if (wfcResult.success) {
@@ -762,7 +764,7 @@ export class HexMap {
     const q = center.q + d.q * (radius - half) + d2.q * half
     const r = center.r + d.r * (radius - half) + d2.r * half
     const s = center.s + d.s * (radius - half) + d2.s * half
-    initialCollapses.push({ q, r, s, type: TileType.OCEAN, rotation: 0, level: 0 })
+    initialCollapses.push({ q, r, s, type: TileType.WATER, rotation: 0, level: 0 })
   }
 
   /**
@@ -799,7 +801,7 @@ export class HexMap {
     for (const [gx, gz] of [...sideGrids, innerGrid]) {
       const worldOffset = this.calculateWorldOffset(gx, gz)
       const c = worldOffsetToGlobalCube(worldOffset)
-      seeds.push({ q: c.q, r: c.r, s: c.s, type: TileType.OCEAN, rotation: 0, level: 0 })
+      seeds.push({ q: c.q, r: c.r, s: c.s, type: TileType.WATER, rotation: 0, level: 0 })
     }
     return seeds
   }
@@ -977,6 +979,14 @@ export class HexMap {
    * @param {Array<[number,number]>} order - Array of [gridX, gridZ] pairs
    */
   async autoBuild(order, { animate } = {}) {
+    // If map is already complete, reset first
+    const allPopulated = order.every(([gx, gz]) => {
+      const grid = this.grids.get(getGridKey(gx, gz))
+      return grid && grid.state !== HexGridState.PLACEHOLDER
+    })
+    if (allPopulated) await this.reset()
+
+    log('[AUTO-BUILD] Starting', 'color: blue')
     const myEpoch = ++this._buildEpoch
     this._buildCancelled = false
     this.onBeforeTilesChanged?.()
@@ -987,6 +997,7 @@ export class HexMap {
 
     const startTime = performance.now()
     const animPromises = []
+    const failedGrids = []
     for (let i = 0; i < order.length; i++) {
       const [gx, gz] = order[i]
       if (this._buildCancelled || this._buildEpoch !== myEpoch) {
@@ -1003,13 +1014,18 @@ export class HexMap {
       if (grid.state === HexGridState.PLACEHOLDER) {
         Sounds.play('pop', 1.0, 0.2, 0.7)
         await this.onGridClick(grid, { skipPrune: true, animate })
+        if (grid.state !== HexGridState.POPULATED) failedGrids.push(key)
         if (grid.animationDone) animPromises.push(grid.animationDone)
       }
     }
     this._autoBuilding = false
     this._releaseWfcLock()
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1)
-    log(`[AUTO-BUILD] Done (${elapsed}s, ${this.droppedCells.size} dropped)`, 'color: green')
+    const parts = [`${elapsed}s`]
+    if (failedGrids.length > 0) parts.push(`${failedGrids.length} grid wfc failed`)
+    if (this.droppedCells.size > 0) parts.push(`${this.droppedCells.size} cells dropped`)
+    const color = failedGrids.length > 0 ? 'color: red' : 'color: green'
+    log(`[AUTO-BUILD] Done (${parts.join(', ')})`, color)
 
     // Wait for all drop animations to finish, then rebuild waves mask
     await Promise.all(animPromises)
@@ -1020,6 +1036,8 @@ export class HexMap {
       success: true,
       time: elapsed,
       dropped: this.droppedCells.size,
+      failed: failedGrids.length,
+      failedGrids,
     }
   }
 
@@ -1425,10 +1443,16 @@ export class HexMap {
       log(`[BENCHMARK] Run ${i + 1}/${runs} (seed: ${seed})`, 'color: blue')
 
       setSeed(seed)
+      rebuildNoiseTables()
       await this.reset()
 
       const result = await this.autoBuild(autoBuildOrder, { animate: false })
       results.push({ seed, ...(result || { success: false }) })
+
+      if (result?.success) {
+        await new Promise(r => setTimeout(r, 1000))
+        App.instance?.exportPNG({ filename: `benchmark-${i + 1}-seed${seed}.jpg` })
+      }
 
       if (this._buildCancelled) {
         log('[BENCHMARK] Cancelled', 'color: red')
@@ -1438,19 +1462,14 @@ export class HexMap {
 
     const successes = results.filter(r => r.success).length
     const failures = results.filter(r => !r.success && !r.cancelled).length
+    const totalFailedGrids = results.reduce((sum, r) => sum + (r.failed || 0), 0)
     const times = results.filter(r => r.success).map(r => parseFloat(r.time))
     const avgTime = times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : '-'
 
     log(`[BENCHMARK] === RESULTS ===`, 'color: green')
-    log(`[BENCHMARK] ${successes}/${results.length} succeeded, ${failures} failed, avg time: ${avgTime}s`, 'color: green')
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]
-      if (r.success) {
-        log(`[BENCHMARK]   Run ${i + 1} (seed ${r.seed}): SUCCESS (${r.time}s, ${r.dropped} dropped)`, 'color: green')
-      } else if (!r.cancelled) {
-        log(`[BENCHMARK]   Run ${i + 1} (seed ${r.seed}): FAIL`, 'color: red')
-      }
-    }
+    const summaryParts = [`${successes}/${results.length} succeeded`, `${failures} failed`, `avg time: ${avgTime}s`]
+    if (totalFailedGrids > 0) summaryParts.push(`${totalFailedGrids} grid wfc failed`)
+    log(`[BENCHMARK] ${summaryParts.join(', ')}`, 'color: green')
 
     Sounds.play('intro')
   }
@@ -1464,6 +1483,7 @@ export class HexMap {
       log(`[BENCHMARK-BA] Run ${i + 1}/${runs} (seed: ${seed})`, 'color: blue')
 
       setSeed(seed)
+      rebuildNoiseTables()
       await this.reset()
 
       const result = await this.populateAllGrids(null, { animate: false })
@@ -1495,6 +1515,7 @@ export class HexMap {
 
     Sounds.play('intro')
   }
+
 
   async reset() {
     ++this._buildEpoch

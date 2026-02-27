@@ -17,7 +17,7 @@ export const EdgeType = {
   GRASS: 'grass',
   ROAD: 'road',
   RIVER: 'river',
-  OCEAN: 'ocean',
+  WATER: 'water',
   COAST: 'coast',
   CLIFF: 'cliff',
   CLIFF_ROAD: 'cliff_road',
@@ -186,6 +186,7 @@ export class HexTileGeometry {
         this.HEX_HEIGHT = bb.max.z - bb.min.z
       }
 
+      console.log(`[GLB] Cached ${this.geoms.size} tile geometries`)
       this.loaded = true
     } catch (e) {
       console.warn('HexTileGeometry: Failed to load', glbPath, e)

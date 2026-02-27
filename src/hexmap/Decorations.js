@@ -7,7 +7,7 @@ import {
   LEVEL_HEIGHT, TILE_SURFACE,
   globalNoiseA, globalNoiseB, globalNoiseC,
   getCurrentTreeThreshold, getBuildingThreshold,
-  weightedPick, isCoastOrOcean, getRoadDeadEndInfo,
+  weightedPick, isCoastOrWater, getRoadDeadEndInfo,
   TreesByType, TreeMeshNames,
   BuildingDefs, CoastBuildingDefs, BuildingMeshNames, CoastBuildingMeshNames,
   TOWER_TOP_MESH, TOWER_TOP_CHANCE,
@@ -20,7 +20,7 @@ import {
 } from './DecorationDefs.js'
 
 // Re-export noise functions so existing imports from Decorations.js still work
-export { initGlobalTreeNoise, setTreeNoiseFrequency, getTreeNoiseFrequency, setTreeThreshold, getTreeThreshold, setBuildingNoiseFrequency, getBuildingNoiseFrequency, setBuildingThreshold, getBuildingThreshold } from './DecorationDefs.js'
+export { initGlobalTreeNoise, rebuildNoiseTables, setTreeNoiseFrequency, getTreeNoiseFrequency, setTreeThreshold, getTreeThreshold, setBuildingNoiseFrequency, getBuildingNoiseFrequency, setBuildingThreshold, getBuildingThreshold } from './DecorationDefs.js'
 
 export class Decorations {
   // Static geometry cache — extracted once from GLB, shared by all instances
@@ -318,7 +318,7 @@ export class Decorations {
         const nz = tile.gridZ + dz
         if (nx >= 0 && nx < size && nz >= 0 && nz < size) {
           const neighbor = hexGrid[nx]?.[nz]
-          if (neighbor && isCoastOrOcean(neighbor.type)) {
+          if (neighbor && isCoastOrWater(neighbor.type)) {
             const neighborPos = HexTileGeometry.getWorldPosition(nx - gridRadius, nz - gridRadius)
             wdx += neighborPos.x - tilePos.x
             wdz += neighborPos.z - tilePos.z
@@ -485,7 +485,7 @@ export class Decorations {
           px += dx; pz += dz
           if (px < 0 || px >= size || pz < 0 || pz >= size) { blocked = true; break }
           const probeCell = hexGrid[px]?.[pz]
-          if (!probeCell || TILE_LIST[probeCell.type]?.name !== 'OCEAN') { blocked = true; break }
+          if (!probeCell || TILE_LIST[probeCell.type]?.name !== 'WATER') { blocked = true; break }
         }
         if (!blocked) shipyardCandidates.push({ tile, waterAngle })
       }
@@ -661,7 +661,7 @@ export class Decorations {
         const oz = (random() - 0.5) * 1.2
         const rotationY = random() * Math.PI * 2
         const tileName = TILE_LIST[tile.type]?.name || ''
-        const surfaceDip = tileName === 'OCEAN' ? -0.2 : (tileName.startsWith('COAST_') || tileName.startsWith('RIVER_')) ? -0.1 : 0
+        const surfaceDip = tileName === 'WATER' ? -0.2 : (tileName.startsWith('COAST_') || tileName.startsWith('RIVER_')) ? -0.1 : 0
         const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE + surfaceDip, localPos.z + oz, rotationY, 1, tile.level)
         if (instanceId === -1) break
         this.rocks.push({ tile, meshName, instanceId, rotationY, ox, oz })
@@ -1033,7 +1033,7 @@ export class Decorations {
             const ox = (random() - 0.5) * 1.2
             const oz = (random() - 0.5) * 1.2
             const rotationY = random() * Math.PI * 2
-            const surfaceDip = (name === 'OCEAN') ? -0.2 : (isCoast || isRiver) ? -0.1 : 0
+            const surfaceDip = (name === 'WATER') ? -0.2 : (isCoast || isRiver) ? -0.1 : 0
             const y = tile.level * LEVEL_HEIGHT + TILE_SURFACE + surfaceDip
             this.dummy.position.set(localPos.x + ox, y, localPos.z + oz)
             this.dummy.rotation.y = rotationY

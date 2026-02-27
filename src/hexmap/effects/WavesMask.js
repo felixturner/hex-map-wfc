@@ -341,7 +341,7 @@ export class WavesMask {
     const results = []
 
     for (const cell of globalCells.values()) {
-      if (cell.type !== TileType.OCEAN) continue
+      if (cell.type !== TileType.WATER) continue
 
       const weights = new Float32Array(6)
       for (let d = 0; d < 6; d++) {
@@ -353,7 +353,7 @@ export class WavesMask {
           const neighbor = globalCells.get(cubeKey(nq, nr, ns))
 
           if (!neighbor) continue  // off map edge = open water
-          if (neighbor.type !== TileType.OCEAN) {
+          if (neighbor.type !== TileType.WATER) {
             weights[d] = Math.max(0, 1 - (step - 1) / radius)
             break
           }

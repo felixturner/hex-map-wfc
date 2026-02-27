@@ -33,6 +33,12 @@ export function initGlobalTreeNoise(frequency = 0.05) {
   setTreeNoiseFrequency(frequency)
 }
 
+export function rebuildNoiseTables() {
+  globalNoiseA = new ScaledNoise(currentTreeNoiseFreq, random)
+  globalNoiseB = new ScaledNoise(currentTreeNoiseFreq, random)
+  globalNoiseC = new ScaledNoise(currentBuildingNoiseFreq, random)
+}
+
 export function setTreeNoiseFrequency(frequency) {
   currentTreeNoiseFreq = frequency
   globalNoiseA = new ScaledNoise(frequency, random)
@@ -91,10 +97,10 @@ export function hasRoadEdge(tileType) {
   return Object.values(def.edges).some(edge => edge === 'road')
 }
 
-export function isCoastOrOcean(tileType) {
+export function isCoastOrWater(tileType) {
   const def = TILE_LIST[tileType]
   if (!def) return false
-  return def.name.startsWith('COAST_') || def.name === 'OCEAN'
+  return def.name.startsWith('COAST_') || def.name === 'WATER'
 }
 
 // Check if a tile is a road dead-end (exactly 1 road edge) and return the exit direction

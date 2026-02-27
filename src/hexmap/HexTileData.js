@@ -18,8 +18,8 @@ export const TILE_LIST = [
   { name: 'GRASS', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
     weight: 500 },
-  { name: 'OCEAN', mesh: 'hex_water',
-    edges: { NE: 'ocean', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'ocean', NW: 'ocean' },
+  { name: 'WATER', mesh: 'hex_water',
+    edges: { NE: 'water', E: 'water', SE: 'water', SW: 'water', W: 'water', NW: 'water' },
     weight: 500 },
 
   // Roads
@@ -109,16 +109,16 @@ export const TILE_LIST = [
 
   // Coasts
   { name: 'COAST_A', mesh: 'hex_coast_A',
-    edges: { NE: 'grass', E: 'coast', SE: 'ocean', SW: 'coast', W: 'grass', NW: 'grass' },
+    edges: { NE: 'grass', E: 'coast', SE: 'water', SW: 'coast', W: 'grass', NW: 'grass' },
     weight: 20 },
   { name: 'COAST_B', mesh: 'hex_coast_B',
-    edges: { NE: 'grass', E: 'coast', SE: 'ocean', SW: 'ocean', W: 'coast', NW: 'grass' },
+    edges: { NE: 'grass', E: 'coast', SE: 'water', SW: 'water', W: 'coast', NW: 'grass' },
     weight: 15 },
   { name: 'COAST_C', mesh: 'hex_coast_C',
-    edges: { NE: 'coast', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'coast', NW: 'grass' },
+    edges: { NE: 'coast', E: 'water', SE: 'water', SW: 'water', W: 'coast', NW: 'grass' },
     weight: 15 },
   { name: 'COAST_D', mesh: 'hex_coast_D',
-    edges: { NE: 'ocean', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'coast', NW: 'coast' },
+    edges: { NE: 'water', E: 'water', SE: 'water', SW: 'water', W: 'coast', NW: 'coast' },
     weight: 15, preventChaining: true },
   { name: 'COAST_E', mesh: 'hex_coast_E',
     edges: { NE: 'grass', E: 'grass', SE: 'coast', SW: 'coast', W: 'grass', NW: 'grass' },
@@ -126,10 +126,10 @@ export const TILE_LIST = [
 
   // Coast slope (debug)
   { name: 'COAST_SLOPE_A_LOW', mesh: 'coast_slope_low',
-    edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'ocean', NW: 'coast' },
+    edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'water', NW: 'coast' },
     weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 1, debug: { color: 0xff0000, stripe: 'W' } },
   { name: 'COAST_SLOPE_A_HIGH', mesh: 'coast_slope_high',
-    edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'ocean', NW: 'coast' },
+    edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'coast', W: 'water', NW: 'coast' },
     weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2, debug: { color: 0xff0000, stripe: 'W', yOffset: 0.5 } },
 
   // River slope (debug)
@@ -139,7 +139,7 @@ export const TILE_LIST = [
 
   // River-into-coast (debug)
   { name: 'RIVER_INTO_COAST', mesh: 'river_coast',
-    edges: { NE: 'coast', E: 'ocean', SE: 'ocean', SW: 'ocean', W: 'coast', NW: 'river' },
+    edges: { NE: 'coast', E: 'water', SE: 'water', SW: 'water', W: 'coast', NW: 'river' },
     weight: 3, preventChaining: true, debug: { color: 0xff0000, stripe: 'NW' } },
 
   // Crossings
@@ -187,7 +187,7 @@ export const TILE_LIST = [
 
 /**
  * Name → index lookup (derived from TILE_LIST)
- * e.g. TileType.GRASS === 0, TileType.OCEAN === 1
+ * e.g. TileType.GRASS === 0, TileType.WATER === 1
  */
 export const TileType = Object.fromEntries(TILE_LIST.map((t, i) => [t.name, i]))
 

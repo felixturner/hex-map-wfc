@@ -134,7 +134,7 @@ function buildDecorationMap(grid) {
 
   addItems(decs.waterlilies, mesh, (l, pos) => {
     const name = TILE_LIST[l.tile.type]?.name || ''
-    const dip = (name.startsWith('COAST_') || name === 'OCEAN') ? -0.2 : 0
+    const dip = (name.startsWith('COAST_') || name === 'WATER') ? -0.2 : 0
     return {
       x: pos.x + (l.ox ?? 0), y: l.tile.level * LEVEL_HEIGHT + TILE_SURFACE + dip, z: pos.z + (l.oz ?? 0),
       rotationY: l.rotationY ?? 0, scale: 2
@@ -148,7 +148,7 @@ function buildDecorationMap(grid) {
 
   addItems(decs.rocks, mesh, (r, pos) => {
     const name = TILE_LIST[r.tile.type]?.name || ''
-    const dip = name === 'OCEAN' ? -0.2 : (name.startsWith('COAST_') || name.startsWith('RIVER_')) ? -0.1 : 0
+    const dip = name === 'WATER' ? -0.2 : (name.startsWith('COAST_') || name.startsWith('RIVER_')) ? -0.1 : 0
     return {
       x: pos.x + (r.ox ?? 0), y: r.tile.level * LEVEL_HEIGHT + TILE_SURFACE + dip, z: pos.z + (r.oz ?? 0),
       rotationY: r.rotationY ?? 0

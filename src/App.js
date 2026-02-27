@@ -617,20 +617,22 @@ export class App {
     this.stats.end()
   }
 
-  exportPNG() {
+  exportPNG({ format = 'image/jpeg', quality = 0.85, filename } = {}) {
     // Render one frame to ensure canvas is up to date
     this.postFX.render()
 
     // Get canvas data
     const canvas = this.renderer.domElement
+    const ext = format === 'image/png' ? 'png' : 'jpg'
+    const name = filename || `city-${Date.now()}.${ext}`
     canvas.toBlob((blob) => {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `city-${Date.now()}.png`
+      link.download = name
       link.click()
       URL.revokeObjectURL(url)
-    }, 'image/png')
+    }, format, quality)
   }
 
   fadeIn(duration = 1000) {
