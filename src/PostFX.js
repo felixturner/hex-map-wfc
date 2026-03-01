@@ -1,4 +1,4 @@
-import { PostProcessing, RenderTarget, RGBAFormat, Color, TextureLoader, LinearFilter } from 'three/webgpu'
+import { PostProcessing, RenderTarget, RGBAFormat, Color } from 'three/webgpu'
 import {
   pass,
   output,
@@ -15,6 +15,7 @@ import {
   vec4,
   sub,
   texture,
+  blendOverlay,
 } from 'three/tsl'
 import { ao } from 'three/addons/tsl/display/GTAONode.js'
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js'
@@ -33,7 +34,6 @@ export class PostFX {
     this.vignetteEnabled = uniform(1)
     this.dofEnabled = uniform(0)
 
-    this.lutEnabled = uniform(0)
     this.grainEnabled = uniform(0)
 
     // Debug view: 0=final, 1=color, 2=depth, 3=normal, 4=AO, 5=overlay, 6=effects
@@ -47,9 +47,6 @@ export class PostFX {
     this.dofFocus = uniform(100)
     this.dofAperture = uniform(0.025)
     this.dofMaxblur = uniform(0.01)
-
-    // LUT parameters
-    this.lutAmount = uniform(1)
 
     // Grain parameters
     this.grainStrength = uniform(0.1)
@@ -89,32 +86,7 @@ export class PostFX {
     this.onWaterMaskRender = null
 
 
-    // Load default LUT texture
-    this._loadLutTexture('./assets/lut/etikate.png')
-
     this._buildPipeline()
-  }
-
-  _loadLutTexture(path) {
-    const loader = new TextureLoader()
-    this.lutTexture = loader.load(path)
-    this.lutTexture.minFilter = LinearFilter
-    this.lutTexture.magFilter = LinearFilter
-    this.lutTexture.generateMipmaps = false
-    this.lutTexture.flipY = false
-  }
-
-  swapLut(path) {
-    const loader = new TextureLoader()
-    loader.load(path, (tex) => {
-      tex.minFilter = LinearFilter
-      tex.magFilter = LinearFilter
-      tex.generateMipmaps = false
-      tex.flipY = false
-      if (this._lutTexNode) this._lutTexNode.value = tex
-      if (this.lutTexture) this.lutTexture.dispose()
-      this.lutTexture = tex
-    })
   }
 
   _buildPipeline() {
@@ -141,7 +113,7 @@ export class PostFX {
 
     // ---- GTAO pass (uses depth/normals from scene, not affected by DOF) ----
     this.aoPass = ao(scenePassDepth, scenePassNormal, camera)
-    this.aoPass.resolutionScale = 0.5 // Half-res AO for performance
+    this.aoPass.resolutionScale = 1
     this.aoPass.distanceExponent.value = 1
     this.aoPass.distanceFallOff.value = 0.1
     this.aoPass.radius.value = 1.0
@@ -156,8 +128,7 @@ export class PostFX {
 
     // Soften AO: raise to power < 1 to reduce harshness, then blend
     const softenedAO = blurredAO.pow(0.5) // Square root makes it softer
-    const blendedAO = mix(float(1), softenedAO, this.aoIntensity)
-    const withAO = mix(afterDof, afterDof.mul(blendedAO), this.aoEnabled)
+    const withAO = mix(afterDof, afterDof.mul(softenedAO), this.aoEnabled)
 
     // ---- Effects layer compositing (weather) ----
     const effectsTexture = texture(this.effectsTarget.texture)
@@ -176,47 +147,12 @@ export class PostFX {
     const overlayTexture = texture(this.overlayTarget.texture)
     const withOverlay = withWater.add(overlayTexture.rgb.mul(overlayTexture.a))
 
-    // ---- LUT color grading (after overlay, before vignette) ----
-    const lutTexNode = texture(this.lutTexture)
-    this._lutTexNode = lutTexNode
-
-    // Clamp input to [0,1] for safe LUT indexing
-    const lutInput = withOverlay.rgb.clamp(0, 1)
-    const blue = lutInput.b.mul(63.0)
-    const blueIdx = blue.floor()
-    const nextIdx = blueIdx.add(1.0).min(63.0)
-
-    // Tile positions in 8x8 grid
-    const tile1y = blueIdx.div(8.0).floor()
-    const tile1x = blueIdx.sub(tile1y.mul(8.0))
-    const tile2y = nextIdx.div(8.0).floor()
-    const tile2x = nextIdx.sub(tile2y.mul(8.0))
-
-    // UV coordinates within each tile (64x64 in 512x512 texture)
-    const tileSize = float(0.125) // 64/512
-    const halfTexel = float(0.5 / 512.0)
-    const innerScale = float(63.0 / 512.0)
-
-    const uv1 = vec2(
-      tile1x.mul(tileSize).add(halfTexel).add(lutInput.r.mul(innerScale)),
-      tile1y.mul(tileSize).add(halfTexel).add(lutInput.g.mul(innerScale))
-    )
-    const uv2 = vec2(
-      tile2x.mul(tileSize).add(halfTexel).add(lutInput.r.mul(innerScale)),
-      tile2y.mul(tileSize).add(halfTexel).add(lutInput.g.mul(innerScale))
-    )
-
-    const lutSample1 = lutTexNode.sample(uv1).rgb
-    const lutSample2 = lutTexNode.sample(uv2).rgb
-    const lutColor = mix(lutSample1, lutSample2, blue.fract())
-    const afterLut = mix(withOverlay.rgb, lutColor, this.lutEnabled.mul(this.lutAmount))
-
     // ---- Vignette: darken edges toward black ----
     const vignetteFactor = float(1).sub(
       clamp(viewportUV.sub(0.5).length().mul(1.4), 0.0, 1.0).pow(1.5)
     )
     const vignetteMultiplier = mix(float(1), vignetteFactor, this.vignetteEnabled)
-    const withVignette = mix(vec3(0, 0, 0), afterLut, vignetteMultiplier)
+    const withVignette = mix(vec3(0, 0, 0), withOverlay.rgb, vignetteMultiplier)
 
     // ---- Fade to black ----
     const fadeColor = vec3(0, 0, 0)
@@ -239,8 +175,9 @@ export class PostFX {
     const noiseR = grainSeed1.sin().mul(43758.5453).fract()
     const noiseG = grainSeed2.sin().mul(43758.5453).fract()
     const noiseB = grainSeed3.sin().mul(43758.5453).fract()
-    const grainNoise = vec3(noiseR, noiseG, noiseB).sub(0.5).mul(this.grainStrength)
-    const finalOutput = afterFade.add(grainNoise.mul(this.grainEnabled))
+    const grainRaw = vec3(noiseR, noiseG, noiseB)
+    const grainOverlay = blendOverlay(afterFade, grainRaw)
+    const finalOutput = mix(afterFade, grainOverlay, this.grainEnabled.mul(this.grainStrength))
 
     // Debug views
     const depthViz = vec3(scenePassDepth)

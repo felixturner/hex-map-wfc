@@ -49,9 +49,14 @@ export class HexMapInteraction {
     this.hoverHighlight.visible = false
     scene.add(this.hoverHighlight)
 
-    const fillPositions = new Float32Array(19 * 6 * 3 * 3)
+    const fillCount = 19 * 6 * 3 * 3
+    const fillPositions = new Float32Array(fillCount)
+    const fillNormals = new Float32Array(fillCount)
+    // All normals point up (Y+)
+    for (let i = 1; i < fillCount; i += 3) fillNormals[i] = 1
     const fillGeom = new BufferGeometry()
     fillGeom.setAttribute('position', new Float32BufferAttribute(fillPositions, 3))
+    fillGeom.setAttribute('normal', new Float32BufferAttribute(fillNormals, 3))
     fillGeom.setDrawRange(0, 0)
 
     const fillMat = new MeshBasicNodeMaterial({ color: 0xffffff })

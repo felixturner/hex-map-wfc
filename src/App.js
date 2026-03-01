@@ -1,5 +1,6 @@
 import {
   Clock,
+  Group,
   OrthographicCamera,
   PerspectiveCamera,
   Vector2,
@@ -292,6 +293,15 @@ export class App {
     this.gui.init()
     this.gui.applyParams()
 
+    // Move FPS meter into GUI panel, above DPR
+    this.stats.dom.style.position = 'relative'
+    this.stats.dom.style.top = ''
+    this.stats.dom.style.left = '106px'
+    const guiChildren = this.gui.gui.domElement.querySelector('.children')
+    const dprEl = guiChildren?.firstElementChild
+    if (dprEl) guiChildren.insertBefore(this.stats.dom, dprEl)
+    else this.gui.gui.domElement.prepend(this.stats.dom)
+
     // Pre-render full pipeline to compile GPU shaders while screen is still black
     // BatchedMeshes already have a dummy instance from initMeshes()
     const tileMeshes = []
@@ -399,8 +409,6 @@ export class App {
     this.dofFocus = this.postFX.dofFocus
     this.dofAperture = this.postFX.dofAperture
     this.dofMaxblur = this.postFX.dofMaxblur
-    this.lutEnabled = this.postFX.lutEnabled
-    this.lutAmount = this.postFX.lutAmount
     this.grainEnabled = this.postFX.grainEnabled
     this.grainStrength = this.postFX.grainStrength
   }
@@ -429,9 +437,9 @@ export class App {
       bottom: 10px;
       left: 10px;
       color: white;
-      font-family: monospace;
+      font-family: 'Inter', sans-serif;
       font-size: 12px;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
       pointer-events: none;
       z-index: 1000;
     `
@@ -444,9 +452,9 @@ export class App {
       bottom: 10px;
       right: 10px;
       color: white;
-      font-family: monospace;
+      font-family: 'Inter', sans-serif;
       font-size: 12px;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
       pointer-events: none;
       z-index: 1000;
     `
@@ -454,85 +462,111 @@ export class App {
   }
 
   initModeButtons() {
+    const addHover = (btn) => {
+      btn.addEventListener('mouseenter', () => {
+        if (!btn._noHoverBorder) btn.style.borderColor = 'rgba(255,255,255,0.7)'
+      })
+      btn.addEventListener('mouseleave', () => {
+        btn.style.borderColor = btn._activeBorder || 'rgba(255,255,255,0.3)'
+      })
+    }
+
+    const btnBase = `
+      height: 40px;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: transparent;
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      padding: 0 16px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    `
+
     const container = document.createElement('div')
     container.style.cssText = `
       position: fixed;
-      top: 56px;
+      top: 10px;
       left: 10px;
       display: flex;
-      flex-direction: column;
-      gap: 6px;
+      flex-direction: row;
+      gap: 9px;
       z-index: 1000;
     `
     document.body.appendChild(container)
 
-    const modes = [
-      { key: 'move', label: 'Move' },
-      { key: 'build', label: 'Rebuild' },
-    ]
-    const buttons = []
-
-    for (const { key, label } of modes) {
+    // Mode toggle (Move | Build)
+    const toggle = document.createElement('div')
+    toggle.style.cssText = `
+      display: flex;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: transparent;
+      overflow: hidden;
+      height: 40px;
+      backdrop-filter: blur(4px);
+    `
+    const modeButtons = {}
+    const setMode = (key) => {
+      this.buildMode = key === 'build'
+      for (const [k, btn] of Object.entries(modeButtons)) {
+        btn.style.background = k === key ? 'rgba(255,255,255,0.3)' : 'transparent'
+      }
+    }
+    for (const { key, label } of [{ key: 'move', label: 'Move' }, { key: 'build', label: 'Build' }]) {
       const btn = document.createElement('button')
       btn.textContent = label
       btn.style.cssText = `
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
-        border: 2px solid rgba(255,255,255,0.3);
-        background: rgba(0,0,0,0.4);
+        padding: 0 18px;
+        height: 100%;
+        border: none;
+        background: ${key === 'move' ? 'rgba(255,255,255,0.3)' : 'transparent'};
         color: white;
-        font-family: monospace;
-        font-size: 11px;
+        font-family: 'Inter', sans-serif;
+        font-size: 13px;
         cursor: pointer;
-        backdrop-filter: blur(4px);
+        text-shadow: 0 1px 3px rgba(0,0,0,0.6);
       `
+      btn.addEventListener('mouseenter', () => { toggle.style.borderColor = 'rgba(255,255,255,0.7)' })
+      btn.addEventListener('mouseleave', () => { toggle.style.borderColor = 'rgba(255,255,255,0.3)' })
       btn.addEventListener('pointerdown', (e) => e.stopPropagation())
       btn.addEventListener('click', (e) => {
         e.stopPropagation()
-        this.buildMode = key === 'build'
-        for (const b of buttons) {
-          b.style.borderColor = 'rgba(255,255,255,0.3)'
-        }
-        btn.style.borderColor = 'white'
+        setMode(key)
       })
-      container.appendChild(btn)
-      buttons.push(btn)
-      if (key === 'move') btn.style.borderColor = 'white'
+      modeButtons[key] = btn
+      toggle.appendChild(btn)
+      if (key === 'move') {
+        const divider = document.createElement('div')
+        divider.style.cssText = 'width: 1px; background: rgba(255,255,255,0.3); align-self: stretch;'
+        toggle.appendChild(divider)
+      }
     }
+    container.appendChild(toggle)
 
-    // Action buttons (not toggle — fire once)
+    // Action buttons
     const actions = [
-      { label: 'Reset', action: () => {
+      { label: 'Build All', action: () => {
+        this.city.autoBuild([
+          [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
+        ])
+      }},
+      { label: 'Clear All', action: () => {
         this.city.reset()
         this.city.setHelpersVisible(this.params.debug.hexGrid)
         this.perspCamera.position.set(0.903, 100.036, 59.610)
         this.controls.target.set(0.903, 1, 1.168)
         this.controls.update()
       }},
-      { label: 'Auto\nBuild', action: () => {
-        this.city.autoBuild([
-          [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
-        ])
-      }},
     ]
 
     for (const { label, action } of actions) {
       const btn = document.createElement('button')
       btn.textContent = label
-      btn.style.cssText = `
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
-        border: 2px solid rgba(255,255,255,0.3);
-        background: rgba(0,0,0,0.4);
-        color: white;
-        font-family: monospace;
-        font-size: 11px;
-        cursor: pointer;
-        backdrop-filter: blur(4px);
-        white-space: pre-line;
-      `
+      btn.style.cssText = btnBase
+      addHover(btn)
       btn.addEventListener('pointerdown', (e) => e.stopPropagation())
       btn.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -540,6 +574,27 @@ export class App {
       })
       container.appendChild(btn)
     }
+
+    // Settings toggle
+    const guiBtn = document.createElement('button')
+    guiBtn.textContent = 'Controls'
+    guiBtn.style.cssText = btnBase
+    let guiVisible = true
+    const updateGuiBtn = () => {
+      guiBtn.style.background = guiVisible ? 'rgba(255,255,255,0.3)' : 'transparent'
+    }
+    updateGuiBtn()
+    addHover(guiBtn)
+    guiBtn.addEventListener('pointerdown', (e) => e.stopPropagation())
+    guiBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const guiEl = this.gui?.gui?.domElement
+      if (!guiEl) return
+      guiVisible = !guiVisible
+      guiEl.style.display = guiVisible ? '' : 'none'
+      updateGuiBtn()
+    })
+    container.appendChild(guiBtn)
   }
 
   onResize(_e, toSize) {
@@ -615,6 +670,54 @@ export class App {
     }
 
     this.stats.end()
+  }
+
+  toggleFlythrough(enabled) {
+    if (enabled) {
+      // Compute clone offset from actual grid positions
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+      for (const grid of this.city.grids.values()) {
+        if (!grid.hexMesh) continue
+        const p = grid.group.position
+        if (p.x < minX) minX = p.x
+        if (p.x > maxX) maxX = p.x
+        if (p.z < minZ) minZ = p.z
+        if (p.z > maxZ) maxZ = p.z
+      }
+      // Span of grid centers + one grid diameter so clone sits edge-to-edge
+      const d = this.city.hexGridRadius * 2 + 1
+      const hexW = 2  // HEX_WIDTH
+      const hexH = 2 / Math.sqrt(3) * 2  // HEX_HEIGHT
+      const offsetX = maxX - minX + d * hexW
+      const offsetZ = maxZ - minZ + d * hexH * 0.75
+      console.log(`%c[FLYTHROUGH] offset: (${offsetX.toFixed(1)}, ${offsetZ.toFixed(1)})`, 'color: blue')
+
+      // Clone grid content at diagonal offset
+      const cloneBatched = (src) => {
+        const c = src.clone()
+        c._matricesTexture = src._matricesTexture
+        if (src._colorsTexture) c._colorsTexture = src._colorsTexture
+        if (src._indirectTexture) c._indirectTexture = src._indirectTexture
+        return c
+      }
+
+      this._flythroughClone = new Group()
+      this._flythroughClone.position.set(offsetX, 0, offsetZ)
+      for (const grid of this.city.grids.values()) {
+        if (!grid.hexMesh) continue
+        const g = new Group()
+        g.position.copy(grid.group.position)
+        g.add(cloneBatched(grid.hexMesh))
+        if (grid.decorations?.mesh) g.add(cloneBatched(grid.decorations.mesh))
+        this._flythroughClone.add(g)
+      }
+      this.scene.add(this._flythroughClone)
+    } else {
+      if (this._flythroughClone) {
+        this.scene.remove(this._flythroughClone)
+        this._flythroughClone = null
+      }
+    }
   }
 
   exportPNG({ format = 'image/jpeg', quality = 0.85, filename } = {}) {

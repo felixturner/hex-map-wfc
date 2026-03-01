@@ -1,18 +1,20 @@
 # TODO
 
-- rather than do drop on wfc fail try a exta wfc
+
+good seed: 31930
+
 - add flyhtrough button
-
 - make intro screen? audio? start btn wait for audio
-- figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)
-- dial in AO 
+- figure out ui? for more fun interaction? click one tile to flip to a new tile? (show avaiable tiles?)=
 - clean up old assets
-
-- figure out why build all is failing more now? 
-
 - push. record video. 
-
 - send link to codrops
+
+
+## blog post
+- pick out images
+- rewrite text a little bit
+
 
 ####
 
@@ -24,12 +26,9 @@
 - smoke from chimneys as meshes or puffs that fade
 - add sound effects birds wind sounds. ticking build sound for wfc
 - add village furniture - barrels, water troghs, carts etc
-- add bushes like bad north
 - find/make simpler more minimal building models
 
-
 # LATER
-- add icon to hex btn? add finger pointer
 - Consider preventing road slopes up/down from meeting
 - remove baked shadoews from blender file?
 - paint big noise color fileds over grasss for more variation

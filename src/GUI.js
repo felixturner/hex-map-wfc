@@ -18,6 +18,7 @@ export class GUIManager {
   static defaultParams = {
     camera: {
       fov: 20,
+      flythrough: false,
     },
     scene: {
       noiseScale: 0.015,
@@ -53,21 +54,19 @@ export class GUIManager {
     },
     fx: {
       ao: true,
-      aoScale: 2.7,
+      aoStrength: 2.7,
       aoRadius: 1,
       aoBlur: 0.3,
       aoIntensity: 0.95,
+      aoFullRes: true,
       vignette: true,
       dots: true,
       debris: true,
       dof: true,
       dofAperture: 0.21,
       dofMaxblur: 0.005,
-      lut: true,
-      lutStyle: 'etikate',
-      lutAmount: 0.1,
       grain: true,
-      grainStrength: 0.03,
+      grainStrength: 0.1,
       grainFPS: 0,
     },
     debug: {
@@ -153,6 +152,10 @@ export class GUIManager {
       app.perspCamera.fov = v
       app.perspCamera.updateProjectionMatrix()
     })
+    gui.add(allParams.camera, 'flythrough').name('Flythrough').onChange((v) => {
+      app.toggleFlythrough(v)
+    })
+
 
     // Debug view
     const viewMap = { final: 0, color: 1, normal: 3, ao: 4, overlay: 5, effects: 6, mask: 7 }
@@ -176,6 +179,7 @@ export class GUIManager {
     gui.add(allParams.roads, 'showOutlines').name('Show Outlines').onChange((v) => {
       app.city?.setOutlinesVisible(v)
     })
+    gui.add(allParams.roads, 'animateWFC').name('Animate WFC')
     gui.add(allParams.debug, 'tileLabels').name('Tile Labels').onChange((v) => {
       app.city.setTileLabelsVisible(v)
     })
@@ -212,24 +216,22 @@ export class GUIManager {
       if (app.city._levelBias) app.city._levelBias.value = v
     })
 
-    gui.add(allParams.roads, 'animateWFC').name('Animate WFC')
-
     // Action buttons
-    gui.add({ exportPNG: () => app.exportPNG() }, 'exportPNG').name('Export PNG')
+    gui.add({ exportPNG: () => app.exportPNG() }, 'exportPNG').name('Export JPG')
     gui.add({ reset: () => {
       app.city.reset()
       app.city.setHelpersVisible(allParams.debug.hexGrid)
       app.perspCamera.position.set(0.903, 100.036, 59.610)
       app.controls.target.set(0.903, 1, 1.168)
       app.controls.update()
-    } }, 'reset').name('Reset')
+    } }, 'reset').name('Clear All')
     gui.add({ autoBuild: () => app.city.autoBuild([
       [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
-    ]) }, 'autoBuild').name('Auto-Build')
+    ]) }, 'autoBuild').name('Build All (Modular)')
     gui.add({ buildAll: () => {
       import('./lib/Sounds.js').then(({ Sounds }) => Sounds.play('pop', 1.0, 0, 0.3))
       app.city.populateAllGrids()
-    } }, 'buildAll').name('Build All')
+    } }, 'buildAll').name('Build All (Single Solve)')
     gui.add({ benchmark: () => app.city.runBenchmark(50) }, 'benchmark').name('Auto-Build (50 runs)')
     gui.add({ benchmarkBA: () => app.city.runBuildAllBenchmark(50) }, 'benchmarkBA').name('Build-All (50 runs)')
 
@@ -428,7 +430,7 @@ export class GUIManager {
     fxFolder.add(allParams.fx, 'ao').name('AO').onChange((v) => {
       app.aoEnabled.value = v ? 1 : 0
     })
-    fxFolder.add(allParams.fx, 'aoScale', 0, 5, 0.1).name('AO Scale').onChange((v) => {
+    fxFolder.add(allParams.fx, 'aoStrength', 0, 5, 0.1).name('AO Strength').onChange((v) => {
       if (app.aoPass) app.aoPass.scale.value = v
     })
     fxFolder.add(allParams.fx, 'aoRadius', 0.01, 2, 0.01).name('AO Radius').onChange((v) => {
@@ -437,8 +439,8 @@ export class GUIManager {
     fxFolder.add(allParams.fx, 'aoBlur', 0, 0.5, 0.01).name('AO Blur').onChange((v) => {
       if (app.aoBlurAmount) app.aoBlurAmount.value = v
     })
-    fxFolder.add(allParams.fx, 'aoIntensity', 0, 1, 0.05).name('AO Intensity').onChange((v) => {
-      app.aoIntensity.value = v
+    fxFolder.add(allParams.fx, 'aoFullRes').name('AO Full Res').onChange((v) => {
+      if (app.postFX?.aoPass) app.postFX.aoPass.resolutionScale = v ? 1 : 0.5
     })
     fxFolder.add(allParams.fx, 'vignette').name('Vignette').onChange((v) => {
       app.vignetteEnabled.value = v ? 1 : 0
@@ -451,20 +453,6 @@ export class GUIManager {
     })
     fxFolder.add(allParams.fx, 'dofMaxblur', 0.001, 0.02, 0.001).name('DOF Max Blur').onChange((v) => {
       app.dofMaxblur.value = v
-    })
-    fxFolder.add(allParams.fx, 'lut').name('LUT').onChange((v) => {
-      app.lutEnabled.value = v ? 1 : 0
-    })
-    const lutOptions = [
-      'amatorka', 'brannan', 'earlybird', 'etikate', 'gotham', 'hefe',
-      'inkwell', 'kelvin', 'lofi', 'lookup', 'nashville', 'sutro',
-      'toaster', 'walden', 'xpro',
-    ]
-    fxFolder.add(allParams.fx, 'lutStyle', lutOptions).name('LUT Style').onChange((v) => {
-      app.postFX.swapLut(`./assets/lut/${v}.png`)
-    })
-    fxFolder.add(allParams.fx, 'lutAmount', 0, 1, 0.05).name('LUT Amount').onChange((v) => {
-      app.lutAmount.value = v
     })
     fxFolder.add(allParams.fx, 'grain').name('Grain').onChange((v) => {
       app.grainEnabled.value = v ? 1 : 0
@@ -508,17 +496,14 @@ export class GUIManager {
     // Post processing
     app.aoEnabled.value = params.fx.ao ? 1 : 0
     if (app.aoPass) {
-      app.aoPass.scale.value = params.fx.aoScale
+      app.aoPass.scale.value = params.fx.aoStrength
       app.aoPass.radius.value = params.fx.aoRadius
     }
     if (app.aoBlurAmount) app.aoBlurAmount.value = params.fx.aoBlur
-    app.aoIntensity.value = params.fx.aoIntensity
     app.vignetteEnabled.value = params.fx.vignette ? 1 : 0
     app.dofEnabled.value = params.fx.dof ? 1 : 0
     app.dofAperture.value = params.fx.dofAperture / 1000
     app.dofMaxblur.value = params.fx.dofMaxblur
-    app.lutEnabled.value = params.fx.lut ? 1 : 0
-    app.lutAmount.value = params.fx.lutAmount
     app.grainEnabled.value = params.fx.grain ? 1 : 0
     app.grainStrength.value = params.fx.grainStrength
 

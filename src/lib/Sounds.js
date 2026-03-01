@@ -57,6 +57,8 @@ class SoundsManager {
     } else if (name === 'clink') {
       // Randomly select one of the clink sounds
       sound = this.clinkSounds[Math.floor(Math.random() * this.clinkSounds.length)]
+    } else if (name === 'clink3') {
+      sound = this.clinkSounds[2]
     } else {
       sound = this.sounds[name]
     }

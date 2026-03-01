@@ -49,7 +49,7 @@ export function hideAllInstances(grid) {
 /**
  * Animate a single tile dropping in from above (reused by rebuild-wfc)
  */
-export function animateTileDrop(grid, tile) {
+export function animateTileDrop(grid, tile, { fadeIn = false, onComplete } = {}) {
   if (!tile || tile.instanceId === null) return
 
   const dummy = grid.dummy
@@ -60,7 +60,7 @@ export function animateTileDrop(grid, tile) {
   const targetY = tile.level * LEVEL_HEIGHT
   const rotationY = -tile.rotation * Math.PI / 3
   const fillId = grid.bottomFills.get(`${tile.gridX},${tile.gridZ}`)
-  const anim = { y: targetY + DROP_HEIGHT, scale: 1 }
+  const anim = { y: targetY + DROP_HEIGHT }
   tile._anim = anim
   gsap.to(anim, {
     y: targetY,
@@ -70,7 +70,7 @@ export function animateTileDrop(grid, tile) {
       if (!grid.hexMesh) return
       dummy.position.set(pos.x, anim.y, pos.z)
       dummy.rotation.y = rotationY
-      dummy.scale.setScalar(anim.scale)
+      dummy.scale.setScalar(1)
       dummy.updateMatrix()
       grid.hexMesh.setMatrixAt(tile.instanceId, dummy.matrix)
 
@@ -78,12 +78,13 @@ export function animateTileDrop(grid, tile) {
         const tileY = tile.level * LEVEL_HEIGHT
         dummy.position.set(pos.x, anim.y, pos.z)
         dummy.rotation.y = 0
-        dummy.scale.set(anim.scale, tileY, anim.scale)
+        dummy.scale.set(1, tileY, 1)
         dummy.updateMatrix()
         grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
       }
 
-    }
+    },
+    onComplete
   })
 }
 
@@ -143,7 +144,7 @@ function buildDecorationMap(grid) {
 
   addItems(decs.flowers, mesh, (f, pos) => ({
     x: pos.x + (f.ox ?? 0), y: f.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z + (f.oz ?? 0),
-    rotationY: f.rotationY ?? 0, scale: 2
+    rotationY: f.rotationY ?? 0, scale: f.meshName.startsWith('bush_') ? 1 : 2
   }))
 
   addItems(decs.rocks, mesh, (r, pos) => {

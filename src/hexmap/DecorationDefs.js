@@ -132,9 +132,12 @@ export function getRoadDeadEndInfo(tileType, rotation) {
 export const TreesByType = {
   A: ['tree_single_A', 'trees_A_small', 'trees_A_medium', 'trees_A_large'],
   B: ['tree_single_B', 'trees_B_small', 'trees_B_medium', 'trees_B_large'],
+  C: ['tree_C'],
+  D: ['tree_D'],
+  E: ['tree_E'],
 }
 
-export const TreeMeshNames = [...TreesByType.A, ...TreesByType.B]
+export const TreeMeshNames = [...TreesByType.A, ...TreesByType.B, ...TreesByType.C, ...TreesByType.D, ...TreesByType.E]
 
 // Building meshes
 export const BuildingDefs = [
@@ -144,8 +147,8 @@ export const BuildingDefs = [
   { name: 'building_tower_A_yellow', weight: 2 },
   { name: 'building_townhall_yellow', weight: 1 },
   { name: 'building_well_yellow', weight: 3 },
-  { name: 'building_market_yellow', weight: 5 },
-  { name: 'building_blacksmith_yellow', weight: 5 },
+  { name: 'building_market_yellow', weight: 2 },
+  { name: 'building_blacksmith_yellow', weight: 1 },
 ]
 
 // Rural buildings — placed away from roads on flat grass
@@ -193,6 +196,9 @@ export const FlowerMeshNames = [
   'waterplant_A',
   'waterplant_B',
   'waterplant_C',
+  'bush_A',
+  'bush_B',
+  'bush_C',
 ]
 
 // Rock meshes (placed near cliffs and slopes)
@@ -246,6 +252,14 @@ export const MountainDefs = [
 export const HillMeshNames = HillDefs.map(h => h.name)
 export const MountainMeshNames = MountainDefs.map(m => m.name)
 
+// Rare buildings (placed on flat grass, level 2+)
+export const RareBuildingDefs2 = [
+  { name: 'henge', weight: 2 },
+  { name: 'mine', weight: 1 },
+  { name: 'fort', weight: 1 },
+]
+export const RareBuildingNames = RareBuildingDefs2.map(b => b.name)
+
 // Default white color for decorations (no tinting)
 export const WHITE = new Color(0xffffff)
 const _lvlColor = new Color()
@@ -264,6 +278,7 @@ export const MAX_FLOWERS = 40
 export const MAX_ROCKS = 50
 export const MAX_HILLS = 10
 export const MAX_MOUNTAINS = 10
+export const MAX_HENGES = 2
 
 // Single merged BatchedMesh limit
-export const MAX_DEC_INSTANCES = MAX_TREES + MAX_FLOWERS + MAX_BUILDINGS + MAX_BRIDGES + MAX_WATERLILIES + MAX_ROCKS + MAX_HILLS + MAX_MOUNTAINS + 1  // all decorations + dummy
+export const MAX_DEC_INSTANCES = MAX_TREES + MAX_FLOWERS + MAX_BUILDINGS + MAX_BRIDGES + MAX_WATERLILIES + MAX_ROCKS + MAX_HILLS + MAX_MOUNTAINS + MAX_HENGES + 1  // all decorations + dummy

@@ -1399,15 +1399,44 @@ export class HexMap {
     if (result.success && result.tiles) {
       const changedTilesPerGrid = this.applyTileResultsToGrids(result.tiles)
 
+      // Sort changed tiles by WFC collapse order
+      const collapseIndex = new Map()
+      if (result.collapseOrder) {
+        result.collapseOrder.forEach((c, i) => collapseIndex.set(cubeKey(c.q, c.r, c.s), i))
+      }
+      for (const [g, tiles] of changedTilesPerGrid) {
+        const center = g.globalCenterCube
+        tiles.sort((a, b) => {
+          const ca = offsetToCube(a.gridX - g.gridRadius, a.gridZ - g.gridRadius)
+          const cb = offsetToCube(b.gridX - g.gridRadius, b.gridZ - g.gridRadius)
+          const ia = collapseIndex.get(cubeKey(ca.q + center.q, ca.r + center.r, ca.s + center.s)) ?? Infinity
+          const ib = collapseIndex.get(cubeKey(cb.q + center.q, cb.r + center.r, cb.s + center.s)) ?? Infinity
+          return ia - ib
+        })
+      }
+
+      // Hide changed tiles before animating (prevent flash at final position)
       const TILE_STAGGER = 60
       const DEC_DELAY = 400
       const DEC_STAGGER = 40
       for (const [g, tiles] of changedTilesPerGrid) {
+        g.dummy.scale.setScalar(0)
+        g.dummy.updateMatrix()
+        for (const t of tiles) {
+          if (t.instanceId !== null) g.hexMesh.setMatrixAt(t.instanceId, g.dummy.matrix)
+          const fillId = g.bottomFills.get(`${t.gridX},${t.gridZ}`)
+          if (fillId !== undefined) g.hexMesh.setMatrixAt(fillId, g.dummy.matrix)
+        }
+
         tiles.forEach((t, i) => {
-          setTimeout(() => g.animateTileDrop(t), i * TILE_STAGGER)
+          setTimeout(() => g.animateTileDrop(t, { fadeIn: true }), i * TILE_STAGGER)
         })
         const newDecs = g.decorations?.repopulateTilesAt(tiles, g.gridRadius, g.hexGrid)
         if (newDecs && newDecs.length > 0) {
+          // Hide new decorations before animating
+          for (const dec of newDecs) {
+            try { dec.mesh.setMatrixAt(dec.instanceId, g.dummy.matrix) } catch (_) {}
+          }
           const decStart = tiles.length * TILE_STAGGER + DEC_DELAY
           newDecs.forEach((dec, j) => {
             setTimeout(() => g.animateDecoration(dec), decStart + j * DEC_STAGGER)

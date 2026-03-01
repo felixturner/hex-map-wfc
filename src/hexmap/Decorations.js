@@ -14,6 +14,7 @@ import {
   WindmillMeshNames, WINDMILL_TOP_OFFSET, WINDMILL_FAN_OFFSET,
   BridgeMeshNames, WaterlilyMeshNames, FlowerMeshNames, RockMeshNames,
   HillDefs, MountainDefs, HillMeshNames, MountainMeshNames, RiverEndDefs,
+  RareBuildingNames, RareBuildingDefs2,
   WHITE, levelColor,
   MAX_TREES, MAX_BUILDINGS, MAX_BRIDGES, MAX_WATERLILIES, MAX_FLOWERS, MAX_ROCKS, MAX_HILLS, MAX_MOUNTAINS,
   MAX_DEC_INSTANCES,
@@ -42,12 +43,13 @@ export class Decorations {
       ...RockMeshNames,
       ...HillMeshNames,
       ...MountainMeshNames,
+      ...RareBuildingNames,
     ]
 
     // Windmill fan needs centering
     const centeredMeshes = new Set(['building_windmill_top_fan_yellow'])
     // Tower top keeps its original Y (sits on top of tower base)
-    const keepYMeshes = new Set([TOWER_TOP_MESH, ...BuildingMeshNames, ...CoastBuildingMeshNames, ...WindmillMeshNames])
+    const keepYMeshes = new Set([TOWER_TOP_MESH, ...BuildingMeshNames, ...CoastBuildingMeshNames, ...WindmillMeshNames, ...RareBuildingNames])
 
     for (const meshName of allMeshNames) {
       let geom = null
@@ -145,6 +147,7 @@ export class Decorations {
       ...BuildingMeshNames, TOWER_TOP_MESH, ...CoastBuildingMeshNames, ...WindmillMeshNames,
       ...BridgeMeshNames, ...WaterlilyMeshNames, ...RockMeshNames,
       ...HillMeshNames, ...MountainMeshNames,
+      ...RareBuildingNames,
     ]
     const allGeoms = new Map()
     for (const name of allNames) {
@@ -243,7 +246,14 @@ export class Decorations {
       // threshold..1.0 maps to single -> small -> medium -> large
       const normalizedNoise = (noiseVal - threshold) / (1 - threshold)  // 0..1
       const tierIndex = Math.min(3, Math.floor(normalizedNoise * 4))
-      const meshName = TreesByType[treeType][tierIndex]
+      // At tier 0 (single tree), 30% chance to use a C/D/E variant instead
+      let meshName
+      if (tierIndex === 0 && random() < 0.3) {
+        const variants = ['C', 'D', 'E']
+        meshName = TreesByType[variants[Math.floor(random() * variants.length)]][0]
+      } else {
+        meshName = TreesByType[treeType][tierIndex]
+      }
       const geomId = this.geomIds.get(meshName)
       const instanceId = this._addInstance(this.mesh, geomId)
       if (instanceId === -1) break
@@ -502,6 +512,32 @@ export class Decorations {
       }
     }
 
+    // Place a rare building (henge/ruin/mine/fort) on flat grass at level 2+, max 1 per grid
+    const availableRare = RareBuildingNames.filter(n => this.geomIds.has(n))
+    if (availableRare.length > 0) {
+      const buildingTileIds = new Set(this.buildings.map(b => b.tile.id))
+      const rareCandidates = []
+      for (const tile of hexTiles) {
+        if (tile.type !== TileType.GRASS) continue
+        if (tile.level < 2) continue
+        if (buildingTileIds.has(tile.id)) continue
+        rareCandidates.push(tile)
+      }
+      shuffle(rareCandidates)
+      if (rareCandidates.length > 0 && random() < 0.5) {
+        const tile = rareCandidates[0]
+        const availableDefs = RareBuildingDefs2.filter(d => availableRare.includes(d.name))
+        const meshName = weightedPick(availableDefs)
+        const localPos = HexTileGeometry.getWorldPosition(tile.gridX - gridRadius, tile.gridZ - gridRadius)
+        const baseY = tile.level * LEVEL_HEIGHT + TILE_SURFACE
+        const rotationY = random() * Math.PI * 2
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x, baseY, localPos.z, rotationY, 1, tile.level)
+        if (instanceId !== -1) {
+          this.buildings.push({ tile, meshName, instanceId, rotationY })
+        }
+      }
+    }
+
   }
 
   populateBridges(hexTiles, gridRadius) {
@@ -612,7 +648,8 @@ export class Decorations {
         const ox = (random() - 0.5) * 1.6
         const oz = (random() - 0.5) * 1.6
         const rotationY = random() * Math.PI * 2
-        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z + oz, rotationY, 2, tile.level)
+        const scale = meshName.startsWith('bush_') ? 1 : 2
+        const instanceId = this._placeInstance(this.mesh, this.geomIds, meshName, localPos.x + ox, tile.level * LEVEL_HEIGHT + TILE_SURFACE, localPos.z + oz, rotationY, scale, tile.level)
         if (instanceId === -1) break
         this.flowers.push({ tile, meshName, instanceId, rotationY, ox, oz })
       }
@@ -680,7 +717,10 @@ export class Decorations {
 
     if (!hasHills && !hasMountains) return
 
+    const buildingTileIds = new Set(this.buildings.map(b => b.tile.id))
+
     for (const tile of hexTiles) {
+      if (buildingTileIds.has(tile.id)) continue
       const def = TILE_LIST[tile.type]
       if (!def) continue
 
@@ -764,7 +804,6 @@ export class Decorations {
   clearRocks() { this._clearInstances(this.rocks, this.mesh); this.rocks = [] }
   clearHills() { this._clearInstances(this.hills, this.mesh); this.hills = [] }
   clearMountains() { this._clearInstances(this.mountains, this.mesh); this.mountains = [] }
-
   /**
    * Add a bridge on a single tile if it's a river crossing
    * @param {HexTile} tile - Tile to check

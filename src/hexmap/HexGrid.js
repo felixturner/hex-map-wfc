@@ -527,7 +527,7 @@ export class HexGrid {
   }
 
   hideAllInstances() { _hideAllInstances(this) }
-  animateTileDrop(tile) { _animateTileDrop(this, tile) }
+  animateTileDrop(tile, opts) { _animateTileDrop(this, tile, opts) }
   animatePlacements(collapseOrder, delay, onComplete) { _animatePlacements(this, collapseOrder, delay, onComplete) }
   animateDecoration(items, onAllComplete) { _animateDecoration(this, items, onAllComplete) }
 
@@ -626,7 +626,7 @@ export class HexGrid {
     }
     this.slopeArrows = []
 
-    if (!HexTile.debugLevelColors) return
+    return // TODO: slope arrows disabled — causes FPS drop + normal attribute warning
 
     for (const tile of this.hexTiles) {
       if (!tile.isSlope()) continue
