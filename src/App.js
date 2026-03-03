@@ -1,5 +1,5 @@
 import {
-  Clock,
+  Timer,
   Group,
   OrthographicCamera,
   PerspectiveCamera,
@@ -9,7 +9,7 @@ import {
   NoToneMapping,
   Plane,
   WebGPURenderer,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   AxesHelper,
 } from 'three/webgpu'
 import { OrbitControls, CSS2DRenderer } from 'three/examples/jsm/Addons.js'
@@ -61,7 +61,7 @@ export class App {
     this.postFX = null
     this.scene = new Scene()
     this.pointerHandler = null
-    this.clock = new Clock(false)
+    this.timer = new Timer()
     // Module instances
     this.gui = null
     this.city = null
@@ -95,7 +95,7 @@ export class App {
     this.renderer.toneMapping = NoToneMapping
     this.renderer.toneMappingExposure = 1.0
     this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = PCFSoftShadowMap
+    this.renderer.shadowMap.type = PCFShadowMap
 
     window.addEventListener('resize', this.onResize.bind(this))
 
@@ -297,7 +297,7 @@ export class App {
     this.postFX.setWaterObjects(this.city.getWaterObjects())
     this.postFX.render()
 
-    this.clock.start()
+    this.timer.connect(document)
 
     // Frame rate limiting with drift compensation
     const targetFPS = 60
@@ -605,9 +605,10 @@ export class App {
   animate() {
     this.stats.begin()
 
-    const { controls, clock, postFX } = this
+    const { controls, timer, postFX } = this
 
-    const dt = clock.getDelta()
+    timer.update()
+    const dt = timer.getDelta()
 
     controls.update(dt)
     // Clamp target Y to prevent panning under the city
@@ -625,7 +626,7 @@ export class App {
     // Animate grain noise — quantize to noiseFPS for film-like grain (0 = static)
     const noiseFPS = this.params.fx.grainFPS
     if (noiseFPS > 0) {
-      postFX.grainTime.value = Math.floor(clock.elapsedTime * noiseFPS) / noiseFPS
+      postFX.grainTime.value = Math.floor(timer.getElapsed() * noiseFPS) / noiseFPS
     }
 
     // Update debris physics

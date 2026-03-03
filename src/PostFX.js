@@ -1,4 +1,4 @@
-import { PostProcessing, RenderTarget, RGBAFormat, Color } from 'three/webgpu'
+import { RenderPipeline, RenderTarget, RGBAFormat, Color } from 'three/webgpu'
 import {
   pass,
   output,
@@ -27,7 +27,7 @@ export class PostFX {
     this.scene = scene
     this.camera = camera
 
-    this.postProcessing = new PostProcessing(renderer)
+    this.postProcessing = new RenderPipeline(renderer)
 
     // Effect toggle uniforms
     this.aoEnabled = uniform(1)
@@ -115,8 +115,8 @@ export class PostFX {
     // AO texture for debug view
     const aoTexture = this.aoPass.getTextureNode()
 
-    // Blur the AO to reduce banding artifacts
-    const blurredAO = gaussianBlur(aoTexture, this.aoBlurAmount, 4) // sigma, radius
+    // Blur the AO to reduce banding artifacts (r183: AO is in .r channel only)
+    const blurredAO = gaussianBlur(aoTexture, this.aoBlurAmount, 4).r // sigma, radius
 
     // Soften AO: raise to power < 1 to reduce harshness, then blend
     const softenedAO = blurredAO.pow(0.5) // Square root makes it softer
@@ -170,7 +170,7 @@ export class PostFX {
     // Debug views
     const depthViz = vec3(scenePassDepth)
     const normalViz = scenePassNormal.mul(0.5).add(0.5)
-    const aoViz = vec3(blurredAO)
+    const aoViz = vec3(blurredAO, blurredAO, blurredAO)
     const overlayViz = overlayTexture.rgb
     const waterMaskViz = vec3(waterMaskSample.r)
 

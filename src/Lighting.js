@@ -7,7 +7,7 @@ import {
   HemisphereLight,
   DirectionalLightHelper,
 } from 'three/webgpu'
-import { RGBELoader } from 'three/examples/jsm/Addons.js'
+import { HDRLoader } from 'three/examples/jsm/Addons.js'
 
 export class Lighting {
   constructor(scene, renderer, params) {
@@ -25,7 +25,7 @@ export class Lighting {
   async init() {
     const { scene, params } = this
 
-    const texture = await new RGBELoader()
+    const texture = await new HDRLoader()
       .setPath('./assets/hdr/')
       .loadAsync('venice_sunset_1k.hdr')
     texture.mapping = EquirectangularReflectionMapping

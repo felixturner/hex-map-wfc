@@ -42,7 +42,7 @@ export class GUIManager {
       ao: true,
       aoStrength: 2.7,
       aoRadius: 1,
-      aoBlur: 0.3,
+      aoBlur: 0.5,
       aoFullRes: false,
       vignette: true,
       dof: true,
@@ -392,7 +392,7 @@ export class GUIManager {
     fxFolder.add(allParams.fx, 'aoRadius', 0.01, 2, 0.01).name('AO Radius').onChange((v) => {
       if (app.aoPass) app.aoPass.radius.value = v
     })
-    fxFolder.add(allParams.fx, 'aoBlur', 0, 0.5, 0.01).name('AO Blur').onChange((v) => {
+    fxFolder.add(allParams.fx, 'aoBlur', 0, 1, 0.01).name('AO Blur').onChange((v) => {
       if (app.aoBlurAmount) app.aoBlurAmount.value = v
     })
     fxFolder.add(allParams.fx, 'aoFullRes').name('AO Full Res').onChange((v) => {

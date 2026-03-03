@@ -217,7 +217,7 @@ export class HexMap {
     // Raw geometry Y (before batch transform) for slope gradient
     // Tile surface is at geomY=1.0, each 0.5u above = +1 level
     // So slope contribution = (geomY - 1.0) / 0.5 / (LEVELS_COUNT - 1)
-    const rawGeomPos = positionGeometry.varying('vRawGeomPos')
+    const rawGeomPos = positionGeometry.toVarying('vRawGeomPos')
     const slopeContrib = select(isDecoration,
       rawGeomPos.y.mul(2.0 / (LEVELS_COUNT - 1)),          // decorations: geom starts at y=0
       rawGeomPos.y.sub(1.0).mul(2.0 / (LEVELS_COUNT - 1))  // tiles: surface at y=1.0
