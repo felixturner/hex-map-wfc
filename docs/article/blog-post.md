@@ -276,7 +276,7 @@ No dice required this time — but the feeling is the same. You hit a button, th
 
 **[Full source code on GitHub](https://github.com/felixturner/hex-map-wfc)**
 
-<!-- full -->
+<!-- inline -->
 ![Final beauty shot of a completed map](img/colors.jpg)
 
 ---
