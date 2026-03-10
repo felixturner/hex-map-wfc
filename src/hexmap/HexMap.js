@@ -1743,6 +1743,18 @@ export class HexMap {
     })
   }
 
+  getCanonicalTiles() {
+    return Array.from(this.globalCells.values()).map((cell) => ({
+      q: cell.q,
+      r: cell.r,
+      s: cell.s,
+      type: cell.type,
+      rotation: cell.rotation,
+      level: cell.level,
+      gridKey: cell.gridKey,
+    }))
+  }
+
   // Stub methods for App.js compatibility
   onHover() {}
   onPointerUp() {}

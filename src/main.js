@@ -17,12 +17,6 @@ async function init() {
 
   // Hide loading overlay
   loadingEl.style.display = 'none'
-
-  // Fade in scene
-  app.fadeIn(1000)
-
-  // Start intro build animation
-  app.city.startIntroAnimation(app.camera, app.controls, 4)
 }
 
 init()

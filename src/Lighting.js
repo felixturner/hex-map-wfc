@@ -7,6 +7,7 @@ import {
   DirectionalLightHelper,
 } from 'three/webgpu'
 import { HDRLoader } from 'three/examples/jsm/Addons.js'
+import { RUNTIME_MINIMAL } from './runtimeConfig.js'
 
 export class Lighting {
   constructor(scene, renderer, params) {
@@ -51,9 +52,11 @@ export class Lighting {
     // Update shadow frustum based on scene bounds and light position
     this.updateShadowFrustum()
 
-    // Light helper to visualize direction (visibility set by applyParams)
-    this.dirLightHelper = new DirectionalLightHelper(this.dirLight, 10)
-    scene.add(this.dirLightHelper)
+    // Light helper is useful for tuning visuals, but disabled for wardomes runtime.
+    if (!RUNTIME_MINIMAL) {
+      this.dirLightHelper = new DirectionalLightHelper(this.dirLight, 10)
+      scene.add(this.dirLightHelper)
+    }
 
   }
 
