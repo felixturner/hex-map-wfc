@@ -89,8 +89,7 @@ After many failed approaches, I landed on a layered recovery system:
 
 **Layer 1: Unfixing.** During the initial constraint propagation, if a neighbor cell creates a contradiction, the solver converts it from a fixed constraint back into a solvable cell. Its *own* neighbors (two cells out — "anchors") become the new constraints. This is cheap and handles easy cases.
 
-**Layer 2: Local-WFC.** If the main solve fails, the solver runs a mini-WFC on a small radius-2 region around the problem area — re-solving 19 cells in the overlap area to create a more compatible boundary. Up to 5 attempts, each targeting a different problem cell. Local-WFC was the breakthrough. Instead of trying to solve the impossible, go back and change the problem. The system even got up to ~86% success solving the entire map in one go.
-
+**Layer 2: Local-WFC.** If the main solve fails, the solver runs a mini-WFC on a small radius-2 region around the problem area — re-solving 19 cells in the overlap area to create a more compatible boundary. Up to 5 attempts, each targeting a different problem cell. Local-WFC was the breakthrough. Instead of trying to solve the impossible, go back and change the problem.
 **Layer 3: Drop and hide.** Last resort. Drop the offending neighbor cell entirely and place mountain tiles to cover the seams. Mountains are great — their cliff edges match anything, and they look intentional. Nobody questions a mountain.
 
 <!-- slideshow -->
