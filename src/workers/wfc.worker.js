@@ -49,7 +49,7 @@ class HexWFCSolver {
     // Backtracking state (trail-based — records only changes, not full copies)
     this.trail = []       // { key, stateKey } — each possibility removed during propagation
     this.decisions = []   // stack of { targetKey, prevPossibilities, trailStart, collapseOrderLen, triedStates }
-    this.maxBacktracks = 500
+    this.maxBacktracks = options.maxBacktracks ?? 500
     this.backtracks = 0
     // Neighbor cell data: cells that CAN be unfixed on neighbor conflict
     this.neighborData = new Map()     // cubeKey → { q,r,s, anchors: [...], original: {type,rotation,level} }

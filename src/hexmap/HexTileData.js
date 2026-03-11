@@ -2,6 +2,7 @@
  * Pure tile data - no browser/Three.js dependencies
  * This file can be safely imported by web workers
  */
+import { TILE_WEIGHTS } from './MapTuningConstants.js'
 
 /**
  * Number of elevation levels in the WFC system
@@ -13,14 +14,14 @@ export const LEVELS_COUNT = 5
  * Array index IS the tile's numeric ID (used internally during a session only)
  * Each entry: { name, mesh, edges, weight, highEdges?, levelIncrement? }
  */
-export const TILE_LIST = [
+const BASE_TILE_LIST = [
   // Base
   { name: 'GRASS', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
     weight: 500 },
   { name: 'WATER', mesh: 'hex_water',
     edges: { NE: 'water', E: 'water', SE: 'water', SW: 'water', W: 'water', NW: 'water' },
-    weight: 500 },
+    weight: 24, preventChaining: true },
 
   // Roads
   { name: 'ROAD_A', mesh: 'hex_road_A',
@@ -184,6 +185,11 @@ export const TILE_LIST = [
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
     weight: 6, highEdges: ['E'], levelIncrement: 1 },
 ]
+
+export const TILE_LIST = BASE_TILE_LIST.map((tile) => ({
+  ...tile,
+  weight: TILE_WEIGHTS[tile.name] ?? tile.weight ?? 1,
+}))
 
 /**
  * Name → index lookup (derived from TILE_LIST)

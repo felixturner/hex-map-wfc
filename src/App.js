@@ -21,7 +21,7 @@ import { WavesMask } from './hexmap/effects/WavesMask.js'
 import { setSeed } from './SeededRandom.js'
 import { LEVELS_COUNT } from './hexmap/HexTileData.js'
 import gsap from 'gsap'
-import { RUNTIME_MINIMAL } from './runtimeConfig.js'
+import { RUNTIME_MINIMAL, WARDOMES_MAP_PROFILE } from './runtimeConfig.js'
 
 // Global status update function
 export function setStatus(text) {
@@ -132,7 +132,13 @@ export class App {
 
     if (RUNTIME_MINIMAL) {
       // In wardomes mode we need a fully generated world immediately.
-      await this.city.populateAllGrids(null, { animate: false, animateDelay: 0 })
+      await this.city.populateAllGrids(null, {
+        animate: false,
+        animateDelay: 0,
+        includeOceanSeeds: WARDOMES_MAP_PROFILE.includeOceanSeeds,
+        wfcMaxTries: WARDOMES_MAP_PROFILE.wfcMaxTries,
+        wfcMaxBacktracks: WARDOMES_MAP_PROFILE.wfcMaxBacktracks,
+      })
       // Minimal mode skips coast-mask postfx; hiding this plane avoids visual artifacts.
       if (this.city.water?.mesh) this.city.water.mesh.visible = false
     }

@@ -29,6 +29,7 @@ import { initGlobalTreeNoise, rebuildNoiseTables, Decorations } from './Decorati
 import { Water } from './effects/Water.js'
 import { random, setSeed } from '../SeededRandom.js'
 import { Sounds } from '../lib/Sounds.js'
+import { RUNTIME_MINIMAL, WARDOMES_MAP_PROFILE } from '../runtimeConfig.js'
 
 const LEVEL_HEIGHT = 0.5
 const TILE_SURFACE = 1
@@ -379,20 +380,25 @@ export class HexMap {
     const center = grid.globalCenterCube
     const solveCells = cubeCoordsInRadius(center.q, center.r, center.s, this.hexGridRadius)
     const fixedCells = this.getFixedCellsForRegion(solveCells)
+    const includeOceanSeeds = options.includeOceanSeeds ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.includeOceanSeeds : true)
 
     const initialCollapses = options.initialCollapses ?? []
     if (fixedCells.length === 0 && initialCollapses.length === 0) {
       initialCollapses.push({ q: center.q, r: center.r, s: center.s, type: TileType.GRASS, rotation: 0, level: 0 })
-      this.addWaterEdgeSeeds(initialCollapses, center, this.hexGridRadius)
+      if (includeOceanSeeds) {
+        this.addWaterEdgeSeeds(initialCollapses, center, this.hexGridRadius)
+      }
     }
 
-    // Seed ocean at map corners that fall within this grid
-    const solveSet = new Set(solveCells.map(c => cubeKey(c.q, c.r, c.s)))
-    const fixedSet = new Set(fixedCells.map(fc => cubeKey(fc.q, fc.r, fc.s)))
-    for (const seed of this.getMapCornerOceanSeeds()) {
-      const key = cubeKey(seed.q, seed.r, seed.s)
-      if (solveSet.has(key) && !fixedSet.has(key)) {
-        initialCollapses.push(seed)
+    if (includeOceanSeeds) {
+      // Seed ocean at map corners that fall within this grid
+      const solveSet = new Set(solveCells.map(c => cubeKey(c.q, c.r, c.s)))
+      const fixedSet = new Set(fixedCells.map(fc => cubeKey(fc.q, fc.r, fc.s)))
+      for (const seed of this.getMapCornerOceanSeeds()) {
+        const key = cubeKey(seed.q, seed.r, seed.s)
+        if (solveSet.has(key) && !fixedSet.has(key)) {
+          initialCollapses.push(seed)
+        }
       }
     }
 
@@ -1126,8 +1132,13 @@ export class HexMap {
     const centerCube = centerGrid.globalCenterCube
     const initialCollapses = [
       { q: centerCube.q, r: centerCube.r, s: centerCube.s, type: TileType.GRASS, rotation: 0, level: 0 },
-      ...this.getMapCornerOceanSeeds(),
     ]
+    const includeOceanSeeds = options.includeOceanSeeds ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.includeOceanSeeds : true)
+    const wfcMaxTries = options.wfcMaxTries ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.wfcMaxTries : 5)
+    const wfcMaxBacktracks = options.wfcMaxBacktracks ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.wfcMaxBacktracks : 500)
+    if (includeOceanSeeds) {
+      initialCollapses.push(...this.getMapCornerOceanSeeds())
+    }
 
     // Track seeded cells for debug labels
     for (const ic of initialCollapses) {
@@ -1140,7 +1151,8 @@ export class HexMap {
     const result = await this.solveWfcAsync(allSolveCells, [], {
       tileTypes,
       weights: {},
-      maxTries: 5,
+      maxTries: wfcMaxTries,
+      maxBacktracks: wfcMaxBacktracks,
       initialCollapses,
       gridId: 'BUILD_ALL',
       attemptNum: 1,
