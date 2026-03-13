@@ -241,6 +241,7 @@ export class WFCManager {
       gridId: ctx.gridKey,
       attemptNum: ctx.attempt,
       neighborCells: activeNeighborCells,
+      slopeBias: ctx.slopeBias,
     })
 
     // Account for extra tries so next attempt's try number continues incrementally

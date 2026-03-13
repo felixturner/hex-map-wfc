@@ -416,6 +416,7 @@ export class HexMap {
       initialFixedCount: fixedCells.length,
       attempt: 0,
       options,
+      slopeBias: App.instance?.params?.roads?.slopeBias ?? 1.0,
     }
   }
 
@@ -1144,6 +1145,7 @@ export class HexMap {
       initialCollapses,
       gridId: 'BUILD_ALL',
       attemptNum: 1,
+      slopeBias: params?.roads?.slopeBias ?? 1.0,
     })
 
     if (this._buildCancelled) {

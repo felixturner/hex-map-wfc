@@ -33,6 +33,7 @@ class HexWFCSolver {
       attemptNum: options.attemptNum ?? 0,
       gridId: options.gridId ?? '',
       quiet: options.quiet ?? false,
+      slopeBias: options.slopeBias ?? 1.0,
     }
     this.log = this.options.log
     // Map<cubeKey, HexWFCCell> — cells to solve
@@ -176,9 +177,11 @@ class HexWFCSolver {
     if (!cell || cell.collapsed || cell.possibilities.size === 0) return false
 
     const possArray = Array.from(cell.possibilities)
+    const slopeBias = this.options.slopeBias
     const weights = possArray.map(k => {
       const state = HexWFCCell.parseKey(k)
-      return TILE_LIST[state.type]?.weight ?? 1
+      const base = TILE_LIST[state.type]?.weight ?? 1
+      return TILE_LIST[state.type]?.highEdges?.length > 0 ? base * slopeBias : base
     })
     const totalWeight = weights.reduce((a, b) => a + b, 0)
     let r = random() * totalWeight
@@ -265,9 +268,11 @@ class HexWFCSolver {
     const available = [...cell.possibilities].filter(k => !excludeSet.has(k))
     if (available.length === 0) return false
 
+    const slopeBias = this.options.slopeBias
     const weights = available.map(k => {
       const state = HexWFCCell.parseKey(k)
-      return TILE_LIST[state.type]?.weight ?? 1
+      const base = TILE_LIST[state.type]?.weight ?? 1
+      return TILE_LIST[state.type]?.highEdges?.length > 0 ? base * slopeBias : base
     })
     const total = weights.reduce((a, b) => a + b, 0)
     let r = random() * total

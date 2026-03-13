@@ -177,6 +177,8 @@ export class GUIManager {
     gui.add(allParams.debug, 'levelBias', -1, 1, 0.05).name('Level Bias').onChange((v) => {
       if (app.city._levelBias) app.city._levelBias.value = v
     })
+    allParams.roads.slopeBias = 1.0
+    gui.add(allParams.roads, 'slopeBias', 0.1, 5.0, 0.05).name('Slope Bias')
 
     // Action buttons
     gui.add({ exportPNG: () => app.exportPNG() }, 'exportPNG').name('Export JPG')
