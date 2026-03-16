@@ -27,6 +27,23 @@ npm run dev
 npm run build
 ```
 
+## HexPlatformEngine (N++ Ninja Physics Module)
+
+`src/hexmap/HexPlatformEngine.js` is a reusable ES module that adds N++-style
+ninja platformer physics to hex grid worlds. It provides:
+
+- **NinjaEntity** — position, velocity, state machine (idle/running/jumping/falling/wallSlide/dead)
+- **HexPlatformEngine** — game loop update with collision callbacks, event hooks
+- **NINJA_PHYSICS** — exported constants for tuning (dual gravity, additive jump, wall mechanics)
+- **InputState** — abstracted input for keyboard/gamepad integration
+
+Key physics features: additive jump (N++ signature), dual gravity (rise vs fall),
+apex hang, variable jump height, wall slide/jump with lockout, fall damage,
+landing momentum transfer, coyote time, jump buffering.
+
+This module is used by [N-Scale](https://github.com/aquasolnursery/onehtml/tree/main/NScale),
+a hex ninja platformer in the FreewareArcade.com platform.
+
 ## License
 
 [MIT](LICENSE)
