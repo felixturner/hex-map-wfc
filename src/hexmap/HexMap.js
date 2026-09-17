@@ -27,7 +27,9 @@ import {
 } from './HexGridConnector.js'
 import { initGlobalTreeNoise, rebuildNoiseTables, Decorations } from './Decorations.js'
 import { Water } from './effects/Water.js'
-import { random, setSeed } from '../SeededRandom.js'
+import { createNaturalSurface } from './NaturalMaterial.js'
+import { random, setSeed, getSeed } from '../SeededRandom.js'
+import { createMapSnapshot, decodeMapSnapshot } from '../maps/MapSnapshot.js'
 import { Sounds } from '../lib/Sounds.js'
 import { RUNTIME_MINIMAL, WARDOMES_MAP_PROFILE } from '../runtimeConfig.js'
 
@@ -242,13 +244,23 @@ export class HexMap {
     this._colorMode = uniform(0)
     const isDebug = this._colorMode.equal(1)
     const isWhite = this._colorMode.equal(2)
-    this._combinedColor = select(isWhite, vec3(1, 1, 1), select(isDebug, debugColor, blendedColor))
+    this.naturalSurface = await createNaturalSurface({
+      summer: sampleA, winter: sampleB, blended: blendedColor,
+      elevation: blendFactor, isDecoration, localPosition: rawGeomPos,
+      waterMask: this._texNodeMask.r, debugMode: this._colorMode,
+    })
+    this._combinedColor = select(isWhite, vec3(1, 1, 1), select(isDebug, debugColor, this.naturalSurface.color))
+    this.roadMaterial.normalNode = this.naturalSurface.normal
+    this.roadMaterial.roughnessNode = this.naturalSurface.roughness
 
     // Unlit water mask material (for per-frame mask RT render — no PBR overhead)
     this.waterMaskMaterial = new MeshBasicNodeMaterial()
     this.waterMaskMaterial.colorNode = vec3(this._texNodeMask.r)
     // Skip batchColor multiply (R channel encodes level, not a tint)
     this.waterMaskMaterial.setupDiffuseColor = this.roadMaterial.setupDiffuseColor
+    this.landMaskMaterial = new MeshBasicNodeMaterial()
+    this.landMaskMaterial.colorNode = vec3(float(1).sub(this._texNodeMask.r))
+    this.landMaskMaterial.setupDiffuseColor = this.roadMaterial.setupDiffuseColor
 
     this.roadMaterial.needsUpdate = true
   }
@@ -983,6 +995,7 @@ export class HexMap {
    * @param {Array<[number,number]>} order - Array of [gridX, gridZ] pairs
    */
   async autoBuild(order, { animate } = {}) {
+    if (this._restoring) return { success: false, cancelled: true }
     // If map is already complete, reset first
     const allPopulated = order.every(([gx, gz]) => {
       const grid = this.grids.get(getGridKey(gx, gz))
@@ -1036,6 +1049,10 @@ export class HexMap {
     Sounds.play('intro')
     this.onTilesChanged?.(Promise.resolve())
 
+    if (!failedGrids.length && !this.droppedCells.size) {
+      await this.onMapSolved?.(this.createSnapshot())
+    }
+
     return {
       success: true,
       time: elapsed,
@@ -1051,6 +1068,7 @@ export class HexMap {
    * @param {Object} options - { animate, animateDelay }
    */
   async populateAllGrids(expansionCoords = null, options = {}) {
+    if (this._restoring) return { success: false, cancelled: true }
     ++this._buildEpoch
     this._buildCancelled = false
     this._autoBuilding = true
@@ -1179,6 +1197,10 @@ export class HexMap {
     }
 
     const solveTime = ((performance.now() - startTime) / 1000).toFixed(1)
+    // Persist the expensive solve before building any GPU resources.
+    await this.onMapSolved?.(this.createSnapshot(result.tiles, allGridCoords))
+    setSeed(getSeed())
+    rebuildNoiseTables()
     log(`[BUILD ALL] WFC SUCCESS (${result.tiles.length} tiles, ${solveTime}s, ${result.backtracks || 0} backtracks, ${result.tries || 0} tries)`, 'color: green')
     await setStatusAsync(`[BUILD ALL] Success! Distributing ${result.tiles.length} tiles...`)
 
@@ -1350,7 +1372,7 @@ export class HexMap {
    * Rejects silently during build seq (_autoBuilding).
    */
   _enqueueWfc(fn) {
-    if (this._autoBuilding) return
+    if (this._autoBuilding || this._restoring) return
     if (this._wfcBusy) {
       this._wfcQueue.push(fn)
       return
@@ -1559,7 +1581,8 @@ export class HexMap {
   }
 
 
-  async reset() {
+  async reset({ forRestore = false } = {}) {
+    if (this._restoring && !forRestore) return
     ++this._buildEpoch
     this._buildCancelled = true
     this._autoBuilding = false
@@ -1603,6 +1626,7 @@ export class HexMap {
   }
 
   async regenerateAll(options = {}) {
+    if (this._restoring) return
     this._autoBuilding = false
     this._wfcQueue.length = 0
     await this._waitForWfcIdle()
@@ -1662,6 +1686,7 @@ export class HexMap {
   }
 
   update(dt) {
+    if (this.naturalSurface) this.naturalSurface.clock.value += dt
   }
 
   // === Water uniform proxies (GUI accesses via app.city._waterSpeed etc.) ===
@@ -1765,6 +1790,67 @@ export class HexMap {
       level: cell.level,
       gridKey: cell.gridKey,
     }))
+  }
+
+  createSnapshot(tiles = this.getCanonicalTiles(), coordinates = null) {
+    const grids = coordinates
+      ? coordinates.map(([x, z]) => this.grids.get(getGridKey(x, z)))
+      : [...this.grids.values()].filter(grid => grid.state === HexGridState.POPULATED)
+    return createMapSnapshot({
+      seed: getSeed(), radius: this.hexGridRadius, tiles,
+      waterSideIndex: this._waterSideIndex,
+      grids: grids.map(grid => ({ ...grid.gridCoords, center: { ...grid.globalCenterCube } })),
+    })
+  }
+
+  async restoreSnapshot(snapshot) {
+    const decoded = decodeMapSnapshot(snapshot)
+    if (decoded.radius !== this.hexGridRadius) throw new Error('Saved map uses a different grid size')
+    for (const grid of decoded.grids) {
+      if (!this.isValidGridPosition(grid.x, grid.z)) throw new Error('Saved map exceeds the supported map bounds')
+      const center = worldOffsetToGlobalCube(this.calculateWorldOffset(grid.x, grid.z))
+      if (cubeKey(center.q, center.r, center.s) !== cubeKey(grid.center.q, grid.center.r, grid.center.s)) {
+        throw new Error('Saved map uses an incompatible grid layout')
+      }
+    }
+    if (this._wfcBusy || this._autoBuilding || this._restoring) throw new Error('Wait for generation to finish before opening a map')
+    this._restoring = true
+    try {
+      this.onBeforeTilesChanged?.()
+      await this.reset({ forRestore: true })
+      this.isRegenerating = true
+      this._autoBuilding = true
+      this._waterSideIndex = decoded.waterSideIndex ?? null
+      setSeed(decoded.seed)
+      this.wfcManager.cancelAndRestart()
+      rebuildNoiseTables()
+      const tiles = new Map(decoded.tiles.map(tile => [cubeKey(tile.q, tile.r, tile.s), tile]))
+      for (const entry of decoded.grids) {
+        const key = getGridKey(entry.x, entry.z)
+        const grid = this.grids.get(key) || await this.createGrid(entry.x, entry.z)
+        const c = grid.globalCenterCube
+        const gridTiles = cubeCoordsInRadius(c.q, c.r, c.s, this.hexGridRadius)
+          .map(cell => tiles.get(cubeKey(cell.q, cell.r, cell.s)))
+        this.addToGlobalCells(key, gridTiles)
+        await grid.populateFromCubeResults(gridTiles, [], c, { animate: false })
+        grid.setHelperVisible(this.helpersVisible)
+        if (grid.outline && this.debug._outlinesVisible !== undefined) {
+          grid.outline.visible = this.debug._outlinesVisible
+        }
+      }
+      for (const entry of decoded.grids) await this.createAdjacentPlaceholders(getGridKey(entry.x, entry.z))
+      this.pruneInvalidPlaceholders()
+      this.updateAllPlaceholderTriangles()
+      if (this.tileLabels.visible) this.createTileLabels()
+    } catch (error) {
+      await this.reset({ forRestore: true })
+      throw error
+    } finally {
+      this._restoring = false
+      this._autoBuilding = false
+      this.isRegenerating = false
+    }
+    this.onTilesChanged?.(Promise.resolve())
   }
 
   // Stub methods for App.js compatibility

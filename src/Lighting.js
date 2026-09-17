@@ -31,6 +31,7 @@ export class Lighting {
     texture.needsUpdate = true
     scene.background = new Color(0x98a4bb)
     scene.environment = texture
+    scene.environmentIntensity = params.lighting.envIntensity
 
     // Scene bounds for shadow calculation (7x7 lots, centered on middle lot, ~98x98, buildings up to ~50 height)
     this.sceneBounds = new Box3(
@@ -39,13 +40,14 @@ export class Lighting {
     )
 
     // Directional light for key shadows/highlights (values set by applyParams)
-    this.dirLight = new DirectionalLight(0xffffff, 1)
-    this.dirLightOffset = new Vector3(50, 100, 50)
+    this.dirLight = new DirectionalLight(0xffffff, params.lighting.dirLight)
+    this.dirLightOffset = new Vector3(params.lighting.lightX, params.lighting.lightY, params.lighting.lightZ)
     this.dirLight.position.copy(this.dirLightOffset)
     this.dirLight.castShadow = true
     this.dirLight.shadow.mapSize.width = 4096
     this.dirLight.shadow.mapSize.height = 4096
     this.dirLight.shadow.bias = -0.0005
+    this.dirLight.shadow.intensity = params.lighting.shadowIntensity
     scene.add(this.dirLight)
     scene.add(this.dirLight.target) // Required for dynamic target positioning
 

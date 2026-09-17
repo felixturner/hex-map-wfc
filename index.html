@@ -45,6 +45,31 @@
         margin-bottom: 24px;
       }
       .lil-gui.gui-hidden { display: none; }
+      #map-library {
+        position: fixed;
+        right: 10px;
+        bottom: 58px;
+        z-index: 999;
+        max-width: calc(100vw - 20px);
+        padding: 10px;
+        border-radius: 8px;
+        background: rgba(20, 28, 24, 0.9);
+        color: #fff;
+        font: 12px 'Inter', sans-serif;
+      }
+      #map-library > div:first-child { display: flex; flex-wrap: wrap; gap: 6px; }
+      #map-library button, #map-library select {
+        padding: 7px;
+        max-width: 260px;
+        background: #293c32;
+        border: 1px solid #849a8c;
+        border-radius: 4px;
+        color: #fff;
+        font: inherit;
+      }
+      #map-library button { cursor: pointer; }
+      #map-library button:disabled { opacity: 0.5; cursor: wait; }
+      #map-library [role=status] { margin-top: 8px; max-width: 650px; }
       @media (orientation: portrait) {
         #ui-menu { flex-direction: column !important; }
       }

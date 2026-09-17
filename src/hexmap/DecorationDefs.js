@@ -17,6 +17,7 @@ class ScaledNoise {
 
 export const LEVEL_HEIGHT = 0.5
 export const TILE_SURFACE = 1
+export const HIGH_GRASS_MOUNTAIN_CHANCE = 0.65
 
 // Global noise instances shared across all Decorations
 // Created lazily on first use, seeded from global RNG
@@ -277,7 +278,7 @@ export const MAX_WATERLILIES = 10
 export const MAX_FLOWERS = 40
 export const MAX_ROCKS = 50
 export const MAX_HILLS = 10
-export const MAX_MOUNTAINS = 10
+export const MAX_MOUNTAINS = 32
 export const MAX_HENGES = 2
 
 // Single merged BatchedMesh limit

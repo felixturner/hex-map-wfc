@@ -18,7 +18,8 @@ import { HexMap } from './hexmap/HexMap.js'
 import { Lighting } from './Lighting.js'
 import { PostFX } from './PostFX.js'
 import { WavesMask } from './hexmap/effects/WavesMask.js'
-import { setSeed } from './SeededRandom.js'
+import { setSeed, getSeed } from './SeededRandom.js'
+import { MapLibrary } from './maps/MapLibrary.js'
 import { LEVELS_COUNT } from './hexmap/HexTileData.js'
 import gsap from 'gsap'
 import { RUNTIME_MINIMAL, WARDOMES_MAP_PROFILE } from './runtimeConfig.js'
@@ -130,9 +131,23 @@ export class App {
     await this.lighting.init()
     await this.city.init()
 
+    this.mapLibrary = new MapLibrary(this)
+    const savedMap = await this.mapLibrary.init()
+    let restored = false
+    if (savedMap) {
+      try {
+        await this.mapLibrary.open(savedMap)
+        restored = true
+      } catch (error) {
+        this.mapLibrary.message(`Could not open saved map: ${error.message}. Import another map or choose New map.`)
+      }
+    }
+
     if (RUNTIME_MINIMAL) {
       // In wardomes mode we need a fully generated world immediately.
-      await this.city.populateAllGrids(null, {
+      // A broken save leaves the library available for recovery; do not silently
+      // start another multi-minute solve when the user expected to open a map.
+      if (!savedMap && !this.mapLibrary.hasStoredMaps) await this.city.populateAllGrids(null, {
         animate: false,
         animateDelay: 0,
         includeOceanSeeds: WARDOMES_MAP_PROFILE.includeOceanSeeds,
@@ -143,10 +158,7 @@ export class App {
       if (this.city.water?.mesh) this.city.water.mesh.visible = false
     }
 
-    window.__WARDOMES_MAP__ = {
-      seed,
-      tiles: this.city.getCanonicalTiles(),
-    }
+    this.publishMap()
 
     if (!RUNTIME_MINIMAL) {
       // Water mask: swap tile materials to unlit B&W mask material for mask RT render
@@ -234,7 +246,7 @@ export class App {
           for (const grid of this.city.grids.values()) {
             if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
           }
-          this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane, this.city.globalCells)
+          this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane, this.city.globalCells, this.city.landMaskMaterial)
 
           gsap.to(this._waveFade, {
             opacity: this.params.waves.opacity,
@@ -309,11 +321,12 @@ export class App {
       for (const grid of this.city.grids.values()) {
         if (grid.hexMesh) tileMeshes.push(grid.hexMesh)
       }
-      this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane, this.city.globalCells)
+      this.wavesMask.render(this.scene, tileMeshes, this.city.waterPlane, this.city.globalCells, this.city.landMaskMaterial)
       this.postFX.setOverlayObjects(this.city.getOverlayObjects())
 
       this.postFX.setWaterObjects(this.city.getWaterObjects())
       this.postFX.render()
+      if (restored) this.fadeIn(0)
     }
 
     this.timer.connect(document)
@@ -332,6 +345,10 @@ export class App {
       }
     }
     requestAnimationFrame(loop)
+  }
+
+  publishMap() {
+    window.__WARDOMES_MAP__ = { seed: getSeed(), tiles: this.city.getCanonicalTiles() }
   }
 
   initCamera() {

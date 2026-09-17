@@ -15,8 +15,8 @@ export class GUIManager {
       fov: 20,
     },
     lighting: {
-      envIntensity: 0.95,
-      dirLight: 2.15,
+      envIntensity: 0.65,
+      dirLight: 3.0,
       shadowIntensity: 1.0,
       lightX: 35,
       lightY: 50,

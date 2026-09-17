@@ -2,9 +2,10 @@ import { Object3D, BatchedMesh } from 'three/webgpu'
 import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, rotateHexEdges, LEVELS_COUNT } from './HexTileData.js'
 import { HexTileGeometry } from './HexTiles.js'
 import { random, shuffle } from '../SeededRandom.js'
+import { createTreeGeometry, detailTerrain } from './NaturalGeometry.js'
 import gsap from 'gsap'
 import {
-  LEVEL_HEIGHT, TILE_SURFACE,
+  LEVEL_HEIGHT, TILE_SURFACE, HIGH_GRASS_MOUNTAIN_CHANCE,
   globalNoiseA, globalNoiseB, globalNoiseC,
   getCurrentTreeThreshold, getBuildingThreshold,
   weightedPick, isCoastOrWater, getRoadDeadEndInfo,
@@ -52,6 +53,10 @@ export class Decorations {
     const keepYMeshes = new Set([TOWER_TOP_MESH, ...BuildingMeshNames, ...CoastBuildingMeshNames, ...WindmillMeshNames, ...RareBuildingNames])
 
     for (const meshName of allMeshNames) {
+      if (TreeMeshNames.includes(meshName)) {
+        Decorations.cachedGeoms.set(meshName, createTreeGeometry(meshName))
+        continue
+      }
       let geom = null
       gltfScene.traverse((child) => {
         if (child.name === meshName && child.geometry) {
@@ -67,10 +72,13 @@ export class Decorations {
         }
       })
       if (geom) {
-        // Sink mountain meshes so they appear shorter
-        if (MountainMeshNames.includes(meshName)) {
-          geom.translate(0, -0.5, 0)
+        if (MountainMeshNames.includes(meshName) || HillMeshNames.includes(meshName) || RockMeshNames.includes(meshName)) {
+          const authored = geom
+          geom = detailTerrain(authored, meshName)
+          authored.dispose()
         }
+        geom.computeBoundingBox()
+        geom.computeBoundingSphere()
         Decorations.cachedGeoms.set(meshName, geom)
       } else {
         console.warn(`[Dec] NOT FOUND: ${meshName}`)
@@ -750,8 +758,9 @@ export class Decorations {
 
       if (!isCliff && !isRiverEnd && !isHighGrass) continue
 
-      // 10% for cliffs, 30% for river ends, 15% for high grass
-      const chance = isRiverEnd ? 0.7 : isHighGrass ? 0.1 : 0.1
+      // High plateaus carry a chain of peaks; roads and occupied tiles are
+      // excluded above, so their authored connection/clearance stays intact.
+      const chance = isRiverEnd ? 0.7 : isHighGrass ? HIGH_GRASS_MOUNTAIN_CHANCE : 0.1
       if (random() > chance) continue
 
       const localPos = HexTileGeometry.getWorldPosition(
@@ -1037,9 +1046,10 @@ export class Decorations {
       // Hills and mountains
       const isCliff = def.levelIncrement && name.includes('CLIFF')
       const isRiverEnd = name === 'RIVER_END'
-      const isHighGrass = name === 'GRASS' && tile.level >= 2
-      if ((isCliff || isRiverEnd || isHighGrass) && this.mesh) {
-        const chance = isRiverEnd ? 0.7 : isHighGrass ? 0.1 : 0.1
+      const isHighGrass = name === 'GRASS' && tile.level >= LEVELS_COUNT - 1
+      const occupied = this.buildings.some(b => b.tile.id === tile.id) || this.trees.some(t => t.tile.id === tile.id)
+      if ((isCliff || isRiverEnd || isHighGrass) && this.mesh && !occupied) {
+        const chance = isRiverEnd ? 0.7 : isHighGrass ? HIGH_GRASS_MOUNTAIN_CHANCE : 0.1
         if (random() <= chance) {
           if (isHighGrass) {
             const mtCountBefore = this.mountains.length

@@ -4,7 +4,7 @@ import {
   Mesh, PlaneGeometry, CircleGeometry, MeshBasicNodeMaterial, Color, Vector2, Vector4,
   InstancedMesh, Object3D, DynamicDrawUsage,
 } from 'three/webgpu'
-import { vec3, vec2, uv, float, texture, uniform, select } from 'three/tsl'
+import { vec3, vec2, uv, float, texture, uniform } from 'three/tsl'
 import { CUBE_DIRS, cubeKey, cubeToOffset } from '../HexWFCCore.js'
 import { TileType } from '../HexTileData.js'
 import { HexTileGeometry } from '../HexTiles.js'
@@ -19,8 +19,8 @@ import { HexTileGeometry } from '../HexTiles.js'
  *   2 hex tiles (target wave reach) ≈ 45px
  *
  * Pipeline (runs once after grid build):
- *   1. Render tile BatchedMeshes top-down (hide everything else)
- *   2. Dilation: blue → black (water), non-blue bright → white (land), max-filter expand → _rtA
+ *   1. Render the canonical land/water mask top-down (hide everything else)
+ *   2. Dilate white land into black water, max-filter expand → _rtA
  *   3. Blur: smooth into coast distance gradient → _rtA
  *   4. Cove: white hexes at concave cells → dilate → blur → _rtCove
  */
@@ -64,7 +64,7 @@ export class WavesMask {
     // Shared direction uniform for both dilation materials
     this._dilateDir = uniform(new Vector2(1, 0))
 
-    // ---- Dilation material (max-filter with blue detection) ----
+    // ---- Dilation material (max-filter of the canonical land mask) ----
     // Radius 14 → ~14px expansion ≈ 1.2 WU
     const dilateTexNode = texture(this._rtA.texture)
     this._dilateTexNode = dilateTexNode
@@ -73,12 +73,7 @@ export class WavesMask {
     const dilateRadius = 14
 
     function sampleMask(uvCoord) {
-      const s = dilateTexNode.sample(uvCoord)
-      const lum = s.r.mul(0.2126).add(s.g.mul(0.7152)).add(s.b.mul(0.0722))
-      const isBlue = s.b.greaterThan(s.r.mul(2.0))
-        .and(s.b.greaterThan(s.g.mul(1.15)))
-        .and(s.b.sub(s.r).greaterThan(0.15))
-      return select(isBlue, float(0), select(lum.greaterThan(0.03), float(1), float(0)))
+      return dilateTexNode.sample(uvCoord).r
     }
 
     let maxVal = sampleMask(dilateUV)
@@ -164,9 +159,9 @@ export class WavesMask {
     this._coveScene.add(this._coveInstanced)
     this._coveObj = new Object3D()
 
-    // ---- Solid blue material (for water plane in mask render) ----
-    this._blueMat = new MeshBasicNodeMaterial()
-    this._blueMat.colorNode = vec3(0, 0, float(1))
+    // ---- Black water material (for the binary land mask) ----
+    this._waterMat = new MeshBasicNodeMaterial()
+    this._waterMat.colorNode = vec3(0)
   }
 
   /** Swap material on shared quad and render to target */
@@ -181,13 +176,14 @@ export class WavesMask {
    * Hides everything in the scene except the tile meshes and water plane.
    * @param {Scene} mainScene
    * @param {Object3D[]} showMeshes - tile BatchedMeshes to render
-   * @param {Mesh} [waterPlane] - water plane mesh (rendered as blue for water detection)
+   * @param {Mesh} [waterPlane] - water plane mesh (black in the land mask)
    * @param {Map} [globalCells] - global cell map for cove probe
+   * @param {Material} landMaskMaterial - unlit inverse of the shared water atlas mask
    */
-  render(mainScene, showMeshes = [], waterPlane = null, globalCells = null) {
+  render(mainScene, showMeshes = [], waterPlane = null, globalCells = null, landMaskMaterial) {
     const { renderer, _sceneCam, _rtA, _rtB } = this
 
-    // ---- Step 1: render tiles + blue water plane top-down to _rtA ----
+    // ---- Step 1: render land white and water black, independent of lighting/palette ----
     const savedBackground = mainScene.background
     const savedClearColor = renderer.getClearColor(new Color())
     const savedClearAlpha = renderer.getClearAlpha()
@@ -197,7 +193,13 @@ export class WavesMask {
     let savedWaterMat = null
     if (waterPlane) {
       savedWaterMat = waterPlane.material
-      waterPlane.material = this._blueMat
+      waterPlane.material = this._waterMat
+    }
+
+    const savedMaterials = new Map()
+    for (const mesh of showMeshes) {
+      savedMaterials.set(mesh, mesh.material)
+      mesh.material = landMaskMaterial
     }
 
     const showSet = new Set(showMeshes)
@@ -218,6 +220,7 @@ export class WavesMask {
     mainScene.background = savedBackground
     for (const [obj, vis] of savedVis) obj.visible = vis
     if (waterPlane && savedWaterMat) waterPlane.material = savedWaterMat
+    for (const [mesh, material] of savedMaterials) mesh.material = material
 
     // ---- Step 2: Dilation (H+V) ----
     this._dilateTexNode.value = _rtA.texture

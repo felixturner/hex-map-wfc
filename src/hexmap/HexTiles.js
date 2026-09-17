@@ -1,5 +1,6 @@
 import { GLTFLoader } from 'three/examples/jsm/Addons.js'
 import { Color } from 'three/webgpu'
+import { detailTerrain } from './NaturalGeometry.js'
 import {
   TILE_LIST,
   TileType,
@@ -212,9 +213,13 @@ export class HexTileGeometry {
     }
 
     // Clone and scale geometry — origin from Blender is trusted (centered XZ, Y at surface)
-    const geom = mesh.geometry.clone()
+    let geom = mesh.geometry.clone()
     geom.scale(this.SCALE, this.SCALE, this.SCALE)
     geom.translate(0, 1 * this.SCALE, 0)
+
+    const authored = geom
+    geom = detailTerrain(authored, meshName)
+    authored.dispose()
 
     geom.computeBoundingBox()
     geom.computeBoundingSphere()
