@@ -1,3 +1,4 @@
+import { stateWeight } from '../maps/GenerationSettings.js'
 /**
  * WFC Web Worker
  * Runs WFC solver in a separate thread to prevent UI freezing
@@ -27,6 +28,8 @@ class HexWFCSolver {
   constructor(rules, options = {}) {
     this.rules = rules
     this.options = {
+      weights: options.weights,
+      elevation: options.elevation,
       maxTries: options.maxTries ?? 2,
       tileTypes: options.tileTypes ?? null,
       log: options.log ?? (() => {}),
@@ -178,7 +181,7 @@ class HexWFCSolver {
     const possArray = Array.from(cell.possibilities)
     const weights = possArray.map(k => {
       const state = HexWFCCell.parseKey(k)
-      return TILE_LIST[state.type]?.weight ?? 1
+      return stateWeight(state, this.options)
     })
     const totalWeight = weights.reduce((a, b) => a + b, 0)
     let r = random() * totalWeight
@@ -267,7 +270,7 @@ class HexWFCSolver {
 
     const weights = available.map(k => {
       const state = HexWFCCell.parseKey(k)
-      return TILE_LIST[state.type]?.weight ?? 1
+      return stateWeight(state, this.options)
     })
     const total = weights.reduce((a, b) => a + b, 0)
     let r = random() * total

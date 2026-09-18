@@ -40,28 +40,45 @@ npm run build
 - [Maxim Gumin's WFC](https://github.com/mxgmn/WaveFunctionCollapse) — original Wave Function Collapse
 - [Red Blob Games — Hexagonal Grids](https://www.redblobgames.com/grids/hexagons/) — hex grid reference
 
-## Saved maps
+## Map workshop
 
-Successful full-map solves are automatically saved to IndexedDB in the current
-browser, before their visuals are built. Reloading (including Vite reloads after
-code edits) opens the last saved/opened map without running WFC again.
+Use **Map workshop** at the top right to configure the next generation. Changing
+controls leaves the displayed map untouched until you click **Generate**.
 
-Use the **Saved maps** controls at the bottom right:
+- Adjust lakes/coasts, elevation preference, slopes/cliffs, roads, rivers,
+  trees, structures, mountain peaks, hills, rocks, flowers/bushes, and water plants.
+- Amounts are relative to the original defaults (100%); **Off** excludes that
+  category. Terrain constraints and per-region decoration limits still apply.
+- Forest and settlement patch sizes control clustering independently of amount.
+- **All structures: Off** removes buildings, windmills, rare structures and
+  bridges, and excludes river-crossing tiles that would require bridges.
+- **New seed** changes the pending seed without generating. Keeping the same
+  seed and settings reproduces a generated map with the same version of the code.
+- Mountains occupy eligible high ground and cliffs; raise elevation/ruggedness
+  as well as peak amount for a more mountainous map. Trees and structures compete
+  with peaks for space.
 
-- Select a map and click **Open** to revisit it.
-- **Save current** creates a separate snapshot of the currently populated grids.
-- **Export JSON** downloads the selected save; **Import JSON** opens and saves a
-  copy of an exported map. Export maps you want to keep as durable backups.
-- **New map** attempts a fresh generation and retains previous saves if it fails.
+### Saving and reopening
 
-Saves contain versioned terrain data (tile names, coordinates, rotations,
-elevations, grid layout, and seed), independent of materials and geometry.
-Loading still builds meshes and decorations using the current graphical code,
-but skips the expensive constraint solver. Visual settings and camera position
-are not saved; procedural decorations are rebuilt and may change with code or
-settings. Failed or incomplete full-map solves do not replace saved maps.
+Generated maps are **unsaved previews**. Enter a name and choose **Save as copy**
+to keep one, or **Save changes** to replace the saved map you opened. You can
+continue experimenting without adding every attempt to the library. A failed
+generation restores the previous preview when one exists.
 
-Browser saves belong to the exact site address, including its port, and are lost
-if site data is cleared. Use JSON export/import to move maps between addresses,
-browsers, or machines. If browser storage fails, the controls report the problem
-and keep the solved map available for export for the current session.
+Saves contain the terrain, seed and the generation settings actually used for
+the displayed map. Pending slider edits are never saved as that map’s recipe.
+**Open** restores the saved map without solving again and restores its controls.
+Reload opens the last saved/opened map; with no saves, choose settings and click
+Generate to start. Older version-1 saves remain readable but have no recipe;
+the workshop identifies them and offers defaults for subsequent generation.
+
+**Export JSON** downloads the displayed map and its applied recipe. **Import
+JSON** opens an unsaved preview; use Save as copy to keep it in the library.
+
+Browser saves use IndexedDB and belong to the exact site address, including its
+port. Clearing site data removes them. Export JSON for durable backups or to move
+maps between browsers or machines. Storage errors keep the map in memory for
+export. Camera, lighting and post-processing settings are not part of the recipe.
+Decorations are rebuilt from the seed and recipe; future changes to generation
+or graphical code can change their appearance. Manual Build-mode edits preserve
+terrain snapshots but are not reproduced by generating from the original recipe.

@@ -47,29 +47,46 @@
       .lil-gui.gui-hidden { display: none; }
       #map-library {
         position: fixed;
-        right: 10px;
-        bottom: 58px;
+        right: 12px;
+        top: 12px;
         z-index: 999;
-        max-width: calc(100vw - 20px);
-        padding: 10px;
-        border-radius: 8px;
-        background: rgba(20, 28, 24, 0.9);
-        color: #fff;
-        font: 12px 'Inter', sans-serif;
+        width: 330px;
+        max-width: calc(100vw - 24px);
+        border: 1px solid #64786c;
+        border-radius: 12px;
+        background: rgba(20, 30, 25, 0.96);
+        box-shadow: 0 12px 36px #0005;
+        color: #eef3ef;
+        font: 12px/1.45 'Inter', sans-serif;
       }
-      #map-library > div:first-child { display: flex; flex-wrap: wrap; gap: 6px; }
-      #map-library button, #map-library select {
-        padding: 7px;
-        max-width: 260px;
-        background: #293c32;
-        border: 1px solid #849a8c;
-        border-radius: 4px;
-        color: #fff;
-        font: inherit;
+      #map-library summary { cursor: pointer; padding: 10px 0; font-weight: 500; }
+      #map-library > summary { padding: 14px; font-size: 16px; }
+      #map-library > summary span { display: block; margin: 3px 0 0 16px; color: #b5c6ba; font-size: 11px; }
+      .workshop-body { padding: 0 14px 14px; max-height: calc(100dvh - 150px); overflow-y: auto; overscroll-behavior: contain; }
+      .workshop-intro { margin: 0 0 10px; color: #c6d4cb; }
+      .recipe-controls > details { border-top: 1px solid #ffffff20; }
+      #map-library label { display: block; margin: 9px 0; }
+      #map-library .slider-control { display: grid; grid-template-columns: 1fr auto; gap: 5px; }
+      .slider-control input { grid-column: 1 / -1; width: 100%; margin: 0; accent-color: #b7d99d; }
+      .slider-control output { color: #c9e4b4; font-variant-numeric: tabular-nums; }
+      .workshop-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0; }
+      #map-library button, #map-library select, #map-library input:not([type=range]):not([type=checkbox]) {
+        padding: 8px; min-height: 34px; min-width: 0;
+        background: #293c32; border: 1px solid #687f70; border-radius: 5px; color: #fff; font: inherit;
       }
+      #map-library label > input:not([type=range]):not([type=checkbox]), #map-library select { width: 100%; margin-top: 4px; }
       #map-library button { cursor: pointer; }
-      #map-library button:disabled { opacity: 0.5; cursor: wait; }
-      #map-library [role=status] { margin-top: 8px; max-width: 650px; }
+      #map-library button:hover { background: #3e5547; }
+      #map-library button.primary { width: 100%; background: #bdd99d; color: #172517; border-color: #bdd99d; font-weight: 500; }
+      #map-library :disabled { opacity: 0.45; cursor: default; }
+      #map-library :focus-visible { outline: 2px solid #d8f2bd; outline-offset: 2px; }
+      .workshop-hint, .pending-settings { color: #b5c6ba; font-size: 11px; }
+      .save-section { border-top: 1px solid #ffffff25; padding-top: 6px; }
+      #map-library [role=status] { margin-top: 10px; color: #d5e8c5; }
+      @media (max-width: 600px) {
+        #map-library { top: 76px; right: 8px; width: 300px; }
+        .workshop-body { max-height: calc(100dvh - 230px); }
+      }
       @media (orientation: portrait) {
         #ui-menu { flex-direction: column !important; }
       }

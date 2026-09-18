@@ -1,5 +1,8 @@
 # Map persistence verification
 
+Historical checks for the original autosave workflow. The current explicit-save
+workflow is documented in [Map workshop verification](map-workshop-verification.md).
+
 The persistence changes were checked with seven passing Node tests and a passing
 Vite production build. The build still reports its existing large-bundle and
 mixed static/dynamic Sounds import warnings.

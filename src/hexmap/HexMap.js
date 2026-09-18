@@ -1,3 +1,5 @@
+import { DEFAULT_GENERATION_SETTINGS, validateGenerationSettings } from '../maps/GenerationSettings.js'
+import { applyDecorationSettings } from './DecorationDefs.js'
 import {
   Object3D,
   MeshPhysicalNodeMaterial,
@@ -70,6 +72,7 @@ export class HexMap {
   constructor(scene, params) {
     this.scene = scene
     this.params = params
+    this.generationSettings = { ...DEFAULT_GENERATION_SETTINGS }
 
     // Grid management - all grids (both PLACEHOLDER and POPULATED)
     this.grids = new Map()  // key: "x,z" grid coords, value: HexGrid instance
@@ -392,7 +395,8 @@ export class HexMap {
     const center = grid.globalCenterCube
     const solveCells = cubeCoordsInRadius(center.q, center.r, center.s, this.hexGridRadius)
     const fixedCells = this.getFixedCellsForRegion(solveCells)
-    const includeOceanSeeds = options.includeOceanSeeds ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.includeOceanSeeds : true)
+    const settings = this.generationSettings ?? DEFAULT_GENERATION_SETTINGS
+    const includeOceanSeeds = settings.water > 0 && (options.includeOceanSeeds ?? settings.oceanEdge)
 
     const initialCollapses = options.initialCollapses ?? []
     if (fixedCells.length === 0 && initialCollapses.length === 0) {
@@ -1151,7 +1155,8 @@ export class HexMap {
     const initialCollapses = [
       { q: centerCube.q, r: centerCube.r, s: centerCube.s, type: TileType.GRASS, rotation: 0, level: 0 },
     ]
-    const includeOceanSeeds = options.includeOceanSeeds ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.includeOceanSeeds : true)
+    const settings = this.generationSettings ?? DEFAULT_GENERATION_SETTINGS
+    const includeOceanSeeds = settings.water > 0 && (options.includeOceanSeeds ?? settings.oceanEdge)
     const wfcMaxTries = options.wfcMaxTries ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.wfcMaxTries : 5)
     const wfcMaxBacktracks = options.wfcMaxBacktracks ?? (RUNTIME_MINIMAL ? WARDOMES_MAP_PROFILE.wfcMaxBacktracks : 500)
     if (includeOceanSeeds) {
@@ -1197,8 +1202,7 @@ export class HexMap {
     }
 
     const solveTime = ((performance.now() - startTime) / 1000).toFixed(1)
-    // Persist the expensive solve before building any GPU resources.
-    await this.onMapSolved?.(this.createSnapshot(result.tiles, allGridCoords))
+    // Use the same decoration stream when generating and reopening this map.
     setSeed(getSeed())
     rebuildNoiseTables()
     log(`[BUILD ALL] WFC SUCCESS (${result.tiles.length} tiles, ${solveTime}s, ${result.backtracks || 0} backtracks, ${result.tries || 0} tries)`, 'color: green')
@@ -1798,9 +1802,17 @@ export class HexMap {
       : [...this.grids.values()].filter(grid => grid.state === HexGridState.POPULATED)
     return createMapSnapshot({
       seed: getSeed(), radius: this.hexGridRadius, tiles,
+      generationSettings: this.generationSettings,
       waterSideIndex: this._waterSideIndex,
       grids: grids.map(grid => ({ ...grid.gridCoords, center: { ...grid.globalCenterCube } })),
     })
+  }
+
+  applyGenerationSettings(settings) {
+    this.generationSettings = settings === null ? null : validateGenerationSettings(settings)
+    const applied = this.generationSettings ?? DEFAULT_GENERATION_SETTINGS
+    this.wfcManager.generationSettings = { ...applied }
+    applyDecorationSettings(applied)
   }
 
   async restoreSnapshot(snapshot) {
@@ -1821,6 +1833,7 @@ export class HexMap {
       this.isRegenerating = true
       this._autoBuilding = true
       this._waterSideIndex = decoded.waterSideIndex ?? null
+      this.applyGenerationSettings(decoded.generationSettings)
       setSeed(decoded.seed)
       this.wfcManager.cancelAndRestart()
       rebuildNoiseTables()

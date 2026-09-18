@@ -1,3 +1,4 @@
+import { DEFAULT_GENERATION_SETTINGS, validateGenerationSettings } from '../maps/GenerationSettings.js'
 import { Color } from 'three/webgpu'
 import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, LEVELS_COUNT } from './HexTileData.js'
 import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js'
@@ -29,6 +30,22 @@ let currentTreeNoiseFreq = 0.05
 let currentTreeThreshold = 0.5
 let currentBuildingNoiseFreq = 0.02
 let currentBuildingThreshold = 0.77
+
+export let decorationSettings = { ...DEFAULT_GENERATION_SETTINGS }
+
+// Applying a recipe consumes no RNG. Rebuild noise once after seeding at the
+// start of visual population, identically for generation and restored maps.
+export function applyDecorationSettings(settings) {
+  decorationSettings = validateGenerationSettings(settings)
+  currentTreeNoiseFreq = 0.05 / settings.treePatchSize
+  currentTreeThreshold = Math.max(0.02, 1 - 0.5 * settings.trees)
+  currentBuildingNoiseFreq = 0.02 / settings.buildingPatchSize
+  currentBuildingThreshold = Math.max(0.02, 1 - 0.23 * settings.structures)
+}
+
+export function hillDefinitions(defs) {
+  return decorationSettings.trees === 0 ? defs.filter(d => !d.name.includes('_trees')) : defs
+}
 
 export function initGlobalTreeNoise(frequency = 0.05) {
   setTreeNoiseFrequency(frequency)
@@ -283,3 +300,16 @@ export const MAX_HENGES = 2
 
 // Single merged BatchedMesh limit
 export const MAX_DEC_INSTANCES = MAX_TREES + MAX_FLOWERS + MAX_BUILDINGS + MAX_BRIDGES + MAX_WATERLILIES + MAX_ROCKS + MAX_HILLS + MAX_MOUNTAINS + MAX_HENGES + 1  // all decorations + dummy
+
+// Central gate covers full population, local repairs and fallback decorations.
+export function decorationAllowed(name, settings) {
+  if (!name) return false
+  if ((TreeMeshNames.includes(name) || name.includes('_trees')) && settings.trees === 0) return false
+  if ((name.startsWith('building_') || RareBuildingNames.includes(name)) && settings.structures === 0) return false
+  if (HillMeshNames.includes(name) && settings.hills === 0) return false
+  if (MountainMeshNames.includes(name) && settings.mountains === 0) return false
+  if (RockMeshNames.includes(name) && settings.rocks === 0) return false
+  if (FlowerMeshNames.includes(name) && settings.flowers === 0) return false
+  if (WaterlilyMeshNames.includes(name) && settings.waterlilies === 0) return false
+  return true
+}

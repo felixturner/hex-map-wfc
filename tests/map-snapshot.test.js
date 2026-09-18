@@ -59,3 +59,31 @@ test('slopes cannot exceed the elevation limit', () => {
   snapshot.tiles[0].level = 4
   assert.throws(() => decodeMapSnapshot(snapshot), /elevation/)
 })
+
+test('generation recipes are copied into snapshots and restored after serialization', () => {
+  const snapshot = fixture()
+  snapshot.generationSettings.trees = 2
+  snapshot.generationSettings.roads = 0
+  const decoded = decodeMapSnapshot(JSON.parse(JSON.stringify(snapshot)))
+  assert.equal(decoded.generationSettings.trees, 2)
+  assert.equal(decoded.generationSettings.roads, 0)
+  assert.notEqual(decoded.generationSettings, snapshot.generationSettings)
+  assert.equal(fixture().generationSettings.trees, 1)
+})
+
+test('legacy saves remain readable without inventing their original recipe', () => {
+  const snapshot = fixture()
+  snapshot.version = 1
+  delete snapshot.generationSettings
+  const decoded = decodeMapSnapshot(snapshot)
+  assert.equal(decoded.generationSettings, null)
+  assert.equal(decoded.tiles.length, 7)
+})
+
+test('version 2 saves require a valid recipe or explicit unknown legacy recipe', () => {
+  const snapshot = fixture()
+  delete snapshot.generationSettings
+  assert.throws(() => decodeMapSnapshot(snapshot), /generation settings/)
+  snapshot.generationSettings = null
+  assert.equal(decodeMapSnapshot(snapshot).generationSettings, null)
+})

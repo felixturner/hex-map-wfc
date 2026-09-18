@@ -1,3 +1,4 @@
+import { DEFAULT_GENERATION_SETTINGS, terrainOptions } from '../maps/GenerationSettings.js'
 import WFCWorker from '../workers/wfc.worker.js?worker'
 import { HexWFCAdjacencyRules, CUBE_DIRS, cubeKey, parseCubeKey } from './HexWFCCore.js'
 import { TILE_LIST, HexDir, HexOpposite, rotateHexEdges, LEVELS_COUNT } from './HexTileData.js'
@@ -11,6 +12,7 @@ import { getSeed } from '../SeededRandom.js'
 export class WFCManager {
   constructor(globalCells) {
     this.globalCells = globalCells
+    this.generationSettings = { ...DEFAULT_GENERATION_SETTINGS }
 
     this.hexWfcRules = null
     this.wfcWorker = null
@@ -99,7 +101,7 @@ export class WFCManager {
         id,
         solveCells,
         fixedCells,
-        options
+        options: { ...options, ...terrainOptions(this.generationSettings) }
       })
     })
   }
@@ -283,6 +285,6 @@ export class WFCManager {
 
   /** Get default tile types for WFC */
   getDefaultTileTypes() {
-    return TILE_LIST.map((_, i) => i)
+    return terrainOptions(this.generationSettings).tileTypes
   }
 }

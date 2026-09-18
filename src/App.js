@@ -22,7 +22,7 @@ import { setSeed, getSeed } from './SeededRandom.js'
 import { MapLibrary } from './maps/MapLibrary.js'
 import { LEVELS_COUNT } from './hexmap/HexTileData.js'
 import gsap from 'gsap'
-import { RUNTIME_MINIMAL, WARDOMES_MAP_PROFILE } from './runtimeConfig.js'
+import { RUNTIME_MINIMAL } from './runtimeConfig.js'
 
 // Global status update function
 export function setStatus(text) {
@@ -139,21 +139,12 @@ export class App {
         await this.mapLibrary.open(savedMap)
         restored = true
       } catch (error) {
-        this.mapLibrary.message(`Could not open saved map: ${error.message}. Import another map or choose New map.`)
+        this.mapLibrary.message(`Could not open saved map: ${error.message}. Import another map or click Generate.`)
       }
     }
 
+    // Without a saved map, the workshop lets the user choose a recipe before generating.
     if (RUNTIME_MINIMAL) {
-      // In wardomes mode we need a fully generated world immediately.
-      // A broken save leaves the library available for recovery; do not silently
-      // start another multi-minute solve when the user expected to open a map.
-      if (!savedMap && !this.mapLibrary.hasStoredMaps) await this.city.populateAllGrids(null, {
-        animate: false,
-        animateDelay: 0,
-        includeOceanSeeds: WARDOMES_MAP_PROFILE.includeOceanSeeds,
-        wfcMaxTries: WARDOMES_MAP_PROFILE.wfcMaxTries,
-        wfcMaxBacktracks: WARDOMES_MAP_PROFILE.wfcMaxBacktracks,
-      })
       // Minimal mode skips coast-mask postfx; hiding this plane avoids visual artifacts.
       if (this.city.water?.mesh) this.city.water.mesh.visible = false
     }
@@ -541,18 +532,15 @@ export class App {
 
     // Action buttons
     const actions = [
-      { label: 'Build All', action: () => {
-        this.city.autoBuild([
-          [0,0],[0,-1],[1,-1],[1,0],[0,1],[-1,0],[-1,-1],[-1,-2],[0,-2],[1,-2],[2,-1],[2,0],[2,1],[1,1],[0,2],[-1,1],[-2,1],[-2,0],[-2,-1]
-        ])
-      }},
-      { label: 'Clear All', action: () => {
-        this.city.reset()
-        this.city.setHelpersVisible(this.params.debug.hexGrid)
-        this.perspCamera.position.set(0, 100, 58.5)
-        this.controls.target.set(0, 1, 0)
-        this.controls.update()
-      }},
+      { label: 'Generate', action: () => this.mapLibrary.run(() => this.mapLibrary.generate()) },
+      { label: 'Clear All', action: () => this.mapLibrary.run(async () => {
+        await this.city.reset()
+        this.mapLibrary.current = null
+        this.mapLibrary.sourceId = null
+        this.mapLibrary.refresh()
+        this.mapLibrary.message('Map cleared. Generate or open a saved map.')
+        this.publishMap()
+      }) },
     ]
 
     for (const { label, action } of actions) {
