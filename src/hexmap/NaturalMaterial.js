@@ -77,10 +77,17 @@ export async function createNaturalSurface({ summer, winter, blended, elevation,
   // Retain some of the seasonal palette when users change biomes in the GUI.
   const meadow = mix(grassColor, summer.rgb.mul(vec3(0.65, 0.85, 0.5)), 0.18)
   const rock = rockDetail.rgb.mul(macro.r.mul(0.5).add(0.6))
-  const snowAmount = elevation.add(macro.r.sub(0.5).mul(0.5)).sub(rockySlope.mul(0.36)).smoothstep(0.55, 0.93)
-  const snowColor = mix(vec3(0.66, 0.73, 0.76), winter.rgb, 0.4).mul(groundDetail.g.mul(0.15).add(0.9))
-  const terrain = mix(mix(meadow, rock, rockySlope), snowColor, snowAmount)
-  const stoneColor = mix(rock, snowColor, snowAmount.mul(up.smoothstep(0.4, 0.85)))
+  // Snow settles in drifts on shelves, with wind-scoured rock on steep faces.
+  const drift = texture(detailTexture, p.xz.mul(0.24)).r
+  const snowLine = elevation.add(macro.r.sub(0.5).mul(0.35)).smoothstep(0.48, 0.9)
+  const retention = up.add(drift.sub(0.5).mul(0.22)).smoothstep(0.58, 0.96)
+  const snowAmount = snowLine.mul(retention)
+  const snowGrain = texture(detailTexture, p.xz.mul(vec2(1.6, 0.45)))
+  const snowColor = mix(vec3(0.39, 0.51, 0.61), vec3(0.83, 0.87, 0.88), drift.mul(0.65).add(snowGrain.r.mul(0.35)))
+    .mul(snowGrain.g.mul(0.12).add(0.94))
+  const alpineGround = mix(meadow, rock, max(rockySlope, snowLine.mul(0.88)))
+  const terrain = mix(alpineGround, snowColor, snowAmount)
+  const stoneColor = mix(rock, snowColor, snowAmount)
   const leafColor = mix(vec3(0.012, 0.034, 0.012), vec3(0.075, 0.12, 0.025), macro.r)
     .mul(groundDetail.g.mul(0.65).add(0.65))
   const leaves = mix(leafColor, snowColor, snowAmount.mul(up.smoothstep(0.1, 0.75)).mul(0.8))
@@ -105,9 +112,22 @@ export async function createNaturalSurface({ summer, winter, blended, elevation,
   const waterColor = mix(vec3(0.016, 0.059, 0.073), vec3(0.042, 0.135, 0.14), shallows)
     .add(vec3(0.10, 0.16, 0.16).mul(wave.pow(18)).mul(ripple.g.smoothstep(0.52, 0.73)).mul(0.4))
     .add(vec3(0.6, 0.68, 0.66).mul(foam))
-  color = select(water, waterColor, color)
-  const normal = bumpMap(select(water, ripple.g, select(stone.or(grass.and(up.lessThan(0.85))), rockDetail.g, grassPhoto.g)), select(water, 0.13, select(foliage, 0.008, 0.045)))
-  const roughness = select(water, float(0.27).add(ripple.r.mul(0.08)), select(foliage, 0.93, float(0.82).add(groundDetail.g.mul(0.16))))
+  // World-space height makes the streaks travel down regardless of tile rotation.
+  // Steep drops carry more whitewater; horizontal river stretches stay calm.
+  // Ignore the authored tile rim: its bevel is not a drop in the river.
+  const fallZone = localPosition.x.smoothstep(-0.85, -0.65).mul(float(1).sub(localPosition.x.smoothstep(-0.35, -0.15)))
+  const fallStrength = float(1).sub(up).smoothstep(0.025, 0.5).mul(fallZone)
+  const fallingDetail = texture(detailTexture, vec2(p.x.add(p.z).mul(5), p.y.mul(1.6).add(clock.mul(0.8))))
+  const streaks = fallingDetail.g.smoothstep(0.28, 0.7)
+  const fallingWater = mix(vec3(0.08, 0.23, 0.28), vec3(0.72, 0.86, 0.88), streaks.mul(0.7).add(0.22))
+  color = select(water, mix(waterColor, fallingWater, fallStrength), color)
+  const groundBump = select(stone.or(up.lessThan(0.85)), rockDetail.g, grassPhoto.g)
+  const snowBump = snowGrain.g.mul(0.35).add(drift.mul(0.65))
+  const terrainBump = select(stone.or(grass), mix(groundBump, snowBump, snowAmount), grassPhoto.g)
+  const waterBump = mix(ripple.g, fallingDetail.g, fallStrength)
+  const normal = bumpMap(select(water, waterBump, terrainBump), select(water, mix(0.13, 0.04, fallStrength), select(foliage, 0.008, 0.045)))
+  const waterRoughness = mix(float(0.27).add(ripple.r.mul(0.08)), float(0.65), fallStrength)
+  const roughness = select(water, waterRoughness, select(foliage, 0.93, float(0.82).add(groundDetail.g.mul(0.16))))
   return {
     color,
     normal: select(debugMode.equal(0), normal, normalViewGeometry),

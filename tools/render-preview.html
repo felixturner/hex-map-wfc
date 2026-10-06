@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Render-only export verification</title>
+<style>body{margin:0;background:#dfe7db;font:16px system-ui;color:#182820}canvas{display:block;width:100vw;height:100vh}aside{position:absolute;left:20px;top:20px;padding:16px;max-width:430px;background:#ffffffed;border-radius:12px}h1{font-size:20px;margin:0 0 8px}p{margin:6px 0}#result{white-space:pre-wrap;font-size:13px}</style>
+<aside><h1>Render-only export verification</h1><p>Terrain and saved scenery from the paired JSON example.</p><div id="result">Loading render document and immutable assets…</div></aside>
+<script type="module">
+import { Scene, OrthographicCamera, AmbientLight, DirectionalLight, Color, Box3, Vector3 } from 'three'
+import { WebGPURenderer } from 'three/webgpu'
+import { loadRenderGroup } from '../src/maps/RenderAssets.js'
+const result = document.querySelector('#result')
+try {
+  const index = await (await fetch('/examples/paired/index.json')).json()
+  const render = await (await fetch(`/examples/paired/${index.render}`)).json()
+  const requests = []
+  const group = await loadRenderGroup(render, location.origin + '/', { fetchAsset: url => {
+    if (url.pathname.includes('.resources.json')) throw new Error('Resource file requested')
+    requests.push(url.pathname.split('/').at(-1))
+    return fetch(url)
+  } })
+  const scene = new Scene(); scene.background = new Color('#dfe7db'); scene.add(group)
+  scene.add(new AmbientLight(0xffffff, 2))
+  const sun = new DirectionalLight(0xffffff, 3); sun.position.set(10, 25, 12); scene.add(sun)
+  const bounds = new Box3().setFromObject(group), center = bounds.getCenter(new Vector3())
+  const size = bounds.getSize(new Vector3()), half = Math.max(size.x, size.z) * 0.8
+  const aspect = innerWidth / innerHeight
+  const camera = new OrthographicCamera(-half * aspect, half * aspect, half, -half, 0.1, 500)
+  camera.position.copy(center).add(new Vector3(24, 32, 30)); camera.lookAt(center)
+  const renderer = new WebGPURenderer({ antialias: true }); await renderer.init()
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight)
+  document.body.append(renderer.domElement); renderer.render(scene, camera)
+  result.textContent = `PASS: ${render.tiles.length} terrain tiles, ${render.landscape.grids.reduce((n,g)=>n+g.instances.length,0)} saved scenery instances\nResource file requests: 0\nVerified assets: ${requests.join(', ')}\nBackend: ${renderer.backend.constructor.name}`
+} catch (error) { result.textContent = `FAIL: ${error.stack}`; console.error(error) }
+</script></html>

@@ -1,4 +1,4 @@
-import { Object3D, BatchedMesh } from 'three/webgpu'
+import { Object3D, BatchedMesh, Matrix4 } from 'three/webgpu'
 import { TILE_LIST, TileType, HexDir, getHexNeighborOffset, rotateHexEdges, LEVELS_COUNT } from './HexTileData.js'
 import { HexTileGeometry } from './HexTiles.js'
 import { random, shuffle } from '../SeededRandom.js'
@@ -111,6 +111,7 @@ export class Decorations {
 
     // Instance IDs invalidated by clearDecorationsAt (prevents stale animation tweens)
     this._invalidDecIds = new Set()
+    this.placementMatrices = new Map()
 
     this.dummy = new Object3D()
   }
@@ -130,7 +131,10 @@ export class Decorations {
   /** Delete all instances in an array from a BatchedMesh */
   _clearInstances(items, mesh) {
     if (!mesh) return
-    for (const item of items) mesh.deleteInstance(item.instanceId)
+    for (const item of items) {
+      mesh.deleteInstance(item.instanceId)
+      this.placementMatrices.delete(item.instanceId)
+    }
   }
 
   /** Create a decoration instance: add geometry, set color/transform, return instanceId (-1 on failure) */
@@ -146,8 +150,47 @@ export class Decorations {
     this.dummy.rotation.set(0, rotY, 0)
     this.dummy.scale.setScalar(scale)
     this.dummy.updateMatrix()
-    mesh.setMatrixAt(instanceId, this.dummy.matrix)
+    this.setPlacementMatrix(instanceId, this.dummy.matrix)
     return instanceId
+  }
+
+  // Keep final placements separate from the transient drop-in animation matrices.
+  setPlacementMatrix(instanceId, matrix) {
+    this.mesh.setMatrixAt(instanceId, matrix)
+    this.placementMatrices.set(instanceId, matrix.clone())
+  }
+
+  exportLandscape() {
+    const instances = []
+    for (const kind of ['trees', 'rocks', 'hills', 'mountains']) {
+      for (const item of this[kind]) {
+        const matrix = this.placementMatrices.get(item.instanceId)
+        if (!matrix) throw new Error('Landscape placement is missing')
+        instances.push({ kind, mesh: item.meshName, tile: { x: item.tile.gridX, z: item.tile.gridZ }, matrix: matrix.toArray() })
+      }
+    }
+    return instances
+  }
+
+  restoreLandscape(instances, hexTiles) {
+    for (const kind of ['trees', 'rocks', 'hills', 'mountains']) {
+      this._clearInstances(this[kind], this.mesh)
+      this[kind] = []
+    }
+    const tiles = new Map(hexTiles.map(tile => [`${tile.gridX},${tile.gridZ}`, tile]))
+    for (const saved of instances) {
+      const tile = tiles.get(`${saved.tile.x},${saved.tile.z}`)
+      const geomId = this.geomIds.get(saved.mesh)
+      if (!tile || geomId === undefined) throw new Error('Saved landscape asset or tile is unavailable')
+      // A persisted placement is authoritative, even with an unknown legacy recipe.
+      const instanceId = this.mesh.addInstance(geomId)
+      this._invalidDecIds.delete(instanceId)
+      const matrix = new Matrix4().fromArray(saved.matrix)
+      this.setPlacementMatrix(instanceId, matrix)
+      this.mesh.setColorAt(instanceId, levelColor(tile.level))
+      const rotationY = Math.atan2(saved.matrix[8], saved.matrix[0])
+      this[saved.kind].push({ tile, meshName: saved.mesh, instanceId, rotationY })
+    }
   }
 
   async init(material) {
@@ -292,7 +335,7 @@ export class Decorations {
       this.dummy.scale.setScalar(1 + random() * 0.2)
       this.dummy.updateMatrix()
 
-      this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
+      this.setPlacementMatrix(instanceId, this.dummy.matrix)
       this.trees.push({ tile, meshName, instanceId, rotationY, ox, oz })
     }
   }
@@ -998,7 +1041,7 @@ export class Decorations {
               this.dummy.rotation.set(0, rotY, 0)
               this.dummy.scale.setScalar(1)
               this.dummy.updateMatrix()
-              this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
+              this.setPlacementMatrix(instanceId, this.dummy.matrix)
               this.trees.push({ tile, meshName, instanceId, rotationY: rotY, ox, oz })
               newItems.push({ mesh: this.mesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY: rotY })
             }
@@ -1044,7 +1087,7 @@ export class Decorations {
             this.dummy.rotation.y = rotationY
             this.dummy.scale.setScalar(2)
             this.dummy.updateMatrix()
-            this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
+            this.setPlacementMatrix(instanceId, this.dummy.matrix)
             this.waterlilies.push({ tile, meshName, instanceId, rotationY, ox, oz })
             newItems.push({ mesh: this.mesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY, scale: 2 })
           }
@@ -1081,7 +1124,7 @@ export class Decorations {
                   this.dummy.rotation.y = rotationY
                   this.dummy.scale.setScalar(1)
                   this.dummy.updateMatrix()
-                  this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
+                  this.setPlacementMatrix(instanceId, this.dummy.matrix)
                   this.hills.push({ tile, meshName, instanceId, rotationY })
                   newItems.push({ mesh: this.mesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY })
                 }
@@ -1101,7 +1144,7 @@ export class Decorations {
                 this.dummy.rotation.y = rotationY
                 this.dummy.scale.setScalar(1)
                 this.dummy.updateMatrix()
-                this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
+                this.setPlacementMatrix(instanceId, this.dummy.matrix)
                 this.hills.push({ tile, meshName, instanceId, rotationY })
                 newItems.push({ mesh: this.mesh, instanceId, x: localPos.x, y, z: localPos.z, rotationY })
               }
@@ -1128,7 +1171,7 @@ export class Decorations {
             this.dummy.rotation.y = rotationY
             this.dummy.scale.setScalar(1)
             this.dummy.updateMatrix()
-            this.mesh.setMatrixAt(instanceId, this.dummy.matrix)
+            this.setPlacementMatrix(instanceId, this.dummy.matrix)
             this.rocks.push({ tile, meshName, instanceId, rotationY, ox, oz })
             newItems.push({ mesh: this.mesh, instanceId, x: localPos.x + ox, y, z: localPos.z + oz, rotationY })
           }
@@ -1159,7 +1202,9 @@ export class Decorations {
       return items.filter(item => {
         if (item.tile.gridX === gridX && item.tile.gridZ === gridZ) {
           this._invalidDecIds.add(item.instanceId)
-          mesh.deleteInstance(item.instanceId); return false
+          mesh.deleteInstance(item.instanceId)
+          this.placementMatrices.delete(item.instanceId)
+          return false
         }
         return true
       })

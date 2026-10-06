@@ -339,7 +339,10 @@ export class App {
   }
 
   publishMap() {
-    window.__WARDOMES_MAP__ = { seed: getSeed(), tiles: this.city.getCanonicalTiles() }
+    window.__Ashdomes_MAP__ = {
+      seed: getSeed(),
+      tiles: this.city.getCanonicalTiles(),
+    };
   }
 
   initCamera() {

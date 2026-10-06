@@ -1,16 +1,19 @@
+import { RENDER_FORMAT, validateEnvelope, validateAssetManifest } from './ExportContract.js'
+import { validateLandscape, validateMapResources } from './ResourceValidation.js'
 import { DEFAULT_GENERATION_SETTINGS, validateGenerationSettings } from './GenerationSettings.js'
 import { TILE_LIST, LEVELS_COUNT } from '../hexmap/HexTileData.js'
 import { cubeCoordsInRadius, cubeKey } from '../hexmap/HexWFCCore.js'
 
 const FORMAT = 'hex-map-wfc'
-const VERSION = 2
+const VERSION = 3
 const tileTypes = new Map(TILE_LIST.map((tile, index) => [tile.name, index]))
 const integer = (value, min, max) => Number.isInteger(value) && value >= min && value <= max
 
 // Save semantic tile names: numeric IDs can change when tile definitions are reordered.
-export function createMapSnapshot({ seed, radius, grids, tiles, name, waterSideIndex = null, generationSettings = DEFAULT_GENERATION_SETTINGS }) {
+export function createMapSnapshot({ seed, radius, grids, tiles, name, waterSideIndex = null, generationSettings = DEFAULT_GENERATION_SETTINGS, landscape, resources }) {
   const snapshot = {
-    format: FORMAT, version: VERSION,
+    format: FORMAT, version: resources ? VERSION : 2,
+    ...(resources ? { landscape, resources } : {}),
     id: crypto.randomUUID(), createdAt: new Date().toISOString(),
     name: name || `Map ${seed ?? 'unseeded'} — ${new Date().toLocaleString()}`,
     seed, radius, grids, waterSideIndex,
@@ -25,8 +28,17 @@ export function createMapSnapshot({ seed, radius, grids, tiles, name, waterSideI
 
 // Validate the entire document before storage or any scene mutation.
 export function decodeMapSnapshot(snapshot) {
+  const renderOnly = snapshot?.format === RENDER_FORMAT
+  if (renderOnly) {
+    validateEnvelope(snapshot, RENDER_FORMAT)
+    validateAssetManifest(snapshot.assets)
+    if (Object.hasOwn(snapshot, 'resources')) throw new Error('Render export must not contain resources')
+    validateLandscape(snapshot)
+    const decoded = decodeMapSnapshot({ ...snapshot, format: FORMAT, version: 2 })
+    return { ...decoded, format: RENDER_FORMAT, version: 1, landscape: snapshot.landscape }
+  }
   const fail = message => { throw new Error(`Invalid saved map: ${message}`) }
-  if (!snapshot || snapshot.format !== FORMAT || ![1, VERSION].includes(snapshot.version)) fail('unsupported format or version')
+  if (!snapshot || snapshot.format !== FORMAT || ![1, 2, VERSION].includes(snapshot.version)) fail('unsupported format or version')
   if (typeof snapshot.id !== 'string' || !snapshot.id || snapshot.id.length > 100 ||
       typeof snapshot.name !== 'string' || !snapshot.name.trim() || snapshot.name.length > 200 ||
       typeof snapshot.createdAt !== 'string' || !Number.isFinite(Date.parse(snapshot.createdAt))) fail('invalid metadata')
@@ -47,7 +59,7 @@ export function decodeMapSnapshot(snapshot) {
     for (const cell of cubeCoordsInRadius(c.q, c.r, c.s, snapshot.radius)) expected.add(cubeKey(cell.q, cell.r, cell.s))
   }
   let generationSettings = null
-  if (snapshot.version === VERSION && snapshot.generationSettings !== null) {
+  if (snapshot.version >= 2 && snapshot.generationSettings !== null) {
     try { generationSettings = validateGenerationSettings(snapshot.generationSettings) }
     catch (error) { fail(error.message) }
   }
@@ -63,5 +75,9 @@ export function decodeMapSnapshot(snapshot) {
     return { q: cell.q, r: cell.r, s: cell.s, type, rotation: cell.rotation, level: cell.level }
   })
   if (expected.size) fail('map is incomplete')
-  return { ...snapshot, tiles, generationSettings }
+  if (snapshot.version === VERSION) validateMapResources(snapshot)
+  return { ...snapshot, tiles, generationSettings,
+    landscape: snapshot.version === VERSION ? snapshot.landscape : undefined,
+    resources: snapshot.version === VERSION ? snapshot.resources : undefined,
+  }
 }

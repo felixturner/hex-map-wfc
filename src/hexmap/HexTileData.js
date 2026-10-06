@@ -184,6 +184,10 @@ const BASE_TILE_LIST = [
   { name: 'GRASS_CLIFF_LOW_C', mesh: 'hex_grass',
     edges: { NE: 'grass', E: 'grass', SE: 'grass', SW: 'grass', W: 'grass', NW: 'grass' },
     weight: 6, highEdges: ['E'], levelIncrement: 1 },
+  // Append to preserve existing numeric tile IDs in legacy maps.
+  { name: 'RIVER_A_SLOPE_HIGH', mesh: 'river_slope_low',
+    edges: { NE: 'grass', E: 'river', SE: 'grass', SW: 'grass', W: 'river', NW: 'grass' },
+    weight: 1, highEdges: ['NE', 'E', 'SE'], levelIncrement: 2 },
 ]
 
 export const TILE_LIST = BASE_TILE_LIST.map((tile) => ({

@@ -37,6 +37,7 @@ export const TILE_WEIGHTS = {
 
   // River slopes / transitions
   RIVER_A_SLOPE_LOW: 1,
+  RIVER_A_SLOPE_HIGH: 1,
   RIVER_INTO_COAST: 3,
 
   // Crossings

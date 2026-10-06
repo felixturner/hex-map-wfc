@@ -66,3 +66,29 @@ test('replacement tree assets are repeatable, bounded, and do not consume the ma
   }
   assert.equal(random(), expected)
 })
+
+test('river drops form steep curtains with unchanged channel ends and taller high falls', () => {
+  const source = geometry('river_slope_low')
+  const low = detailTerrain(source, 'river_slope_low')
+  const high = detailTerrain(source, 'river_slope_low', { riverRise: 1 })
+  const p = low.attributes.position, q = high.attributes.position
+  const uv = low.attributes.uv, normal = low.attributes.normal
+  let fallingWater = 0, highEnd = 0, lowEnd = 0
+  for (let i = 0; i < p.count; i++) {
+    assert.ok(Math.abs(p.getX(i) - q.getX(i)) < 1e-6)
+    assert.ok(Math.abs(p.getZ(i) - q.getZ(i)) < 1e-6)
+    if (p.getX(i) > 0.9999 && p.getY(i) > 0.9) {
+      assert.ok(Math.abs(q.getY(i) - p.getY(i) - 0.5) < 1e-6)
+      highEnd++
+    }
+    if (p.getX(i) < -0.9999) {
+      assert.equal(q.getY(i), p.getY(i))
+      lowEnd++
+    }
+    // The shipped river's blue atlas island, excluding bank triangles.
+    if (uv.getY(i) < 0.5 && uv.getX(i) > 0.125 && uv.getX(i) < 0.25 && Math.abs(p.getX(i) + 0.5) < 0.03 && normal.getY(i) < 0.5) fallingWater++
+  }
+  assert.ok(highEnd && lowEnd, 'both channel connections exercised')
+  assert.ok(fallingWater > 0, 'water has a near-vertical falling section, not a uniform ramp')
+  for (const g of [source, low, high]) g.dispose()
+})

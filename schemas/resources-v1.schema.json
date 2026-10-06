@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hex-map-wfc:resources:1",
+  "description": "Structural schema. Use the shared JS validators for semantic coordinates, catalog membership, matrices, cell ordering, bounds and pairing hashes.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "const": "hex-map-wfc-resources"
+    },
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generatorCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40,64}$"
+    },
+    "renderSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "resources": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "coordinates": {
+          "const": "world-xz-y-up"
+        },
+        "cellSize": {
+          "type": "number",
+          "minimum": 0.125,
+          "maximum": 2
+        },
+        "origin": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "z"
+          ],
+          "additionalProperties": false
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "samplesPerCell": {
+          "const": 4
+        },
+        "yieldUnits": {
+          "const": "per-cell-per-tick"
+        },
+        "rules": {
+          "type": "object",
+          "properties": {
+            "wood": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "minerals": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "farming": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "fishing": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "minimumFishingArea": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          },
+          "required": [
+            "wood",
+            "minerals",
+            "farming",
+            "fishing",
+            "minimumFishingArea"
+          ],
+          "additionalProperties": true
+        },
+        "columns": {
+          "const": [
+            "column",
+            "row",
+            "elevation",
+            "slope",
+            "wood",
+            "minerals",
+            "food",
+            "coverage"
+          ]
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 90
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 40000
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 40000
+              },
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 40000
+              },
+              {
+                "enum": [
+                  0.25,
+                  0.5,
+                  0.75,
+                  1
+                ]
+              }
+            ],
+            "items": false
+          },
+          "minItems": 1,
+          "maxItems": 1000000
+        }
+      },
+      "required": [
+        "version",
+        "coordinates",
+        "cellSize",
+        "origin",
+        "width",
+        "height",
+        "samplesPerCell",
+        "yieldUnits",
+        "rules",
+        "columns",
+        "cells"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "format",
+    "version",
+    "id",
+    "revision",
+    "createdAt",
+    "generatorCommit",
+    "renderSha256",
+    "resources"
+  ],
+  "additionalProperties": false
+}

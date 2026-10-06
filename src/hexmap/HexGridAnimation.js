@@ -273,8 +273,16 @@ export function animateDecoration(grid, items, onAllComplete) {
 
   if (!grid._decTweens) grid._decTweens = []
 
+  const landscapeIds = new Set(['trees', 'rocks', 'hills', 'mountains']
+    .flatMap(kind => grid.decorations?.[kind] ?? []).map(item => item.instanceId))
   for (let j = 0; j < list.length; j++) {
-    const item = list[j]
+    const item = { ...list[j] }
+    // Full drops and local repairs must finish at the exact exported transform.
+    const matrix = landscapeIds.has(item.instanceId) && grid.decorations.placementMatrices.get(item.instanceId)
+    if (matrix) {
+      const m = matrix.elements
+      Object.assign(item, { x: m[12], y: m[13], z: m[14], rotationY: Math.atan2(m[8], m[0]), scale: m[5] })
+    }
     const targetScale = item.scale ?? 1
     const anim = { y: item.y + DEC_DROP_HEIGHT }
     const tween = gsap.to(anim, {

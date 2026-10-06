@@ -79,6 +79,15 @@ Browser saves use IndexedDB and belong to the exact site address, including its
 port. Clearing site data removes them. Export JSON for durable backups or to move
 maps between browsers or machines. Storage errors keep the map in memory for
 export. Camera, lighting and post-processing settings are not part of the recipe.
-Decorations are rebuilt from the seed and recipe; future changes to generation
-or graphical code can change their appearance. Manual Build-mode edits preserve
+New version-3 saves preserve exact tree, rock, hill and mountain placements and
+fine-grained wood, minerals, food, elevation and slope data. Use **Resources** in
+the workshop to inspect the heatmaps. See [Resource export](docs/resource-export.md)
+for the JSON schema, coordinate system and yield rules. Structures and other
+non-resource decorations are still rebuilt from the seed and recipe; future
+changes to graphical assets can change their appearance. Manual Build-mode edits preserve
 terrain snapshots but are not reproduced by generating from the original recipe.
+
+## Paired map exports
+
+Export terrain/scenery and server-side resources as two paired JSON files. See
+[the v1 contract, migration commands, assets and coordinate helpers](docs/paired-export-v1.md).

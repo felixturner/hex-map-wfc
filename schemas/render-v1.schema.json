@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hex-map-wfc:render:1",
+  "description": "Structural schema. Use the shared JS validators for semantic coordinates, catalog membership, matrices, cell ordering, bounds and pairing hashes.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "const": "hex-map-wfc-render"
+    },
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generatorCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40,64}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "seed": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "radius": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "grids": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "z": {
+            "type": "integer"
+          },
+          "center": {
+            "type": "object",
+            "properties": {
+              "q": {
+                "type": "integer"
+              },
+              "r": {
+                "type": "integer"
+              },
+              "s": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "q",
+              "r",
+              "s"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "x",
+          "z",
+          "center"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 200
+    },
+    "waterSideIndex": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 5
+    },
+    "generationSettings": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "tiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "integer"
+          },
+          "r": {
+            "type": "integer"
+          },
+          "s": {
+            "type": "integer"
+          },
+          "tile": {
+            "type": "string"
+          },
+          "rotation": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          }
+        },
+        "required": [
+          "q",
+          "r",
+          "s",
+          "tile",
+          "rotation",
+          "level"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 50000
+    },
+    "landscape": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "assetVersion": {
+          "const": 1
+        },
+        "matrixConvention": {
+          "const": "three-column-major-local-to-grid"
+        },
+        "grids": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              },
+              "z": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "z"
+                ],
+                "additionalProperties": false
+              },
+              "instances": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "trees",
+                        "rocks",
+                        "hills",
+                        "mountains"
+                      ]
+                    },
+                    "mesh": {
+                      "type": "string"
+                    },
+                    "tile": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "integer"
+                        },
+                        "z": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "z"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "matrix": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 16,
+                      "maxItems": 16
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "mesh",
+                    "tile",
+                    "matrix"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 193
+              }
+            },
+            "required": [
+              "x",
+              "z",
+              "offset",
+              "instances"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "version",
+        "assetVersion",
+        "matrixConvention",
+        "grids"
+      ],
+      "additionalProperties": false
+    },
+    "assets": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "release": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^assets/releases/[a-f0-9]{64}/"
+              },
+              "role": {
+                "enum": [
+                  "catalog",
+                  "models",
+                  "textures",
+                  "implementation",
+                  "source"
+                ]
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "path",
+              "role",
+              "sha256",
+              "bytes"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 3
+        }
+      },
+      "required": [
+        "version",
+        "release",
+        "files"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "format",
+    "version",
+    "id",
+    "revision",
+    "createdAt",
+    "generatorCommit",
+    "name",
+    "seed",
+    "radius",
+    "grids",
+    "waterSideIndex",
+    "generationSettings",
+    "tiles",
+    "landscape",
+    "assets"
+  ],
+  "additionalProperties": false
+}

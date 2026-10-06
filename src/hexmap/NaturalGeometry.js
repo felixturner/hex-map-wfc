@@ -14,13 +14,44 @@ export function assetRandom(name) {
 
 const hexRadius = (x, z) => Math.max(Math.abs(x), Math.abs(x) * 0.5 + Math.abs(z) * Math.sqrt(3) / 2)
 
+// Relax welded vertices together so UV seams cannot open cracks. Tile boundaries
+// and undersides stay fixed; only the interior silhouette is rounded.
+function roundTerrain(positions) {
+  const vertices = [], ids = [], lookup = new Map()
+  for (let i = 0; i < positions.length; i += 3) {
+    const point = positions.slice(i, i + 3)
+    const key = point.map(v => v.toFixed(5)).join(',')
+    if (!lookup.has(key)) {
+      lookup.set(key, vertices.length)
+      vertices.push({ point, neighbors: new Set(), fixed: hexRadius(point[0], point[2]) > 0.985 || point[1] < 0.96 })
+    }
+    ids.push(lookup.get(key))
+  }
+  for (let i = 0; i < ids.length; i += 3) {
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+      if (ids[i + a] !== ids[i + b]) vertices[ids[i + a]].neighbors.add(ids[i + b])
+    }
+  }
+  for (let pass = 0; pass < 5; pass++) {
+    const next = vertices.map(({ point, neighbors, fixed }) => {
+      if (fixed || !neighbors.size) return point
+      const average = [0, 0, 0]
+      for (const id of neighbors) for (let axis = 0; axis < 3; axis++) average[axis] += vertices[id].point[axis] / neighbors.size
+      return point.map((v, axis) => v + (average[axis] - v) * 0.45)
+    })
+    vertices.forEach((v, i) => { v.point = next[i] })
+  }
+  ids.forEach((id, i) => vertices[id].point.forEach((v, axis) => { positions[i * 3 + axis] = v }))
+}
+
 // Subdivide authored triangles without changing their UV islands or connections.
 // Coincident vertices use the same displacement, including across hard normals.
-export function detailTerrain(source, name) {
+export function detailTerrain(source, name, { riverRise = 0.5 } = {}) {
   const geometry = source.index ? source.toNonIndexed() : source.clone()
   const p = geometry.attributes.position, uv = geometry.attributes.uv
   const positions = [], uvs = []
   const terrainRelief = /sloped|cliff/.test(name) && !/road|river|coast/.test(name)
+  const riverDrop = /river_slope/.test(name)
   const rockRelief = /mountain|hill|rock/.test(name)
   const emit = (a, b, c, depth) => {
     if (depth > 0) {
@@ -40,8 +71,8 @@ export function detailTerrain(source, name) {
       }
       if (terrainRelief && y > 0.95 && radius < 0.93) {
         const edgeFade = Math.min(1, Math.max(0, (0.93 - radius) / 0.28))
-        const ridge = 0.5 + 0.25 * Math.sin(x * 12 + z * 7) + 0.25 * Math.sin(z * 17 - x * 5)
-        y += ridge * edgeFade * 0.38
+        const ridge = 0.5 + 0.25 * Math.sin(x * 5 + z * 3) + 0.25 * Math.sin(z * 7 - x * 3)
+        y += ridge * edgeFade * 0.09
       }
       if (rockRelief && y > 0.06) {
         const amount = Math.min(y, 0.17)
@@ -50,21 +81,35 @@ export function detailTerrain(source, name) {
         z += Math.sin(x * 21 + y * 17) * amount * 0.22
         y += crag * amount * 0.5
       }
+      if (riverDrop) {
+        // Preserve channel depth and bank height when building the two-level variant.
+        y += (riverRise - 0.5) * Math.min(1, Math.max(0, x + 1)) * Math.min(1, Math.max(0, y / 0.9))
+      }
+      if (riverDrop && x > -1 && x < 0 && radius < 0.9999) {
+        // The authored river rises from x=-1 to x=0. Compress its middle
+        // horizontally into a falling curtain, preserving both end levels and
+        // reshaping the banks with the water. Larger authored rises yield taller falls.
+        const t = x * 2 + 1
+        const cascadeX = -0.5 + 0.5 * t * t * t
+        const inset = Math.min(1, (1 - radius) / 0.12)
+        x += (cascadeX - x) * inset
+      }
       positions.push(x, y, z); uvs.push(u, w)
     }
   }
   for (let i = 0; i < p.count; i += 3) {
     const vertex = j => [p.getX(j), p.getY(j), p.getZ(j), uv.getX(j), uv.getY(j)]
-    emit(vertex(i), vertex(i + 1), vertex(i + 2), terrainRelief || rockRelief ? 2 : 0)
+    emit(vertex(i), vertex(i + 1), vertex(i + 2), riverDrop ? 3 : terrainRelief ? 3 : rockRelief ? 2 : 0)
   }
   geometry.dispose()
+  if (terrainRelief) roundTerrain(positions)
   const result = new BufferGeometry()
   result.setAttribute('position', new Float32BufferAttribute(positions, 3))
   result.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
   // All geometries in a BatchedMesh must use the same indexed layout.
   result.setIndex(Array.from({ length: positions.length / 3 }, (_, i) => i))
   result.computeVertexNormals()
-  if (terrainRelief || rockRelief) {
+  if (terrainRelief || rockRelief || riverDrop) {
     // UV islands duplicate vertices. Average by position so material boundaries
     // do not turn subdivided slopes into a patchwork of independently lit faces.
     const normals = result.attributes.normal
@@ -79,6 +124,9 @@ export function detailTerrain(source, name) {
       shared.set(key, faces)
     }
     for (let i = 0; i < keys.length; i++) {
+      // Preserve the channel end normals: rounding the connection bevel would
+      // create a reflective white seam across otherwise continuous water.
+      if (riverDrop && (positions[i * 3] < -0.85 || positions[i * 3] > -0.15)) continue
       const sum = [0, 0, 0]
       for (const n of shared.get(keys[i])) {
         // Keep cliff faces and top surfaces distinct; averaging through a hard

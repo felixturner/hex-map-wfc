@@ -7,7 +7,13 @@
     "dev": "vite",
     "test": "node --test",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "assets:release": "node tools/release-assets.js",
+    "convert:map": "node tools/convert-map.js",
+    "prebuild": "npm run assets:release",
+    "predev": "npm run assets:release",
+    "example:export": "node tools/create-export-example.js",
+    "preview:render": "node tools/serve-render-preview.js"
   },
   "dependencies": {
     "gsap": "^3.14.2",

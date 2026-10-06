@@ -1,3 +1,6 @@
+import assetRelease from './AssetRelease.json'
+import { splitMapSnapshot, combineExportPair } from './PairedExport.js'
+import { showResourcePreview } from './ResourcePreview.js'
 import { MapStore } from './MapStore.js'
 import { decodeMapSnapshot } from './MapSnapshot.js'
 import { DEFAULT_GENERATION_SETTINGS, GENERATION_CONTROLS, validateGenerationSettings } from './GenerationSettings.js'
@@ -55,7 +58,8 @@ export class MapLibrary {
     this.pending.textContent = changed ? 'Settings changed — Generate to apply. Saving keeps the displayed map’s recipe.' : 'Settings apply only when you click Generate.'
     this.saveChanges.disabled = this.busy || !this.sourceId || !this.current
     this.saveCopy.disabled = this.busy || !this.current
-    this.exportButton.disabled = this.busy || !this.current
+    this.exportButton.disabled = this.busy || !this.current || !this.current.resources
+    this.resourcesButton.disabled = this.busy || !this.current || !this.current.resources
   }
 
   syncControls() {
@@ -92,6 +96,7 @@ export class MapLibrary {
 
   async open(snapshot) {
     const decoded = decodeMapSnapshot(snapshot)
+    if (snapshot.assets && snapshot.assets.release !== assetRelease.assets.release) throw new Error('This map needs its matching asset release. Open it with that release’s renderer.')
     await this.app.city.restoreSnapshot(snapshot)
     this.current = snapshot
     this.sourceId = this.entries.has(snapshot.id) ? snapshot.id : null
@@ -159,27 +164,36 @@ export class MapLibrary {
     this.busy = true
     const buildMode = this.app.buildMode
     this.app.buildMode = false
-    this.controls.querySelectorAll('button, select, input').forEach(c => { c.disabled = true })
+    // Keep file inputs enabled: the Import action opens the native picker by
+    // calling fileInput.click() from inside this wrapper. Browsers ignore
+    // click() on a disabled file input, making Import JSON appear inert.
+    this.controls.querySelectorAll('button, select, input:not([type="file"])').forEach(c => { c.disabled = true })
     try { await action() }
     catch (error) { this.message(error.message); console.error(error) }
     finally {
       this.busy = false
       this.app.buildMode = buildMode
-      this.controls.querySelectorAll('button, select, input').forEach(c => { c.disabled = false })
+      this.controls.querySelectorAll('button, select, input:not([type="file"])').forEach(c => { c.disabled = false })
       this.updatePending()
     }
   }
 
-  exportMap() {
+  async exportMap() {
     if (!this.current) throw new Error('Generate or open a map first.')
-    const snapshot = this.app.city.createSnapshot()
+    const snapshot = this.app.city.createSnapshot(undefined, null, { requireCachedResources: true })
     snapshot.name = this.nameInput.value.trim() || this.current.name
-    const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot)], { type: 'application/json' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `hex-map-${snapshot.seed ?? 'saved'}-${snapshot.id}.json`
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    snapshot.id = this.sourceId || this.current.id
+    snapshot.createdAt = this.current.createdAt
+    const pair = await splitMapSnapshot(snapshot, assetRelease)
+    for (const [filename, text] of [[pair.renderFilename, pair.renderText], [pair.resourcesFilename, pair.resourcesText]]) {
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+    this.message('Exported paired render and resources JSON. Allow multiple downloads if your browser prompts.')
   }
 
   createControls() {
@@ -273,20 +287,27 @@ export class MapLibrary {
       if (!snapshot) throw new Error('Choose a saved map first.')
       await this.open(snapshot)
     })
-    this.exportButton = button('.library-actions', 'Export JSON', () => this.exportMap())
+    this.exportButton = button('.library-actions', 'Export paired JSON', () => this.exportMap())
+    this.resourcesButton = button('.library-actions', 'Resources', () => showResourcePreview(this.app.city.createSnapshot().resources))
     const fileInput = document.createElement('input')
     fileInput.type = 'file'
     fileInput.accept = '.json,application/json'
     fileInput.hidden = true
+    fileInput.multiple = true
     fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0]
+      const files = [...fileInput.files]
+      const file = files[0]
       fileInput.value = ''
       if (!file) return
       this.run(async () => {
-        if (file.size > 20 * 1024 * 1024) throw new Error('Map files must be smaller than 20 MB.')
-        const snapshot = JSON.parse(await file.text())
+        if (files.length > 2 || files.some(f => f.size > 64 * 1024 * 1024)) throw new Error('Map files must be smaller than 64 MB.')
+        const texts = await Promise.all(files.map(f => f.text()))
+        const renderIndex = texts.findIndex(text => JSON.parse(text).format === 'hex-map-wfc-render')
+        if (renderIndex >= 0 && JSON.parse(texts[renderIndex]).assets?.release !== assetRelease.assets.release) throw new Error('This map needs its matching asset release.')
+        const snapshot = files.length === 2
+          ? await combineExportPair(texts[renderIndex], texts[1 - renderIndex])
+          : JSON.parse(texts[0])
         decodeMapSnapshot(snapshot)
-        snapshot.id = crypto.randomUUID()
         await this.open(snapshot)
         this.message('Imported preview. Save as copy to keep it in this browser.')
       })

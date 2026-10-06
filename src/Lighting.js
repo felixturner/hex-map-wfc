@@ -22,44 +22,47 @@ export class Lighting {
   }
 
   async init() {
-    const { scene, params } = this
+    const {scene, params} = this;
 
     const texture = await new HDRLoader()
-      .setPath('./assets/hdr/')
-      .loadAsync('venice_sunset_1k.hdr')
-    texture.mapping = EquirectangularReflectionMapping
-    texture.needsUpdate = true
-    scene.background = new Color(0x98a4bb)
-    scene.environment = texture
-    scene.environmentIntensity = params.lighting.envIntensity
+      .setPath("./assets/hdr/")
+      .loadAsync("venice_sunset_1k.hdr");
+    texture.mapping = EquirectangularReflectionMapping;
+    texture.needsUpdate = true;
+    scene.background = new Color(0x98a4bb);
+    scene.environment = texture;
+    scene.environmentIntensity = params.lighting.envIntensity;
 
     // Scene bounds for shadow calculation (7x7 lots, centered on middle lot, ~98x98, buildings up to ~50 height)
     this.sceneBounds = new Box3(
       new Vector3(-50, 0, -50),
-      new Vector3(55, 50, 55)
-    )
+      new Vector3(55, 50, 55),
+    );
 
     // Directional light for key shadows/highlights (values set by applyParams)
-    this.dirLight = new DirectionalLight(0xffffff, params.lighting.dirLight)
-    this.dirLightOffset = new Vector3(params.lighting.lightX, params.lighting.lightY, params.lighting.lightZ)
-    this.dirLight.position.copy(this.dirLightOffset)
-    this.dirLight.castShadow = true
-    this.dirLight.shadow.mapSize.width = 4096
-    this.dirLight.shadow.mapSize.height = 4096
-    this.dirLight.shadow.bias = -0.0005
-    this.dirLight.shadow.intensity = params.lighting.shadowIntensity
-    scene.add(this.dirLight)
-    scene.add(this.dirLight.target) // Required for dynamic target positioning
+    this.dirLight = new DirectionalLight(0xffffff, params.lighting.dirLight);
+    this.dirLightOffset = new Vector3(
+      params.lighting.lightX,
+      params.lighting.lightY,
+      params.lighting.lightZ,
+    );
+    this.dirLight.position.copy(this.dirLightOffset);
+    this.dirLight.castShadow = true;
+    this.dirLight.shadow.mapSize.width = 4096;
+    this.dirLight.shadow.mapSize.height = 4096;
+    this.dirLight.shadow.bias = -0.0005;
+    this.dirLight.shadow.intensity = params.lighting.shadowIntensity;
+    scene.add(this.dirLight);
+    scene.add(this.dirLight.target); // Required for dynamic target positioning
 
     // Update shadow frustum based on scene bounds and light position
-    this.updateShadowFrustum()
+    this.updateShadowFrustum();
 
-    // Light helper is useful for tuning visuals, but disabled for wardomes runtime.
+    // Light helper is useful for tuning visuals, but disabled for Ashdomes runtime.
     if (!RUNTIME_MINIMAL) {
-      this.dirLightHelper = new DirectionalLightHelper(this.dirLight, 10)
-      scene.add(this.dirLightHelper)
+      this.dirLightHelper = new DirectionalLightHelper(this.dirLight, 10);
+      scene.add(this.dirLightHelper);
     }
-
   }
 
   // Compute shadow camera frustum to cover scene from any light angle
