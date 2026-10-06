@@ -4,6 +4,7 @@ import { showResourcePreview } from './ResourcePreview.js'
 import { MapStore } from './MapStore.js'
 import { decodeMapSnapshot } from './MapSnapshot.js'
 import { DEFAULT_GENERATION_SETTINGS, GENERATION_CONTROLS, validateGenerationSettings } from './GenerationSettings.js'
+import { MAP_SIZE_PRESETS, mapSizePreset } from './MapLayout.js'
 import { getSeed, setSeed } from '../SeededRandom.js'
 
 export class MapLibrary {
@@ -54,7 +55,7 @@ export class MapLibrary {
 
   updatePending() {
     const changed = this.current && (Number(this.seedInput.value) !== this.current.seed ||
-      JSON.stringify(this.draftSettings) !== JSON.stringify(this.current.generationSettings))
+      JSON.stringify(validateGenerationSettings(this.draftSettings)) !== JSON.stringify(this.current.generationSettings && validateGenerationSettings(this.current.generationSettings)))
     this.pending.textContent = changed ? 'Settings changed — Generate to apply. Saving keeps the displayed map’s recipe.' : 'Settings apply only when you click Generate.'
     this.saveChanges.disabled = this.busy || !this.sourceId || !this.current
     this.saveCopy.disabled = this.busy || !this.current
@@ -63,6 +64,8 @@ export class MapLibrary {
   }
 
   syncControls() {
+    this.playerCountInput.value = this.draftSettings.playerCount
+    this.syncMapShape()
     for (const control of GENERATION_CONTROLS) {
       const input = this.controls.querySelector(`[name="${control.key}"]`)
       input.value = this.draftSettings[control.key]
@@ -71,6 +74,14 @@ export class MapLibrary {
     this.oceanInput.checked = this.draftSettings.oceanEdge
     this.seedInput.value = this.draftSeed
     this.updatePending()
+  }
+
+  syncMapShape() {
+    const preset = mapSizePreset(this.draftSettings.playerCount)
+    if (!Object.hasOwn(preset.shapes, this.draftSettings.mapShape)) this.draftSettings.mapShape = preset.defaultShape
+    this.mapShapeInput.replaceChildren(...Object.entries(preset.shapes).map(([value, label]) => new Option(label, value)))
+    this.mapShapeInput.value = this.draftSettings.mapShape
+    this.mapSizeHint.textContent = `${preset.regionCount} regions · ${(preset.regionCount * 217).toLocaleString()} terrain tiles. Sizes are rounded to complete regions.`
   }
 
   async saveCurrent(asCopy = true) {
@@ -204,6 +215,12 @@ export class MapLibrary {
       <summary>Map workshop <span>Customize · Generate · Save</span></summary>
       <div class="workshop-body">
         <p class="workshop-intro">Shape your next map. Zero means off; 100% is the default amount.</p>
+        <details class="map-size-controls" open>
+          <summary>Map size & shape</summary>
+          <label>Player count / map size <select name="playerCount"></select></label>
+          <label>Map shape <select name="mapShape"></select></label>
+          <p class="workshop-hint map-size-hint"></p>
+        </details>
         <div class="recipe-controls"></div>
         <label class="ocean-control"><input type="checkbox" name="oceanEdge"> Seed an ocean along one side</label>
         <p class="workshop-hint">Terrain amounts are relative preferences. Peaks need high ground; trees and structures compete for space. Decoration counts have per-region limits.</p>
@@ -221,7 +238,21 @@ export class MapLibrary {
       </div>`
     this.controls = panel.querySelector('.workshop-body')
     this.pending = panel.querySelector('.pending-settings')
-    this.select = panel.querySelector('select')
+    this.select = panel.querySelector('[aria-label="Saved maps"]')
+    this.playerCountInput = panel.querySelector('[name=playerCount]')
+    this.mapShapeInput = panel.querySelector('[name=mapShape]')
+    this.mapSizeHint = panel.querySelector('.map-size-hint')
+    this.playerCountInput.replaceChildren(...MAP_SIZE_PRESETS.map(preset => new Option(preset.label, preset.playerCount)))
+    this.playerCountInput.addEventListener('change', () => {
+      this.draftSettings.playerCount = Number(this.playerCountInput.value)
+      this.draftSettings.mapShape = mapSizePreset(this.draftSettings.playerCount).defaultShape
+      this.syncMapShape()
+      this.updatePending()
+    })
+    this.mapShapeInput.addEventListener('change', () => {
+      this.draftSettings.mapShape = this.mapShapeInput.value
+      this.updatePending()
+    })
     this.nameInput = panel.querySelector('[name=mapName]')
     this.seedInput = panel.querySelector('[name=seed]')
     this.oceanInput = panel.querySelector('[name=oceanEdge]')

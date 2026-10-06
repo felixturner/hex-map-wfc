@@ -45,6 +45,13 @@ npm run build
 Use **Map workshop** at the top right to configure the next generation. Changing
 controls leaves the displayed map untouched until you click **Generate**.
 
+- Choose **Player count / map size**: 6 players uses the original 19 regions
+  (4,123 tiles), 3 players uses 10 regions (2,170 tiles, about half), and 2 players
+  uses 5 regions (1,085 tiles, about a quarter). Sizes round to complete regions.
+- Three-player maps default to a triangle and also offer a compact shape.
+  Two-player maps default to a compact diamond and also offer a clipped triangle.
+  The original six-player footprint is a hexagon. Smaller maps solve only their
+  selected regions; terrain, scenery, saves and resource exports use that footprint.
 - Adjust lakes/coasts, elevation preference, slopes/cliffs, roads, rivers,
   trees, structures, mountain peaks, hills, rocks, flowers/bushes, and water plants.
 - Amounts are relative to the original defaults (100%); **Off** excludes that

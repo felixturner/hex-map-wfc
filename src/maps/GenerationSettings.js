@@ -1,4 +1,5 @@
 import { TILE_LIST, LEVELS_COUNT } from '../hexmap/HexTileData.js'
+import { DEFAULT_MAP_LAYOUT, mapSizePreset } from './MapLayout.js'
 
 // Shared by the workshop, snapshot validation and the worker. Amounts are
 // relative preferences, not promised percentages of a constrained map.
@@ -21,6 +22,7 @@ export const GENERATION_CONTROLS = [
 export const DEFAULT_GENERATION_SETTINGS = Object.freeze({
   ...Object.fromEntries(GENERATION_CONTROLS.map(c => [c.key, c.value])),
   oceanEdge: false,
+  ...DEFAULT_MAP_LAYOUT,
 })
 
 export function validateGenerationSettings(value) {
@@ -35,6 +37,14 @@ export function validateGenerationSettings(value) {
   }
   if (typeof value.oceanEdge !== 'boolean') throw new Error('Invalid generation setting: oceanEdge')
   settings.oceanEdge = value.oceanEdge
+  // Recipes written before map sizes were introduced retain the full footprint.
+  const playerCount = Object.hasOwn(value, 'playerCount') ? value.playerCount : DEFAULT_MAP_LAYOUT.playerCount
+  const preset = mapSizePreset(playerCount)
+  if (!preset) throw new Error('Invalid generation setting: playerCount')
+  const mapShape = Object.hasOwn(value, 'mapShape') ? value.mapShape : preset.defaultShape
+  if (typeof mapShape !== 'string' || !Object.hasOwn(preset.shapes, mapShape)) throw new Error('Invalid generation setting: mapShape')
+  settings.playerCount = playerCount
+  settings.mapShape = mapShape
   return settings
 }
 

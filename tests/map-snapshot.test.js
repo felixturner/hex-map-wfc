@@ -80,6 +80,19 @@ test('legacy saves remain readable without inventing their original recipe', () 
   assert.equal(decoded.tiles.length, 7)
 })
 
+test('saved player count and shape survive JSON, and older recipes get the full-size default', () => {
+  const snapshot = fixture()
+  snapshot.generationSettings.playerCount = 3
+  snapshot.generationSettings.mapShape = 'triangle'
+  const decoded = decodeMapSnapshot(JSON.parse(JSON.stringify(snapshot)))
+  assert.equal(decoded.generationSettings.playerCount, 3)
+  assert.equal(decoded.generationSettings.mapShape, 'triangle')
+  delete snapshot.generationSettings.playerCount
+  delete snapshot.generationSettings.mapShape
+  assert.equal(decodeMapSnapshot(snapshot).generationSettings.playerCount, 6)
+  assert.equal(decodeMapSnapshot(snapshot).generationSettings.mapShape, 'hexagon')
+})
+
 test('version 2 saves require a valid recipe or explicit unknown legacy recipe', () => {
   const snapshot = fixture()
   delete snapshot.generationSettings

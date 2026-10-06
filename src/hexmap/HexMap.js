@@ -4,6 +4,7 @@ import {
   validateGenerationSettings,
 } from "../maps/GenerationSettings.js";
 import {applyDecorationSettings} from "./DecorationDefs.js";
+import {getMapGridCoordinates} from "../maps/MapLayout.js";
 import {
   Object3D,
   MeshPhysicalNodeMaterial,
@@ -69,24 +70,6 @@ import {RUNTIME_MINIMAL, Ashdomes_MAP_PROFILE} from "../runtimeConfig.js";
 
 const LEVEL_HEIGHT = 0.5;
 const TILE_SURFACE = 1;
-
-/**
- * Get all grid coordinates within the hex radius (19 grids at radius 2)
- * Returns [q, gz] pairs in flat-top hex odd-q offset layout
- */
-function getAllGridCoordinates(cubeRadius = 2) {
-  const coords = [];
-  for (let q = -cubeRadius; q <= cubeRadius; q++) {
-    for (let r = -cubeRadius; r <= cubeRadius; r++) {
-      const s = -q - r;
-      if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= cubeRadius) {
-        const gz = r + Math.floor((q - (q & 1)) / 2);
-        coords.push([q, gz]);
-      }
-    }
-  }
-  return coords;
-}
 
 /**
  * HexMap - Manages the entire world of multiple HexGrid instances
@@ -1045,7 +1028,7 @@ export class HexMap {
    * Get ocean seeds at the center of 3 contiguous ring-2 grids on one side of the map.
    * Uses the same side direction as the first grid's water edge seed.
    */
-  getMapCornerOceanSeeds() {
+  getMapCornerOceanSeeds(solveCells = null) {
     const cubeDirs = [
       {q: 1, r: -1, s: 0},
       {q: 1, r: 0, s: -1},
@@ -1086,6 +1069,16 @@ export class HexMap {
         rotation: 0,
         level: 0,
       });
+    }
+    if (solveCells) {
+      const solveKeys = new Set(solveCells.map(c => cubeKey(c.q, c.r, c.s)));
+      const retained = seeds.filter(c => solveKeys.has(cubeKey(c.q, c.r, c.s)));
+      if (retained.length) return retained;
+      // Smaller shapes may omit the entire old ocean side. Seed their actual
+      // boundary instead; never place an initial collapse outside the solve.
+      const projection = c => c.q * dir.q + c.r * dir.r + c.s * dir.s;
+      const edge = solveCells.reduce((best, c) => projection(c) > projection(best) ? c : best);
+      return [{...edge, type: TileType.WATER, rotation: 0, level: 0}];
     }
     return seeds;
   }
@@ -1352,7 +1345,7 @@ export class HexMap {
     await this._waitForWfcIdle();
     this._wfcBusy = true;
     if (!expansionCoords) {
-      expansionCoords = getAllGridCoordinates().filter(
+      expansionCoords = getMapGridCoordinates(this.generationSettings ?? DEFAULT_GENERATION_SETTINGS).filter(
         ([q, gz]) => q !== 0 || gz !== 0,
       );
     }
@@ -1457,7 +1450,7 @@ export class HexMap {
       options.wfcMaxBacktracks ??
       (RUNTIME_MINIMAL ? Ashdomes_MAP_PROFILE.wfcMaxBacktracks : 500);
     if (includeOceanSeeds) {
-      initialCollapses.push(...this.getMapCornerOceanSeeds());
+      initialCollapses.push(...this.getMapCornerOceanSeeds(allSolveCells));
     }
 
     // Track seeded cells for debug labels

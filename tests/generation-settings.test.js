@@ -35,9 +35,19 @@ test('all structures and embedded trees honor hard off switches', () => {
 })
 
 test('invalid imported recipes are rejected rather than silently normalized', () => {
-  for (const invalid of [null, {}, recipe({roads: -1}), recipe({trees: Infinity}), recipe({elevation: 2.5}), recipe({oceanEdge: 'yes'})]) {
+  for (const invalid of [null, {}, recipe({roads: -1}), recipe({trees: Infinity}), recipe({elevation: 2.5}), recipe({oceanEdge: 'yes'}),
+    recipe({playerCount: 4}), recipe({playerCount: '3'}), recipe({mapShape: 'triangle'}), recipe({mapShape: 'unknown'}), recipe({mapShape: ['hexagon']})]) {
     assert.throws(() => validateGenerationSettings(invalid), /Invalid generation/)
   }
+})
+
+test('older recipes default to the original size and new sizes keep their shapes', () => {
+  const old = recipe()
+  delete old.playerCount
+  delete old.mapShape
+  assert.deepEqual(validateGenerationSettings(old), DEFAULT_GENERATION_SETTINGS)
+  assert.deepEqual(validateGenerationSettings({...old, playerCount: 3}), recipe({playerCount: 3, mapShape: 'triangle'}))
+  assert.deepEqual(validateGenerationSettings(recipe({playerCount: 2, mapShape: 'compact'})), recipe({playerCount: 2, mapShape: 'compact'}))
 })
 
 test('real worker solves reproducibly with disabled elements and flat terrain', async () => {

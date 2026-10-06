@@ -1,353 +1,359 @@
 {
-  "generatorCommit": "40f07bb354ef1f65d480e6cde7f81c9d1b08ad81",
+  "generatorCommit": "1d16bcb49197bd60232b50c0ef12ee3cce7acf4a",
   "assets": {
     "version": 1,
-    "release": "5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1",
+    "release": "1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656",
     "files": [
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/.DS_Store",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/.DS_Store",
         "role": "implementation",
         "sha256": "e6ab1bdcfdfd77c3bb9e0e37c23072e433a5c7974bb1517db9d40b9d2de2fa44",
         "bytes": 6148
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/App.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/App.js",
         "role": "implementation",
         "sha256": "a3c847ed479a9b2de2d7ebc2ca11c21a3c1dd115f764f0771209ce09e103010a",
         "bytes": 23787
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/GUI.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/GUI.js",
         "role": "implementation",
         "sha256": "3c489759d24d26579ba2ef172ff9958b270c008a905244b2b0e8d5975387a456",
         "bytes": 18911
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/DecorationDefs.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/DecorationDefs.js",
         "role": "implementation",
         "sha256": "8efc6d6077fb5b951f92f193589be94e7472b66594b4f359d7f6c6f2d40a82ef",
         "bytes": 10575
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/Decorations.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/Decorations.js",
         "role": "implementation",
         "sha256": "64cba93d65aff13fdbb4cf9b114fa5fc6aabdd67ed8477de7e3d0888e92be324",
         "bytes": 54376
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/effects/Water.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/effects/Water.js",
         "role": "implementation",
         "sha256": "03a974dd96c72b84fc2e243a0ef9ea14edb15e567b4fd2014b7ff7619b76f401",
         "bytes": 6933
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/effects/WavesMask.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/effects/WavesMask.js",
         "role": "implementation",
         "sha256": "e1d185c6db03950a9b5596deb2887205df7b90c93fda248d56d4024e03b5b489",
         "bytes": 13956
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexGrid.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexGrid.js",
         "role": "implementation",
         "sha256": "3683538cae27744f7c7ae722759e52d33d45f6b85d259d6c29792a0d658f16a8",
         "bytes": 22426
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexGridAnimation.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexGridAnimation.js",
         "role": "implementation",
         "sha256": "1f6e41e78fcf10f7515524dab74fc6269ebf771b1ad5b849d6f782da4fb237b2",
         "bytes": 10111
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexGridConnector.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexGridConnector.js",
         "role": "implementation",
         "sha256": "11cf60de6cc4760f9c1a2e7fbb63b9f970810a1a75ef37f28800a32a8b89b44f",
         "bytes": 4892
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexGridHelper.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexGridHelper.js",
         "role": "implementation",
         "sha256": "ad2c7d2dd49977334ddd70d638f18f507193f67a650f2ee3449dd752e9707556",
         "bytes": 5368
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexMap.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexMap.js",
         "role": "implementation",
-        "sha256": "7bb360813227ad0229a0052f676d061d7c16b96d7124f4ecd1f8f31ca0a593e1",
-        "bytes": 76649
+        "sha256": "51310438c428d6414e81a7f3c600b3132ea66fcb6314eb8f022ac1d9fc75d1ba",
+        "bytes": 76879
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexMapDebug.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexMapDebug.js",
         "role": "implementation",
         "sha256": "da2b1793bfc8740efd50d1c29d23fc915c3453f517aad987bd0dcdeaafdd79a9",
         "bytes": 8227
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexMapInteraction.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexMapInteraction.js",
         "role": "implementation",
         "sha256": "80db7f297f6222f4ad86c79a556d87a1eb52875c35c738f1039d35be570b4acb",
         "bytes": 10231
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexTileData.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexTileData.js",
         "role": "implementation",
         "sha256": "937957ccc54210c5b39bd93c2ddc3d80a323e61e075f90214a1e42ef61030fe3",
         "bytes": 11798
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexTiles.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexTiles.js",
         "role": "implementation",
         "sha256": "a22737fe50d7c5144a1df1281ffbec345619af6bdb81c1c4038f40b5d0b22d8e",
         "bytes": 7505
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/HexWFCCore.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/HexWFCCore.js",
         "role": "implementation",
         "sha256": "a5a809a0f417ca0ed2cf5234ea567848a12b17d53cf225a92645a18a04c0da1b",
         "bytes": 8166
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/MapTuningConstants.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/MapTuningConstants.js",
         "role": "implementation",
         "sha256": "ef776169fb4fc790bcc483f3e1af8f3d8ab780b95026a89b0a1e88c4273c0f27",
         "bytes": 954
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/NaturalGeometry.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/NaturalGeometry.js",
         "role": "implementation",
         "sha256": "afdf8315939f71dc55c06bdba654273de37dd465213781525f93a3fd5b8e66d9",
         "bytes": 9745
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/NaturalMaterial.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/NaturalMaterial.js",
         "role": "implementation",
         "sha256": "cafbc0dce1f1e92525f267eac65ef17b787118822a8eca1f5936a15b1b1e3069",
         "bytes": 8464
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/Placeholder.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/Placeholder.js",
         "role": "implementation",
         "sha256": "a15858b0d6c15f8e975819012c7605c7769ab9791ffcab3f666ad7007a4a2a1c",
         "bytes": 7684
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/hexmap/WFCManager.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/hexmap/WFCManager.js",
         "role": "implementation",
         "sha256": "d33143c967607b7668139e3e1aad927b2c1c1e5c31a8fa782e20e922e964e41d",
         "bytes": 9986
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/lib/Pointer.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/lib/Pointer.js",
         "role": "implementation",
         "sha256": "78942f7e469971f28f9be09ddee34c8697331cef73c0790af3be65d0e1e3c213",
         "bytes": 5070
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/lib/Sounds.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/lib/Sounds.js",
         "role": "implementation",
         "sha256": "19e9c281ac67231a7ef0efc1b1e145d2b34cd41a8cc08324947f0eb1d3f0c9ea",
         "bytes": 1642
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/Lighting.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/Lighting.js",
         "role": "implementation",
         "sha256": "e94e1b63970e1b86ebc31502ff2ff6487858fc51481255e34e9c93a40cbb0f23",
         "bytes": 6524
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/main.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/main.js",
         "role": "implementation",
         "sha256": "a0ff57b220a56aad2e129b2f900e7363a116cbde7b79822000745baf4c9efe3b",
         "bytes": 505
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/CoordinatesV1.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/CoordinatesV1.js",
         "role": "implementation",
         "sha256": "c0df2e6f678ba3782c909865fcc1deee0d25a55487c782e93d0adb7d820c29b1",
         "bytes": 2447
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/ExportContract.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/ExportContract.js",
         "role": "implementation",
         "sha256": "252bebe4564afa241fa56405b41d68730e8b5337f2295a7e93e196b578b1d769",
         "bytes": 1579
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/GenerationSettings.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/GenerationSettings.js",
         "role": "implementation",
-        "sha256": "6dbda8b5b3490bbd7b420a23347e3ef441f308a7e62d9650761500cf8a5b2766",
-        "bytes": 3427
+        "sha256": "66ec8669b64ebe74a2d056a27dc6d5d14e440630e33212ebb1898edb7dbc4b1c",
+        "bytes": 4123
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/MapLibrary.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/MapLayout.js",
         "role": "implementation",
-        "sha256": "4d4df813ba711a7dbdab8dc12f22c36c2068f4858e50dd29ba5c5d1888fc920b",
-        "bytes": 15290
+        "sha256": "436e4bc124efe5471e7fdb78dced0abfd3a2430e511add878297b6620c1ccfbe",
+        "bytes": 1884
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/MapResources.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/MapLibrary.js",
+        "role": "implementation",
+        "sha256": "0da19aa1216f05a24c497e0629c4dd377dac15376958deca7fa08f5f4bdc9bad",
+        "bytes": 17199
+      },
+      {
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/MapResources.js",
         "role": "implementation",
         "sha256": "e2eb847264f85571a7f708b01515251ae22dc7638108616dbbd6bd2fa21fc548",
         "bytes": 3189
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/MapSnapshot.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/MapSnapshot.js",
         "role": "implementation",
         "sha256": "160b46b5cd48ad5aae1bf74b10c1baeb3c96a8095be9cbdf5eff56c4826e7129",
         "bytes": 5022
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/MapStore.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/MapStore.js",
         "role": "implementation",
         "sha256": "07f998115a6d35c18acec05e04fb62744fe8e5cd3b1ba3fa86f02c2ec2711ace",
         "bytes": 1594
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/PairedExport.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/PairedExport.js",
         "role": "implementation",
         "sha256": "b234102811d737b344af92637f5fabe27562a6edf76473771379754b54b70d40",
         "bytes": 3980
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/RenderAssets.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/RenderAssets.js",
         "role": "implementation",
         "sha256": "b449a73227f8089f48f913a70516d2438b3df3c6bff17faadfa024c7e6aff319",
         "bytes": 4262
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/ResourceGrid.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/ResourceGrid.js",
         "role": "implementation",
         "sha256": "778b2663bd81a3602adf961bb74fcb1b5bf4797cb3bdef151293157a691901ba",
         "bytes": 7340
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/ResourcePreview.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/ResourcePreview.js",
         "role": "implementation",
         "sha256": "84f1789d883c8bff1227abd9ecf6a6dfe8d3f42589a0e3c876f564f23b962053",
         "bytes": 3857
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/maps/ResourceValidation.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/maps/ResourceValidation.js",
         "role": "implementation",
         "sha256": "37c7f3e00e5825e5c87cb8537d8c0d52b572aa914b9dad2d6b7b9daf9cfdf8cc",
         "bytes": 3975
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/PostFX.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/PostFX.js",
         "role": "implementation",
         "sha256": "2f4737d4bff338d49408cc5c639f2ea0470dd41ba4c1ce627286964849d44ce1",
         "bytes": 11549
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/runtimeConfig.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/runtimeConfig.js",
         "role": "implementation",
         "sha256": "fe2288d2d27cf58f239e78a23b06e759d7f0cc4f8d78b1c1edb9ebcdecd68b66",
         "bytes": 429
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/SeededRandom.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/SeededRandom.js",
         "role": "implementation",
         "sha256": "ad83d5e14f2ac842afbcdb1edd6b7a294a653ee740e8bdcb9594bbdf07ef7798",
         "bytes": 1033
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/src/workers/wfc.worker.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/src/workers/wfc.worker.js",
         "role": "implementation",
         "sha256": "6bb9857948023dca2a9b6359e5d917e31e783afabfd54749790675a1e1f64ecb",
         "bytes": 24991
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/caustic.jpg",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/caustic.jpg",
         "role": "textures",
         "sha256": "79c32285c5a876716c4d39ddb01d3d4ac949ded1e73e401e48a8620af2b2331a",
         "bytes": 79046
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/cog.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/cog.png",
         "role": "textures",
         "sha256": "63e0ac20fe003126507249aef2273400f033babf2858f6a588ca3a4a76e6608e",
         "bytes": 5490
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/default.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/default.png",
         "role": "textures",
         "sha256": "5301a06866ba3be68dcc14cc429bd6d0f69004b72884283715d7e233f2e9782e",
         "bytes": 15783
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/fall.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/fall.png",
         "role": "textures",
         "sha256": "e638987822519cc6ea9123245980d9ab4541c78523fd8ddb4153a0ec9e4699b0",
         "bytes": 15721
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/moody.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/moody.png",
         "role": "textures",
         "sha256": "bfb678ea118aefad78f367b1749651fd6c1d64b4f284cf0a759d63893b289ef2",
         "bytes": 17237
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/natural/meadow.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/natural/meadow.png",
         "role": "textures",
         "sha256": "3f4ee6f25392e8c10deac381091b37b4d8fccaa6a4d1d2aaaa7fc7d6f1f1f528",
         "bytes": 4000732
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/natural/README.md",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/natural/README.md",
         "role": "textures",
         "sha256": "55e89fb616c3bf5b7e332c55b1bca20c08e3acf5b46ce48e23a47c386842ba70",
         "bytes": 1880
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/natural/rock.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/natural/rock.png",
         "role": "textures",
         "sha256": "8c3c68fade77ebaee66e5f099e166b5c8929d4ec33d07a4355fdacf859f3108b",
         "bytes": 3695502
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/summer.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/summer.png",
         "role": "textures",
         "sha256": "d345c05edd87d72bc622639650cb1d51ef36d0e94c20254ed7864a4d8ab15af7",
         "bytes": 16034
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/water-mask.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/water-mask.png",
         "role": "textures",
         "sha256": "647402944a28a6c2aa96e77df75979b48d1096166a4a86e2f6cf83b93a0193c2",
         "bytes": 5327
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/textures/winter.png",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/textures/winter.png",
         "role": "textures",
         "sha256": "b44076d025bc14ae9b1c499e2f345a99c1a3b607628b295372e56d8a4cf798e7",
         "bytes": 17627
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/assets/models/hex-terrain.glb",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/assets/models/hex-terrain.glb",
         "role": "source",
         "sha256": "036d416c68dc0dacc2ded07fdfda950760eb8fd02345e0371fab51f57c7dec87",
         "bytes": 2574308
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/package-lock.json",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/package-lock.json",
         "role": "implementation",
         "sha256": "0e8ed168c557eec4eefac76a33f75f7be7a0d01f6fcd34e0e2747470cb2bc670",
         "bytes": 35804
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/tools/release-assets.js",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/tools/release-assets.js",
         "role": "implementation",
         "sha256": "dfe67c9adf2a77aceffb79ebe8690b93515ec2248cd94ac3724f50e06817ff44",
         "bytes": 4842
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/catalog.json",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/catalog.json",
         "role": "catalog",
         "sha256": "50261a8a8344676221cd03f089c22cb83016c2f8f650972e39b9b51a6e1b3ec9",
         "bytes": 10762
       },
       {
-        "path": "assets/releases/5a449bc9a7030405d0dd2676f19d09906e2f735b184314577db3e02a8a3e94d1/meshes.json",
+        "path": "assets/releases/1cab7adcd507c50f4fe85088a84cbe0972e49cddbd53b817ff6a02130ca38656/meshes.json",
         "role": "models",
         "sha256": "fef1cc0296404f3957f93992184fda1a34839eeea67e6d88733f4baba3489a35",
         "bytes": 54732387
