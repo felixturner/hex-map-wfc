@@ -1,0 +1,312 @@
+import gsap from 'gsap'
+import { TILE_LIST } from './HexTileData.js'
+import { HexTileGeometry } from './HexTiles.js'
+import { LEVEL_HEIGHT, TILE_SURFACE } from './DecorationDefs.js'
+
+const DROP_HEIGHT = 5
+const ANIM_DURATION = 0.4
+const DEC_DROP_HEIGHT = 4
+const DEC_ANIM_DURATION = 0.3
+const DEC_DELAY = 0.4 // seconds (for gsap.delayedCall)
+
+/**
+ * Hide all tile and decoration instances (for animation start)
+ */
+export function hideAllInstances(grid) {
+  const dummy = grid.dummy
+  dummy.scale.setScalar(0)
+  dummy.updateMatrix()
+
+  for (const tile of grid.hexTiles) {
+    if (tile.instanceId !== null) {
+      grid.hexMesh.setMatrixAt(tile.instanceId, dummy.matrix)
+    }
+  }
+
+  if (grid.decorations) {
+    const mesh = grid.decorations.mesh
+    const pairs = [
+      [grid.decorations.trees, mesh],
+      [grid.decorations.buildings, mesh],
+      [grid.decorations.bridges, mesh],
+      [grid.decorations.waterlilies, mesh],
+      [grid.decorations.flowers, mesh],
+      [grid.decorations.rocks, mesh],
+      [grid.decorations.hills, mesh],
+      [grid.decorations.mountains, mesh],
+    ]
+    for (const [items, mesh] of pairs) {
+      for (const item of items) mesh.setMatrixAt(item.instanceId, dummy.matrix)
+    }
+  }
+
+  for (const fillId of grid.bottomFills.values()) {
+    grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
+  }
+
+}
+
+/**
+ * Animate a single tile dropping in from above (reused by rebuild-wfc)
+ */
+export function animateTileDrop(grid, tile, { fadeIn = false, onComplete } = {}) {
+  if (!tile || tile.instanceId === null) return
+
+  const dummy = grid.dummy
+  const pos = HexTileGeometry.getWorldPosition(
+    tile.gridX - grid.gridRadius,
+    tile.gridZ - grid.gridRadius
+  )
+  const targetY = tile.level * LEVEL_HEIGHT
+  const rotationY = -tile.rotation * Math.PI / 3
+  const fillId = grid.bottomFills.get(`${tile.gridX},${tile.gridZ}`)
+  const anim = { y: targetY + DROP_HEIGHT }
+  tile._anim = anim
+  gsap.to(anim, {
+    y: targetY,
+    duration: ANIM_DURATION,
+    ease: 'power1.out',
+    onUpdate: () => {
+      if (!grid.hexMesh) return
+      dummy.position.set(pos.x, anim.y, pos.z)
+      dummy.rotation.y = rotationY
+      dummy.scale.setScalar(1)
+      dummy.updateMatrix()
+      grid.hexMesh.setMatrixAt(tile.instanceId, dummy.matrix)
+
+      if (fillId !== undefined) {
+        const tileY = tile.level * LEVEL_HEIGHT
+        dummy.position.set(pos.x, anim.y, pos.z)
+        dummy.rotation.y = 0
+        dummy.scale.set(1, tileY, 1)
+        dummy.updateMatrix()
+        grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
+      }
+
+    },
+    onComplete
+  })
+}
+
+/**
+ * Build a map of tile position -> decorations on that tile
+ */
+function buildDecorationMap(grid) {
+  const map = new Map()
+  if (!grid.decorations) return map
+
+  const decs = grid.decorations
+  const radius = grid.gridRadius
+
+  const addItems = (items, mesh, getEntry) => {
+    for (const item of items) {
+      const key = `${item.tile.gridX},${item.tile.gridZ}`
+      if (!map.has(key)) map.set(key, [])
+      const pos = HexTileGeometry.getWorldPosition(item.tile.gridX - radius, item.tile.gridZ - radius)
+      map.get(key).push({ mesh, instanceId: item.instanceId, ...getEntry(item, pos) })
+    }
+  }
+
+  const mesh = decs.mesh
+
+  addItems(decs.trees, mesh, (t, pos) => ({
+    x: pos.x + (t.ox ?? 0), y: t.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z + (t.oz ?? 0),
+    rotationY: t.rotationY ?? 0
+  }))
+
+  // Build windmill fan lookup
+  const fanByInstanceId = new Map()
+  for (const fan of decs.windmillFans) fanByInstanceId.set(fan.instanceId, fan)
+
+  addItems(decs.buildings, mesh, (b, pos) => {
+    const entry = {
+      x: pos.x + (b.ox ?? 0), y: b.tile.level * LEVEL_HEIGHT + TILE_SURFACE + (b.oy ?? 0), z: pos.z + (b.oz ?? 0),
+      rotationY: b.rotationY ?? 0
+    }
+    const fan = fanByInstanceId.get(b.instanceId)
+    if (fan) entry.fan = fan
+    return entry
+  })
+
+  addItems(decs.bridges, mesh, (b, pos) => ({
+    x: pos.x, y: b.tile.level * LEVEL_HEIGHT, z: pos.z,
+    rotationY: -b.tile.rotation * Math.PI / 3
+  }))
+
+  addItems(decs.waterlilies, mesh, (l, pos) => {
+    const name = TILE_LIST[l.tile.type]?.name || ''
+    const dip = (name.startsWith('COAST_') || name === 'WATER') ? -0.2 : 0
+    return {
+      x: pos.x + (l.ox ?? 0), y: l.tile.level * LEVEL_HEIGHT + TILE_SURFACE + dip, z: pos.z + (l.oz ?? 0),
+      rotationY: l.rotationY ?? 0, scale: 2
+    }
+  })
+
+  addItems(decs.flowers, mesh, (f, pos) => ({
+    x: pos.x + (f.ox ?? 0), y: f.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z + (f.oz ?? 0),
+    rotationY: f.rotationY ?? 0, scale: f.meshName.startsWith('bush_') ? 1 : 2
+  }))
+
+  addItems(decs.rocks, mesh, (r, pos) => {
+    const name = TILE_LIST[r.tile.type]?.name || ''
+    const dip = name === 'WATER' ? -0.2 : (name.startsWith('COAST_') || name.startsWith('RIVER_')) ? -0.1 : 0
+    return {
+      x: pos.x + (r.ox ?? 0), y: r.tile.level * LEVEL_HEIGHT + TILE_SURFACE + dip, z: pos.z + (r.oz ?? 0),
+      rotationY: r.rotationY ?? 0
+    }
+  })
+
+  addItems(decs.hills, mesh, (h, pos) => {
+    const isRiverEnd = TILE_LIST[h.tile.type]?.name === 'RIVER_END'
+    return {
+      x: pos.x, y: h.tile.level * LEVEL_HEIGHT + TILE_SURFACE + (isRiverEnd ? -0.1 : 0), z: pos.z,
+      rotationY: h.rotationY ?? 0
+    }
+  })
+
+  addItems(decs.mountains, mesh, (m, pos) => ({
+    x: pos.x, y: m.tile.level * LEVEL_HEIGHT + TILE_SURFACE, z: pos.z,
+    rotationY: m.rotationY ?? 0
+  }))
+
+  return map
+}
+
+/**
+ * Animate tile placements with GSAP drop-in (tiles already placed but hidden)
+ * Each decoration drops after its tile
+ */
+export function animatePlacements(grid, collapseOrder, delay, onComplete) {
+  if (collapseOrder.length === 0) {
+    onComplete?.()
+    return
+  }
+
+  const dummy = grid.dummy
+  const decsByTile = buildDecorationMap(grid)
+  const fillsByTile = grid.bottomFills
+  const lastIndex = collapseOrder.length - 1
+  const invalidIds = grid.decorations?._invalidDecIds
+
+  if (!grid._decTweens) grid._decTweens = []
+
+  let i = 0
+  const step = () => {
+    if (i >= collapseOrder.length || !grid.hexMesh) return
+
+    const isLast = i === lastIndex
+    const placement = collapseOrder[i]
+    const tile = grid.hexGrid?.[placement.gridX]?.[placement.gridZ]
+
+    if (tile && tile.instanceId !== null) {
+      const pos = HexTileGeometry.getWorldPosition(
+        tile.gridX - grid.gridRadius,
+        tile.gridZ - grid.gridRadius
+      )
+      const targetY = tile.level * LEVEL_HEIGHT
+      const rotationY = -tile.rotation * Math.PI / 3
+      const fillId = fillsByTile.get(`${tile.gridX},${tile.gridZ}`)
+      const anim = { y: targetY + DROP_HEIGHT }
+      tile._anim = anim
+      const tileKey = `${tile.gridX},${tile.gridZ}`
+      const decs = decsByTile.get(tileKey)
+
+      gsap.to(anim, {
+        y: targetY,
+        duration: ANIM_DURATION,
+        ease: 'power1.out',
+        onUpdate: () => {
+          if (!grid.hexMesh) return
+          dummy.position.set(pos.x, anim.y, pos.z)
+          dummy.rotation.y = rotationY
+          dummy.scale.setScalar(1)
+          dummy.updateMatrix()
+          grid.hexMesh.setMatrixAt(tile.instanceId, dummy.matrix)
+
+          if (fillId !== undefined) {
+            const tileY = tile.level * LEVEL_HEIGHT
+            dummy.position.set(pos.x, anim.y, pos.z)
+            dummy.rotation.y = 0
+            dummy.scale.set(1, tileY, 1)
+            dummy.updateMatrix()
+            grid.hexMesh.setMatrixAt(fillId, dummy.matrix)
+          }
+
+        },
+        onComplete: (isLast && !decs) ? onComplete : undefined
+      })
+
+      if (decs) {
+        const decComplete = isLast ? onComplete : null
+        const delayedCall = gsap.delayedCall(DEC_DELAY, () => {
+          // Filter out any decorations whose instanceIds were invalidated by recovery
+          const validDecs = invalidIds ? decs.filter(d => !invalidIds.has(d.instanceId)) : decs
+          if (validDecs.length > 0) {
+            animateDecoration(grid, validDecs, decComplete)
+          } else {
+            decComplete?.()
+          }
+        })
+        grid._decTweens.push(delayedCall)
+      }
+    } else if (isLast) {
+      onComplete?.()
+    }
+
+    i++
+    if (i <= collapseOrder.length) {
+      const stepCall = gsap.delayedCall(delay / 1000, step)
+      grid._decTweens.push(stepCall)
+    }
+  }
+  step()
+}
+
+/**
+ * Animate a single decoration or array of decorations dropping in
+ */
+export function animateDecoration(grid, items, onAllComplete) {
+  const dummy = grid.dummy
+  const list = Array.isArray(items) ? items : [items]
+  const lastIdx = list.length - 1
+  const invalidIds = grid.decorations?._invalidDecIds
+
+  if (!grid._decTweens) grid._decTweens = []
+
+  const landscapeIds = new Set(['trees', 'rocks', 'hills', 'mountains']
+    .flatMap(kind => grid.decorations?.[kind] ?? []).map(item => item.instanceId))
+  for (let j = 0; j < list.length; j++) {
+    const item = { ...list[j] }
+    // Full drops and local repairs must finish at the exact exported transform.
+    const matrix = landscapeIds.has(item.instanceId) && grid.decorations.placementMatrices.get(item.instanceId)
+    if (matrix) {
+      const m = matrix.elements
+      Object.assign(item, { x: m[12], y: m[13], z: m[14], rotationY: Math.atan2(m[8], m[0]), scale: m[5] })
+    }
+    const targetScale = item.scale ?? 1
+    const anim = { y: item.y + DEC_DROP_HEIGHT }
+    const tween = gsap.to(anim, {
+      y: item.y,
+      duration: DEC_ANIM_DURATION,
+      ease: 'power1.out',
+      onUpdate: () => {
+        // Skip if this instance was invalidated by decoration repopulation
+        if (invalidIds?.has(item.instanceId)) { tween.kill(); return }
+        try {
+          dummy.position.set(item.x, anim.y, item.z)
+          dummy.rotation.y = item.rotationY
+          dummy.scale.setScalar(targetScale)
+          dummy.updateMatrix()
+          item.mesh.setMatrixAt(item.instanceId, dummy.matrix)
+        } catch (_) {
+          // Instance may have been deleted by decoration repopulation
+        }
+      },
+      onComplete: () => {
+        if (item.fan) item.fan.tween?.resume()
+        if (j === lastIdx) onAllComplete?.()
+      }
+    })
+    grid._decTweens.push(tween)
+  }
+}

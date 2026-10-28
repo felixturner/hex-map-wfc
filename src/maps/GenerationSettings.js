@@ -37,8 +37,9 @@ export function validateGenerationSettings(value) {
   }
   if (typeof value.oceanEdge !== 'boolean') throw new Error('Invalid generation setting: oceanEdge')
   settings.oceanEdge = value.oceanEdge
-  // Recipes written before map sizes were introduced retain the full footprint.
-  const playerCount = Object.hasOwn(value, 'playerCount') ? value.playerCount : DEFAULT_MAP_LAYOUT.playerCount
+  // Older full-size recipes used six players; preserve their footprint.
+  const legacyFullSize = !Object.hasOwn(value, 'playerCount') || (value.playerCount === 6 && value.mapShape === 'hexagon')
+  const playerCount = legacyFullSize ? 12 : value.playerCount
   const preset = mapSizePreset(playerCount)
   if (!preset) throw new Error('Invalid generation setting: playerCount')
   const mapShape = Object.hasOwn(value, 'mapShape') ? value.mapShape : preset.defaultShape

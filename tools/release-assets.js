@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { HexTileGeometry } from '../src/hexmap/HexTiles.js'
 import { Decorations } from '../src/hexmap/Decorations.js'
 import { TILE_LIST } from '../src/hexmap/HexTileData.js'
+import { preserveReleaseManifest } from './release-manifest.js'
 
 const hash = data => createHash('sha256').update(data).digest('hex')
 const files = []
@@ -21,6 +22,7 @@ await walk('public/assets/textures')
 await add('public/assets/models/hex-terrain.glb', 'source')
 await add('package-lock.json', 'implementation')
 await add('tools/release-assets.js', 'implementation')
+await add('tools/release-manifest.js', 'implementation')
 // Parse the geometry without browser image decoders. Materials are separately released textures.
 const glb = await readFile('public/assets/models/hex-terrain.glb')
 const jsonLength = glb.readUInt32LE(12)
@@ -69,6 +71,6 @@ for (const file of files) {
 }
 const assets = { version: 1, release, files: files.map(({ name, role, sha256, bytes }) => ({ path: `assets/releases/${release}/${name}`, role, sha256, bytes })) }
 const generatorCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-await writeFile('src/maps/AssetRelease.json', JSON.stringify({ generatorCommit, assets }, null, 2) + '\n')
-await writeFile(`${root}/manifest.json`, JSON.stringify({ generatorCommit, assets }, null, 2) + '\n')
+const manifest = await preserveReleaseManifest(`${root}/manifest.json`, { generatorCommit, assets })
+await writeFile('src/maps/AssetRelease.json', JSON.stringify(manifest, null, 2) + '\n')
 console.log(`Asset release ${release}: ${files.length} files, ${Object.keys(meshes).length} processed meshes`)

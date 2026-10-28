@@ -89,8 +89,11 @@ test('saved player count and shape survive JSON, and older recipes get the full-
   assert.equal(decoded.generationSettings.mapShape, 'triangle')
   delete snapshot.generationSettings.playerCount
   delete snapshot.generationSettings.mapShape
-  assert.equal(decodeMapSnapshot(snapshot).generationSettings.playerCount, 6)
+  assert.equal(decodeMapSnapshot(snapshot).generationSettings.playerCount, 12)
   assert.equal(decodeMapSnapshot(snapshot).generationSettings.mapShape, 'hexagon')
+  snapshot.generationSettings.playerCount = 6
+  snapshot.generationSettings.mapShape = 'hexagon'
+  assert.equal(decodeMapSnapshot(snapshot).generationSettings.playerCount, 12)
 })
 
 test('version 2 saves require a valid recipe or explicit unknown legacy recipe', () => {

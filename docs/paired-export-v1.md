@@ -26,7 +26,7 @@ manifest), the complete resources object, and generatorCommit. The shared
 and JSON numeric values. A dependency or either dataset changing changes the revision.
 Repeated exports of the same snapshot/release are byte-identical. `createdAt` is
 preserved from the resolved snapshot. `generatorCommit` records the repository HEAD
-at release generation; implementation file hashes additionally identify uncommitted
+when the release was first generated; implementation file hashes additionally identify uncommitted
 source changes, so a commit alone is not the complete release identity.
 
 `renderSha256` hashes emitted bytes, not parsed/re-serialized JSON, compressed

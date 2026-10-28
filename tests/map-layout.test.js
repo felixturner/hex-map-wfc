@@ -54,7 +54,26 @@ test('all size/shape footprints are connected, bounded, unique and contain the o
     }
     assert.equal(reachedCells.size, cellKeys.size, 'terrain must be connected across region boundaries')
   }
-  assert.equal(getMapGridCoordinates().length, 19)
+  assert.equal(getMapGridCoordinates().length, 10)
+})
+
+test('player counts use the requested footprints and retain the previous larger shapes', () => {
+  assert.deepEqual(MAP_SIZE_PRESETS.map(({ playerCount, regionCount }) => [playerCount, regionCount]),
+    [[12, 19], [6, 10], [3, 6], [2, 4]])
+  const asCubes = settings => getMapGridCoordinates(settings).map(([q, z]) => [q, z - Math.floor((q - (q & 1)) / 2)])
+  const triangle = []
+  const hexagon = []
+  for (let q = -2; q <= 2; q++) for (let r = -2; r <= 2; r++) {
+    const s = -q - r
+    if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= 2) {
+      hexagon.push([q, r])
+      if (Math.min(q, r, s) >= -1) triangle.push([q, r])
+    }
+  }
+  assert.deepEqual(asCubes({ playerCount: 12, mapShape: 'hexagon' }), hexagon)
+  assert.deepEqual(asCubes({ playerCount: 6, mapShape: 'triangle' }), triangle)
+  assert.deepEqual(asCubes({ playerCount: 6, mapShape: 'compact' }),
+    [[0, 0], [0, -1], [1, -1], [1, 0], [0, 1], [-1, 1], [-1, 0], [-2, 1], [1, -2], [1, 1]])
 })
 
 test('smaller footprints solve deterministically with the real worker', async () => {
@@ -62,7 +81,7 @@ test('smaller footprints solve deterministically with the real worker', async ()
   globalThis.self = { postMessage: message => messages.push(message) }
   await import('../src/workers/wfc.worker.js')
   try {
-    for (const settings of layouts.filter(s => s.playerCount !== 6)) {
+    for (const settings of layouts.filter(s => s.playerCount !== 12)) {
       const cells = regions(settings).flatMap(g => cubeCoordsInRadius(g.center.q, g.center.r, g.center.s, 8))
       const solve = () => {
         messages.length = 0
@@ -93,7 +112,7 @@ test('smaller snapshots and paired resource exports preserve only their selected
   HexTileGeometry.HEX_HEIGHT = geometry.boundingBox.max.z - geometry.boundingBox.min.z
   HexTileGeometry.geoms.set(0, geometry)
   try {
-    for (const playerCount of [3, 2]) {
+    for (const playerCount of [6, 3, 2]) {
       const settings = layouts.find(s => s.playerCount === playerCount)
       const footprint = regions(settings)
       const tiles = footprint.flatMap(g => cubeCoordsInRadius(g.center.q, g.center.r, g.center.s, 8)
